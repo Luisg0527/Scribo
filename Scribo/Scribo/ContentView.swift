@@ -14,6 +14,7 @@ struct ContentView: View {
                 .imageScale(.large)
                 .foregroundStyle(.tint)
             Text("Hello, dauntless team!\nWelcome to Scribo")
+                .multilineTextAlignment(.center)
         }
         .padding()
     }
