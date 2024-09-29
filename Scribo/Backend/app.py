@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from ocr.OCR import extract_text_from_image
 from models.categorization_model import categorize_text
 from database.db import save_note
+from database.db import notes_collection  
+# Recommendation: Use Conda for managing the environment
 
 app = Flask(__name__)
 
@@ -43,6 +45,7 @@ def upload_image():
         "extracted_text": text
     }), 200
 
+# Endpoint for adding note manually
 @app.route('/add-note', methods=['POST'])
 def add_note():
     try:
@@ -62,14 +65,25 @@ def add_note():
 
         # If result is None, the note saving failed
         if result is None:
-            return jsonify({"error": "Failed to save note"}), 500  # Return 500 if saving fails
+            return jsonify({"error": "Failed to save note"}), 500  # Return 500 if saving fails, Probably due to MongoDB not running
 
         # Return a success message if the note was saved successfully
         return jsonify({"message": result}), 201
 
     except Exception as e:
-        print(f"Error: {e}")  # Log the exception
+        print(f"Error: {e}")  
         return jsonify({"error": "An internal server error occurred"}), 500  # Return 500 for general errors
+
+# Endpoint for retrieving all notes
+@app.route('/get-notes', methods=['GET'])
+def get_notes():
+    try:
+        # Fetch all notes from the MongoDB collection
+        notes = list(notes_collection.find({}, {"_id": 0}))  # Exclude the MongoDB ObjectId (_id)
+        return jsonify(notes), 200
+    except Exception as e:
+        print(f"Error fetching notes: {e}")
+        return jsonify({"error": "Failed to retrieve notes"}), 500
 
 # Run the app
 if __name__ == '__main__':
