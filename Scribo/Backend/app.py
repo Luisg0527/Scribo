@@ -36,7 +36,7 @@ def upload_image():
 
     # Get the top category and its subcategories
     top_category = categorized_output[0]['category']
-    subcategories = categorized_output[0].get('subcategories', [])
+    subcategories = categorized_output[0].get('subcategory', [])
 
     # Get the user-provided category, if available
     user_provided_category = request.form.get('category')
@@ -54,7 +54,7 @@ def upload_image():
     return jsonify({
         "message": "Text categorized and saved",
         "category": selected_category,
-        "subcategories": subcategories,  # Add subcategories to the response
+        "subcategory": subcategories,  # Add subcategories to the response
         "extracted_text": text
     }), 200
 

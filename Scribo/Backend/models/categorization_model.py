@@ -11,30 +11,37 @@ categories_with_subcategories = {
     "Linguistics": ["Phonetics", "Syntax"],
     "Philosophy": ["Metaphysics", "Ethics"],
     # Add more categories and subcategories as needed...
-    "Computer sciences": ["Artificial Intelligence", "Cybersecurity", "Data Science", "Circuits and Systems"]
+    "Computer sciences": ["Artificial Intelligence", "Cybersecurity", "Data Science", "Circuits"]
 }
 
-# Function to categorize text and assign subcategories
-def categorize_text(text, candidate_labels=None, threshold=0.3):
+def categorize_text(text, candidate_labels=None, candidate_sublabels=None, threshold=0.3):
     if candidate_labels is None:
         # Categories to classify text into topics 
         candidate_labels = list(categories_with_subcategories.keys())
-    
+
+    # Perform classification for the main category
     result = classifier(text, candidate_labels, multi_label=True)  # Enable multi-label classification
     categorized_labels = []
 
+    # Filter categories based on threshold score
     for i, label in enumerate(result['labels']):
         if result['scores'][i] > threshold:
             category = label
-            # Check if subcategories exist for this category
-            subcategories = categories_with_subcategories.get(category, [])
-            
-            # Store the category with possible subcategories
             categorized_labels.append({
                 "category": category,
                 "confidence": result['scores'][i],
-                "subcategories": subcategories
             })
-    
-    return categorized_labels
 
+            # Get subcategories for the classified category
+            candidate_sublabels = categories_with_subcategories.get(category, [])
+            if candidate_sublabels:
+                # Perform classification for subcategories
+                subresult = classifier(text, candidate_sublabels, multi_label=True)
+
+                # Filter subcategories based on threshold score
+                for j, sublabel in enumerate(subresult['labels']):
+                    if subresult['scores'][j] > threshold:
+                        categorized_labels[-1]["subcategory"] = sublabel
+                        categorized_labels[-1]["subcategory_confidence"] = subresult['scores'][j]
+
+    return categorized_labels
