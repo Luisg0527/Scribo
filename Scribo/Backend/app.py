@@ -10,38 +10,51 @@ app = Flask(__name__)
 # Endpoint for OCR + Categorization
 @app.route('/upload-image', methods=['POST'])
 def upload_image():
+    # Check if the file is in the request
     if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+        return jsonify({"error": "No file part in the request"}), 400
     
     file = request.files['file']
+      
+    # Check if a file was actually selected
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        return jsonify({"error": "No file selected"}), 400
 
     # Perform OCR to extract text from the image
     text = extract_text_from_image(file)
     
+    # Check if the OCR extraction was successful
     if not text:
-        return jsonify({"error": "Failed to extract text from image"}), 500
+        return jsonify({"error": "Failed to extract text from the image"}), 500
 
-    # Automatically categorize the text
+    # Automatically categorize the extracted text
     categorized_output = categorize_text(text)
-    section = categorized_output['labels'][0]  # Get the top category label
 
-    # Check if the user provides a correct category
+    # Ensure categorized_output contains labels (assuming a list of categories is returned)
+    if not categorized_output or not categorized_output[0]['category']:
+        return jsonify({"error": "Failed to categorize text"}), 500
+
+    # Get the top category and its subcategories
+    top_category = categorized_output[0]['category']
+    subcategories = categorized_output[0].get('subcategories', [])
+
+    # Get the user-provided category, if available
     user_provided_category = request.form.get('category')
 
     # Use the user's category if provided, otherwise use the automatically categorized section
-    if user_provided_category:
-        section = user_provided_category
+    selected_category = user_provided_category if user_provided_category else top_category
 
-    # Save the note with either 'auto' or 'user' depending on how the category was chosen
+    # Determine if the category was provided by the user or auto-generated
     category_source = 'user' if user_provided_category else 'auto'
-    save_note(section, section, text, category_source)
 
-    # Return the response with both the categorized section and the extracted text
+    # Save the note with the selected category and extracted text
+    save_note(selected_category, selected_category, text, category_source)
+
+    # Return the response with both the selected category, extracted text, and subcategories
     return jsonify({
         "message": "Text categorized and saved",
-        "section": section,
+        "category": selected_category,
+        "subcategories": subcategories,  # Add subcategories to the response
         "extracted_text": text
     }), 200
 
