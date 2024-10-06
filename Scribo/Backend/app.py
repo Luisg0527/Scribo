@@ -1,11 +1,22 @@
+import os
 from flask import Flask, request, jsonify
+from werkzeug.utils import secure_filename
 from ocr.OCR import extract_text_from_image
 from models.categorization_model import categorize_text
 from database.db import save_note
 from database.db import notes_collection  
+from utils.uuid_generator import text_to_uuid
 # Recommendation: Use Conda for managing the environment
 
 app = Flask(__name__)
+
+# Directory to save uploaded images
+UPLOAD_FOLDER = 'gallery'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Ensure the upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 
 # Endpoint for OCR + Categorization
 @app.route('/upload-image', methods=['POST'])
@@ -20,6 +31,11 @@ def upload_image():
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
 
+    # Save the uploaded image to the local gallery
+    filename = secure_filename(file.filename)
+    image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(image_path)
+
     # Perform OCR to extract text from the image
     text = extract_text_from_image(file)
     
@@ -27,8 +43,13 @@ def upload_image():
     if not text:
         return jsonify({"error": "Failed to extract text from the image"}), 500
 
+    # Check if the text already exists in the database
+    ###if notes_collection.find_one({'text': text}):
+    ###    return jsonify({"error": "Text already exists in the database"}), 400
+
     # Automatically categorize the extracted text
-    categorized_output = categorize_text(text)
+    categorized_output, summary = categorize_text(text)
+    text_uuid = text_to_uuid(text)
 
     # Ensure categorized_output contains labels (assuming a list of categories is returned)
     if not categorized_output or not categorized_output[0]['category']:
@@ -36,27 +57,34 @@ def upload_image():
 
     # Get the top category and its subcategories
     top_category = categorized_output[0]['category']
-    subcategories = categorized_output[0].get('subcategory', [])
+    top_subcategory = categorized_output[0].get('subcategory', [])
 
     # Get the user-provided category, if available
     user_provided_category = request.form.get('category')
+    user_provided_subcategory = request.form.get('subcategory')
 
     # Use the user's category if provided, otherwise use the automatically categorized section
     selected_category = user_provided_category if user_provided_category else top_category
+    selected_subcategory = user_provided_subcategory if user_provided_subcategory else top_subcategory
 
     # Determine if the category was provided by the user or auto-generated
     category_source = 'user' if user_provided_category else 'auto'
 
-    # Save the note with the selected category and extracted text
-    save_note(selected_category, selected_category, text, category_source)
+    # Save the note with the selected category, extracted text, and image path
+    save_note(selected_category, selected_subcategory, text, text_uuid, summary, image_path, category_source)
 
     # Return the response with both the selected category, extracted text, and subcategories
     return jsonify({
         "message": "Text categorized and saved",
+        "id": text_uuid,
+        "summary": summary,
         "category": selected_category,
-        "subcategory": subcategories,  # Add subcategories to the response
-        "extracted_text": text
+        "subcategory": selected_subcategory,
+        "extracted_text": text,
+        "image_path": image_path
     }), 200
+
+
 
 # Endpoint for adding note manually
 @app.route('/add-note', methods=['POST'])
@@ -97,6 +125,17 @@ def get_notes():
     except Exception as e:
         print(f"Error fetching notes: {e}")
         return jsonify({"error": "Failed to retrieve notes"}), 500
+    
+    # Endpoint for clearing all notes
+@app.route('/clear-notes', methods=['DELETE'])
+def clear_notes():
+    try:
+        # Delete all notes from the MongoDB collection
+        result = notes_collection.delete_many({})
+        return jsonify({"message": f"Deleted {result.deleted_count} notes"}), 200
+    except Exception as e:
+        print(f"Error clearing notes: {e}")
+        return jsonify({"error": "Failed to clear notes"}), 500
 
 # Run the app
 if __name__ == '__main__':

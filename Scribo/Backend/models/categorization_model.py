@@ -2,25 +2,31 @@ from transformers import pipeline
 
 # AI Model BERT for categorizing text into topics
 classifier = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
+summarizer = pipeline('summarization', model='facebook/bart-large-cnn')
 
-# Define your categories and subcategories here
 categories_with_subcategories = {
     "Anthropology": ["Cultural Anthropology", "Physical Anthropology"],
     "Archaeology": ["Prehistoric Archaeology", "Historical Archaeology"],
     "History": ["Ancient History", "Modern History"],
     "Linguistics": ["Phonetics", "Syntax"],
     "Philosophy": ["Metaphysics", "Ethics"],
-    # Add more categories and subcategories as needed...
     "Computer sciences": ["Artificial Intelligence", "Cybersecurity", "Data Science", "Circuits"]
 }
-
-def categorize_text(text, candidate_labels=None, candidate_sublabels=None, threshold=0.3):
+    # Filter categories based on threshold score
+def categorize_text(text, candidate_labels=None, threshold=0.3):
     if candidate_labels is None:
-        # Categories to classify text into topics 
         candidate_labels = list(categories_with_subcategories.keys())
 
-    # Perform classification for the main category
-    result = classifier(text, candidate_labels, multi_label=True)  # Enable multi-label classification
+    # Generate a summary of the text
+    summary = summarizer(
+        text,
+        max_length=40,
+        min_length=7,
+        do_sample=False
+    )[0]['summary_text']
+
+    # Perform classification for the main categories
+    result = classifier(text, candidate_labels, multi_label=True)
     categorized_labels = []
 
     # Filter categories based on threshold score
@@ -44,4 +50,4 @@ def categorize_text(text, candidate_labels=None, candidate_sublabels=None, thres
                         categorized_labels[-1]["subcategory"] = sublabel
                         categorized_labels[-1]["subcategory_confidence"] = subresult['scores'][j]
 
-    return categorized_labels
+    return categorized_labels, summary
