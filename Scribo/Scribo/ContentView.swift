@@ -2,6 +2,15 @@ import SwiftUI
 import PhotosUI
 import Photos
 
+// MARK: - Chat Message Model
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    let content: String
+    let image: UIImage?
+    let isUser: Bool
+    let timestamp: Date
+}
+
 // MARK: - Note Display State
 class NoteDisplayState: ObservableObject {
     @Published var isShowingNote: Bool = false
@@ -105,12 +114,12 @@ struct SidebarView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                 
-                ForEach(["Settings", "Help & Support", "About"], id: \.self) { tool in
+                ForEach(["Scanner"], id: \.self) { tool in
                     Button(action: {
                         // Tool action
                     }) {
                         HStack {
-                            Image(systemName: "gear")
+                            Image(systemName: "doc.viewfinder")
                                 .foregroundColor(.appAccent)
                             Text(tool)
                                 .foregroundColor(.appText)
@@ -156,75 +165,9 @@ struct SidebarView: View {
     }
 }
 
-struct PhotoPermissionView: View {
-    @Binding var isShowing: Bool
-    @Binding var showPhotoPicker: Bool
-    @State private var authorizationStatus: PHAuthorizationStatus = .notDetermined
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 50))
-                .foregroundColor(.appAccent)
-            
-            Text("Photo Access Required")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.appText)
-            
-            Text("Scribo needs access to your photos to let you add them to your notes.")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.appText.opacity(0.8))
-                .padding(.horizontal)
-            
-            HStack(spacing: 20) {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isShowing = false
-                    }
-                }) {
-                    Text("Not Now")
-                        .font(.headline)
-                        .foregroundColor(.appText)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 12)
-                        .background(Color.appCardBackground)
-                        .cornerRadius(10)
-                }
-                
-                Button(action: {
-                    PHPhotoLibrary.requestAuthorization { status in
-                        DispatchQueue.main.async {
-                            authorizationStatus = status
-                            if status == .authorized {
-                                showPhotoPicker = true
-                            }
-                            isShowing = false
-                        }
-                    }
-                }) {
-                    Text("Allow Access")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 12)
-                        .background(Color.appAccent)
-                        .cornerRadius(10)
-                }
-            }
-        }
-        .padding()
-        .frame(height: 300)
-        .background(Color.appBackground)
-    }
-}
-
 struct AttachmentMenuView: View {
     @Binding var isShowing: Bool
     @Binding var selectedPhoto: PhotosPickerItem?
-    @State private var showPhotoPicker = false
-    @State private var showPermissionRequest = false
     
     let menuItems = [
         ("doc.fill", "Document", "Share a document"),
@@ -239,39 +182,54 @@ struct AttachmentMenuView: View {
             // Menu Items
             VStack(spacing: 0) {
                 ForEach(menuItems, id: \.1) { item in
-                    Button(action: {
-                        if item.1 == "Photos" {
-                            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-                            if status == .authorized {
-                                showPhotoPicker = true
-                            } else {
-                                showPermissionRequest = true
+                    if item.1 == "Photos" {
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            HStack(spacing: 16) {
+                                Image(systemName: item.0)
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.appAccent)
+                                    .frame(width: 32)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.1)
+                                        .font(.body)
+                                        .foregroundColor(.appText)
+                                    Text(item.2)
+                                        .font(.caption)
+                                        .foregroundColor(.appText.opacity(0.6))
+                                }
+                                
+                                Spacer()
                             }
-                        } else {
+                            .padding()
+                            .background(Color.appHeaderBackground)
+                        }
+                    } else {
+                        Button(action: {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 isShowing = false
                             }
-                        }
-                    }) {
-                        HStack(spacing: 16) {
-                            Image(systemName: item.0)
-                                .font(.system(size: 24))
-                                .foregroundColor(.appAccent)
-                                .frame(width: 32)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.1)
-                                    .font(.body)
-                                    .foregroundColor(.appText)
-                                Text(item.2)
-                                    .font(.caption)
-                                    .foregroundColor(.appText.opacity(0.6))
+                        }) {
+                            HStack(spacing: 16) {
+                                Image(systemName: item.0)
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.appAccent)
+                                    .frame(width: 32)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.1)
+                                        .font(.body)
+                                        .foregroundColor(.appText)
+                                    Text(item.2)
+                                        .font(.caption)
+                                        .foregroundColor(.appText.opacity(0.6))
+                                }
+                                
+                                Spacer()
                             }
-                            
-                            Spacer()
+                            .padding()
+                            .background(Color.appHeaderBackground)
                         }
-                        .padding()
-                        .background(Color.appHeaderBackground)
                     }
                 }
             }
@@ -279,23 +237,6 @@ struct AttachmentMenuView: View {
         }
         .frame(height: 330)
         .background(Color.appHeaderBackground)
-        .overlay(
-            Group {
-                if showPhotoPicker {
-                    VStack {
-                        Spacer()
-                        PhotoPickerView(selectedPhoto: $selectedPhoto, isShowing: $showPhotoPicker)
-                            .transition(.move(edge: .bottom))
-                    }
-                } else if showPermissionRequest {
-                    VStack {
-                        Spacer()
-                        PhotoPermissionView(isShowing: $showPermissionRequest, showPhotoPicker: $showPhotoPicker)
-                            .transition(.move(edge: .bottom))
-                    }
-                }
-            }
-        )
     }
 }
 
@@ -335,14 +276,14 @@ struct PhotoPickerView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(Color.appCardBackground)
-                        .frame(height: 300)
+                        .frame(height: 420)
                         .overlay(
                             VStack {
                                 if let selectedImage = selectedImage {
                                     Image(uiImage: selectedImage)
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(height: 200)
+                                        .frame(height: 420)
                                         .cornerRadius(12)
                                 } else {
                                     VStack {
@@ -364,10 +305,6 @@ struct PhotoPickerView: View {
                         if let data = try? await newValue.loadTransferable(type: Data.self),
                            let uiImage = UIImage(data: data) {
                             selectedImage = uiImage
-                            // Optionally close the picker after selection
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                isShowing = false
-                            }
                         }
                     }
                 }
@@ -396,7 +333,7 @@ struct RoundedCorner: Shape {
 }
 
 struct ContentView: View {
-    @StateObject private var noteDisplayState = NoteDisplayState()
+    @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var promptText: String = ""
     @State private var isTextFieldFocused: Bool = false
     @State private var isSidebarShowing: Bool = false
@@ -404,6 +341,7 @@ struct ContentView: View {
     @State private var showActionCards: Bool = true
     @State private var showNotebook: Bool = false
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var messages: [ChatMessage] = []
     @FocusState private var isFocused: Bool
     @State private var animatedText = ""
     @State private var hasAnimatedText = false
@@ -432,66 +370,18 @@ struct ContentView: View {
                 
                 VStack(spacing: 0) {
                     // Main Content
-                    VStack(spacing: 20) {
-                        if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
-                            // Note Display View
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 20) {
-                                    // Navigation Path
-                                    HStack {
-                                        if let topic = noteDisplayState.currentTopic {
-                                            Text(topic.title)
-                                                .foregroundColor(.appAccent)
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(.gray)
-                                        }
-                                        if let subtopic = noteDisplayState.currentSubtopic {
-                                            Text(subtopic.title)
-                                                .foregroundColor(.appAccent)
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(.gray)
-                                        }
-                                        Text(note.title)
-                                            .foregroundColor(.appText)
-                                    }
-                                    .font(.subheadline)
-                                    .padding(.horizontal)
-                                    
-                                    // Note Content
-                                    if let photoURL = note.photoURL {
-                                        AsyncImage(url: photoURL) { image in
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fit)
-                                        } placeholder: {
-                                            ProgressView()
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .cornerRadius(12)
-                                        .padding(.horizontal)
-                                    }
-                                    
-                                    Text(note.title)
-                                        .font(.title)
-                                        .fontWeight(.bold)
-                                        .padding(.horizontal)
-                                    
-                                    Text(note.content)
-                                        .font(.body)
-                                        .padding(.horizontal)
-                                    
-                                    Text(note.date, style: .date)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                        .padding(.horizontal)
-                                }
-                                .padding(.vertical)
-                            }
-                        } else {
-                            // Original Chat View
+                    if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
+                        NoteView(note: note, isPresented: $noteDisplayState.isShowingNote)
+                    } else if showNotebook {
+                        NotebookView(isPresented: $showNotebook)
+                            .environmentObject(noteDisplayState)
+                    } else if messages.isEmpty {
+                        // Welcome View
+                        VStack(spacing: 20) {
+                            Spacer()
+                            
                             Image("ThreeDots")
                                 .frame(width: 97, height: 97)
-                                .padding(.top, 240)
                                 .foregroundColor(.appAccent)
                             
                             Text(hasAnimatedText ? fullText : animatedText)
@@ -510,6 +400,26 @@ struct ContentView: View {
                             if showActionCards {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 12) {
+                                        // First set of cards
+                                        ForEach(actionButtons, id: \.self) { action in
+                                            Button(action: {
+                                                promptText = action
+                                                isFocused = true
+                                                showActionCards = false
+                                            }) {
+                                                Text(action)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(.appText)
+                                                    .multilineTextAlignment(.leading)
+                                                    .frame(width: 220)
+                                                    .frame(height: 50)
+                                                    .background(Color.appCardBackground)
+                                                    .cornerRadius(13)
+                                                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+                                            }
+                                        }
+                                        
+                                        // Duplicate set of cards to create infinite effect
                                         ForEach(actionButtons, id: \.self) { action in
                                             Button(action: {
                                                 promptText = action
@@ -531,7 +441,25 @@ struct ContentView: View {
                                     .padding(.horizontal)
                                 }
                                 .frame(height: 100)
-                                .padding(.bottom, -30)
+                                .padding(.bottom, 90)
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        // Chat View
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: 16) {
+                                    ForEach(messages) { message in
+                                        ChatMessageView(message: message)
+                                    }
+                                }
+                                .padding()
+                            }
+                            .onChange(of: messages.count) { _, _ in
+                                withAnimation {
+                                    proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                                }
                             }
                         }
                     }
@@ -540,7 +468,7 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.25), value: isSidebarShowing)
                 
                 // Bottom Bar and Attachment Menu Container
-                if !noteDisplayState.isShowingNote {
+                if !showNotebook {
                     VStack(spacing: 0) {
                         Spacer()
                         
@@ -580,15 +508,13 @@ struct ContentView: View {
                                 }
                                 .submitLabel(.send)
                                 .onSubmit {
-                                    promptText = ""
-                                    isFocused = false
-                                    showActionCards = false
+                                    sendMessage()
                                 }
                             
                             if !isTextFieldFocused {
                                 // Camera button
                                 Button(action: {
-                                    // Camera action
+                                    // TODO: Implement camera functionality
                                 }) {
                                     Image(systemName: "camera.fill")
                                         .font(.system(size: 24))
@@ -606,9 +532,7 @@ struct ContentView: View {
                             } else {
                                 // Send button
                                 Button(action: {
-                                    promptText = ""
-                                    isFocused = false
-                                    showActionCards = false
+                                    sendMessage()
                                 }) {
                                     Image(systemName: "arrow.up.circle.fill")
                                         .font(.system(size: 32))
@@ -616,7 +540,7 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .padding([.leading, .bottom, .trailing], 10)
+                        .padding([.leading, .bottom, .trailing], 20)
                         .frame(height: 94)
                         .background(Color.appHeaderBackground)
                         .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: -5)
@@ -648,63 +572,68 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .top) {
                 // Top Bar
-                VStack {
-                    Spacer()
-                    HStack {
-                        Button(action: {
-                            withAnimation {
-                                isSidebarShowing.toggle()
-                            }
-                        }) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 24))
-                                .foregroundColor(.appAccent)
-                        }
-                        
-                        .padding(.horizontal, 34)
-                        .padding(.vertical, 26)
-                        
+                if !showNotebook {
+                    VStack {
                         Spacer()
-                        
-                        if noteDisplayState.isShowingNote {
+                        HStack {
                             Button(action: {
-                                noteDisplayState.isShowingNote = false
-                                noteDisplayState.currentNote = nil
-                                noteDisplayState.currentTopic = nil
-                                noteDisplayState.currentSubtopic = nil
+                                withAnimation {
+                                    isSidebarShowing.toggle()
+                                }
                             }) {
-                                Image(systemName: "house.fill")
+                                Image(systemName: "line.3.horizontal")
                                     .font(.system(size: 24))
                                     .foregroundColor(.appAccent)
                             }
                             .padding(.horizontal, 34)
-                            .padding(.vertical, 20)
-                        } else {
-                            Button(action: {
-                                showNotebook = true
-                            }) {
-                                Image(systemName: "note.text")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
+                            .padding(.vertical, 26)
+                            
+                            Spacer()
+                            
+                            if noteDisplayState.isShowingNote {
+                                Button(action: {
+                                    noteDisplayState.isShowingNote = false
+                                    noteDisplayState.currentNote = nil
+                                    noteDisplayState.currentTopic = nil
+                                    noteDisplayState.currentSubtopic = nil
+                                    isAttachmentMenuShowing = false
+                                }) {
+                                    Image(systemName: "house.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.appAccent)
+                                }
+                                .padding(.horizontal, 34)
+                                .padding(.vertical, 20)
+                            } else {
+                                Button(action: {
+                                    showNotebook = true
+                                    isAttachmentMenuShowing = false
+                                }) {
+                                    Image(systemName: "note.text")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.appAccent)
+                                }
+                                .padding(.horizontal, 34)
+                                .padding(.vertical, 20)
                             }
-                            .padding(.horizontal, 34)
-                            .padding(.vertical, 20)
                         }
                     }
+                    .frame(height: 120)
+                    .background(Color.appHeaderBackground)
+                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
                 }
-                .frame(height: 120)
-                .background(Color.appHeaderBackground)
-                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
             }
-        }
-        .sheet(isPresented: $showNotebook) {
-            NotebookView(isPresented: $showNotebook)
-                .environmentObject(noteDisplayState)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
         }
         .ignoresSafeArea()
         .preferredColorScheme(isDarkMode ? .dark : .light)
+    }
+    
+    private func sendMessage() {
+        guard !promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        messages.append(ChatMessage(content: promptText, image: nil, isUser: true, timestamp: Date()))
+        promptText = ""
+        isFocused = false
+        showActionCards = false
     }
     
     private func animateText() {
@@ -722,9 +651,48 @@ struct ContentView: View {
     }
 }
 
+struct ChatMessageView: View {
+    let message: ChatMessage
+    
+    var body: some View {
+        HStack {
+            if message.isUser {
+                Spacer()
+            }
+            
+            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 8) {
+                if let image = message.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 250)
+                        .cornerRadius(12)
+                }
+                
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .padding(12)
+                        .background(message.isUser ? Color.appAccent : Color.appCardBackground)
+                        .foregroundColor(message.isUser ? .white : .appText)
+                        .cornerRadius(16)
+                }
+                
+                Text(message.timestamp, style: .time)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+            
+            if !message.isUser {
+                Spacer()
+            }
+        }
+    }
+}
+
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(NoteDisplayState())
             .previewDevice(PreviewDevice(rawValue: "iPhone 16 Pro"))
             .previewDisplayName("iPhone 16 Pro")
     }

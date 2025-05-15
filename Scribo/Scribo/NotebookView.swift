@@ -52,6 +52,164 @@ struct HighlightedText: View {
     }
 }
 
+// MARK: - Topic Preview View
+struct TopicPreviewView: View {
+    let topic: Topic
+    @Environment(\.dismiss) var dismiss
+    @Binding var isPresented: Bool
+    @EnvironmentObject var searchState: SearchState
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20))
+                            .foregroundColor(.appAccent)
+                    }
+                    
+                    Text(topic.title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.appText)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal)
+                
+                // Subtopics Grid
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ], spacing: 16) {
+                    ForEach(topic.subtopics) { subtopic in
+                        NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented)) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(systemName: "folder.fill.badge.person.crop")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.appAccent)
+                                
+                                Text(subtopic.title)
+                                    .font(.headline)
+                                    .foregroundColor(.appText)
+                                    .lineLimit(2)
+                                
+                                Text("\(subtopic.notes.count) notes")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color.appCardBackground)
+                            .cornerRadius(12)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+        }
+        .background(Color.appBackground)
+    }
+}
+
+// MARK: - Subtopic Preview View
+struct SubtopicPreviewView: View {
+    let subtopic: Subtopic
+    let topic: Topic
+    @Binding var isPresented: Bool
+    @EnvironmentObject var searchState: SearchState
+    @EnvironmentObject var noteDisplayState: NoteDisplayState
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                HStack {
+                    Button(action: {
+                        isPresented = false
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20))
+                            .foregroundColor(.appAccent)
+                    }
+                    
+                    VStack(alignment: .leading) {
+                        Text(topic.title)
+                            .font(.subheadline)
+                            .foregroundColor(.appAccent)
+                        Text(subtopic.title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.appText)
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal)
+                
+                // Notes Grid
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 16),
+                    GridItem(.flexible(), spacing: 16)
+                ], spacing: 16) {
+                    ForEach(subtopic.notes) { note in
+                        Button(action: {
+                            noteDisplayState.currentNote = note
+                            noteDisplayState.currentTopic = topic
+                            noteDisplayState.currentSubtopic = subtopic
+                            noteDisplayState.isShowingNote = true
+                            isPresented = false
+                        }) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let photoURL = note.photoURL {
+                                    AsyncImage(url: photoURL) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(height: 120)
+                                            .clipped()
+                                    } placeholder: {
+                                        Rectangle()
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(height: 120)
+                                    }
+                                    .cornerRadius(8)
+                                } else {
+                                    Image(systemName: "note.text")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.appAccent)
+                                        .frame(height: 120)
+                                }
+                                
+                                Text(note.title)
+                                    .font(.headline)
+                                    .foregroundColor(.appText)
+                                    .lineLimit(2)
+                                
+                                Text(note.date, style: .date)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color.appCardBackground)
+                            .cornerRadius(12)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+        }
+        .background(Color.appBackground)
+    }
+}
+
 // MARK: - Notebook View
 struct NotebookView: View {
     @Environment(\.dismiss) var dismiss
@@ -139,7 +297,6 @@ struct NotebookView: View {
                 List {
                     ForEach(filteredTopics) { topic in
                         TopicRow(topic: topic, selectedTopic: $selectedTopic, selectedSubtopic: $selectedSubtopic, selectedNote: $selectedNote, isPresented: $isPresented)
-                            .environmentObject(searchState)
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -148,7 +305,7 @@ struct NotebookView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: {
-                        dismiss()
+                        isPresented = false
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 24))
@@ -167,6 +324,11 @@ struct NotebookView: View {
                 NewTopicView(topics: $topics)
             }
         }
+        .background(Color.appBackground)
+        .safeAreaInset(edge: .top) {
+            Color.clear.frame(height: 120)
+        }
+        .environmentObject(searchState)
     }
 }
 
@@ -180,16 +342,7 @@ struct TopicRow: View {
     @Binding var isPresented: Bool
     
     var body: some View {
-        DisclosureGroup(
-            isExpanded: Binding(
-                get: { selectedTopic?.id == topic.id || isExpanded },
-                set: { if $0 { selectedTopic = topic } else { selectedTopic = nil } }
-            )
-        ) {
-            ForEach(topic.subtopics) { subtopic in
-                SubtopicRow(subtopic: subtopic, selectedSubtopic: $selectedSubtopic, selectedNote: $selectedNote, isPresented: $isPresented, topic: topic)
-            }
-        } label: {
+        NavigationLink(destination: TopicPreviewView(topic: topic, isPresented: $isPresented)) {
             HStack {
                 Image(systemName: "folder.fill")
                     .foregroundColor(.appAccent)
