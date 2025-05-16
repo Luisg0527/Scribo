@@ -21,14 +21,6 @@ struct NoteView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Button(action: {
-                    isPresented = false
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20))
-                        .foregroundColor(.appAccent)
-                }
-                
                 VStack(alignment: .leading) {
                     if let topic = noteDisplayState.currentTopic {
                         Text(topic.title)
@@ -118,6 +110,7 @@ struct NoteView: View {
             }
             .background(Color.appBackground)
         }
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: selectedPhoto) { oldValue, newValue in
             if let newValue {
                 Task {

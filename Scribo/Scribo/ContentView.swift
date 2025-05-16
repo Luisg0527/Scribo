@@ -1,14 +1,35 @@
 import SwiftUI
 import PhotosUI
 import Photos
+import UniformTypeIdentifiers
+import AVFoundation
 
 // MARK: - Chat Message Model
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let content: String
     let image: UIImage?
+    let document: DocumentMessage?
     let isUser: Bool
     let timestamp: Date
+    var isProcessing: Bool = false
+    var error: String? = nil
+    
+    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.content == rhs.content &&
+        lhs.isUser == rhs.isUser &&
+        lhs.timestamp == rhs.timestamp &&
+        lhs.isProcessing == rhs.isProcessing &&
+        lhs.error == rhs.error
+    }
+}
+
+struct DocumentMessage: Identifiable {
+    let id = UUID()
+    let url: URL
+    let name: String
+    let type: String
 }
 
 // MARK: - Note Display State
@@ -52,41 +73,187 @@ extension Color {
     })
 }
 
+// MARK: - Profile View
+struct ProfileView: View {
+    @Environment(\.dismiss) var dismiss
+    @State private var profileImage: UIImage?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var name: String = ""
+    @State private var email: String = ""
+    @State private var bio: String = ""
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Profile Image Section
+                    VStack {
+                        if let profileImage = profileImage {
+                            Image(uiImage: profileImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.appAccent, lineWidth: 3)
+                                )
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 120, height: 120)
+                                .foregroundColor(.appAccent)
+                        }
+                        
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            Text("Change Photo")
+                                .font(.subheadline)
+                                .foregroundColor(.appAccent)
+                        }
+                        .onChange(of: selectedPhoto) { oldValue, newValue in
+                            if let newValue {
+                                Task {
+                                    if let data = try? await newValue.loadTransferable(type: Data.self),
+                                       let uiImage = UIImage(data: data) {
+                                        profileImage = uiImage
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top)
+                    
+                    // Profile Information
+                    VStack(spacing: 20) {
+                        // Name Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Name")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            TextField("Your name", text: $name)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.appText)
+                        }
+                        
+                        // Email Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Email")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            TextField("Your email", text: $email)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.appText)
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                        }
+                        
+                        // Bio Field
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Bio")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            TextEditor(text: $bio)
+                                .frame(height: 100)
+                                .padding(4)
+                                .background(Color.appCardBackground)
+                                .cornerRadius(8)
+                                .foregroundColor(.appText)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Preferences Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Preferences")
+                            .font(.headline)
+                            .foregroundColor(.appText)
+                        
+                        // Dark Mode Toggle
+                        Toggle(isOn: $isDarkMode) {
+                            HStack {
+                                Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                                    .foregroundColor(.appAccent)
+                                Text("Dark Mode")
+                                    .foregroundColor(.appText)
+                            }
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: .appAccent))
+                    }
+                    .padding()
+                    .background(Color.appCardBackground)
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                }
+            }
+            .background(Color.appBackground)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.appAccent)
+                    }
+                }
+                
+                ToolbarItem(placement: .principal) {
+                    Text("Profile")
+                        .font(.headline)
+                        .foregroundColor(.appText)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        // Save profile changes
+                        dismiss()
+                    }
+                    .foregroundColor(.appAccent)
+                }
+            }
+        }
+    }
+}
+
 struct SidebarView: View {
     @Binding var isShowing: Bool
     @AppStorage("isDarkMode") private var isDarkMode = false
     @Environment(\.colorScheme) var colorScheme
+    @State private var showProfile = false
+    @EnvironmentObject var noteDisplayState: NoteDisplayState
+    @State private var recentNotes: [Note] = []
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Profile Section
-            HStack {
-                Image(systemName: "person.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(.appAccent)
-                
-                VStack(alignment: .leading) {
-                    Text("Profile")
-                        .font(.headline)
-                        .foregroundColor(.appText)
-                    Text("View your profile")
-                        .font(.subheadline)
-                        .foregroundColor(.appText.opacity(0.7))
+            Button(action: {
+                showProfile = true
+            }) {
+                HStack {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.appAccent)
+                    
+                    VStack(alignment: .leading) {
+                        Text("Profile")
+                            .font(.headline)
+                            .foregroundColor(.appText)
+                        Text("View your profile")
+                            .font(.subheadline)
+                            .foregroundColor(.appText.opacity(0.7))
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    // Profile settings action
-                }) {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 20))
-                        .foregroundColor(.appText)
-                        .rotationEffect(.degrees(90))
-                }
+                .padding()
+                .background(Color.appHeaderBackground)
             }
-            .padding()
-            .background(Color.appHeaderBackground)
             
             // Dark Mode Toggle
             Button(action: {
@@ -114,7 +281,7 @@ struct SidebarView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                 
-                ForEach(["Scanner"], id: \.self) { tool in
+                ForEach(["Coming soon..."], id: \.self) { tool in
                     Button(action: {
                         // Tool action
                     }) {
@@ -132,110 +299,330 @@ struct SidebarView: View {
             }
             .background(Color.appCardBackground)
             
-            // Previous Chats Section
+            // Recent Notes Section
             VStack(alignment: .leading, spacing: 0) {
-                Text("Previous Chats")
+                Text("Recent Notes")
                     .font(.headline)
                     .foregroundColor(.appText)
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                 
-                ForEach(["CS Notes Discussion", "Math Summary", "History Review"], id: \.self) { chat in
-                    Button(action: {
-                        // Chat action
-                    }) {
-                        HStack {
-                            Image(systemName: "message.fill")
-                                .foregroundColor(.appAccent)
-                            Text(chat)
-                                .foregroundColor(.appText)
-                            Spacer()
-                        }
+                if recentNotes.isEmpty {
+                    Text("No recent notes")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
                         .padding(.horizontal)
                         .padding(.vertical, 12)
+                } else {
+                    ForEach(recentNotes) { note in
+                        Button(action: {
+                            noteDisplayState.currentNote = note
+                            noteDisplayState.isShowingNote = true
+                            isShowing = false
+                        }) {
+                            HStack {
+                                Image(systemName: "note.text")
+                                    .foregroundColor(.appAccent)
+                                VStack(alignment: .leading) {
+                                    Text(note.title)
+                                        .foregroundColor(.appText)
+                                    Text(note.date, style: .date)
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                        }
                     }
                 }
             }
-            .background(Color.appCardBackground)
-            
+            .padding(.top, 3.0)
             Spacer()
         }
         .frame(width: 280)
-        .background(Color.appBackground)
+        .background(Color.appCardBackground)
+        .fullScreenCover(isPresented: $showProfile) {
+            NavigationView {
+                ProfileView()
+            }
+        }
+        .onChange(of: noteDisplayState.currentNote) { oldValue, newValue in
+            if let note = newValue {
+                // Add the note to recent notes if it's not already there
+                if !recentNotes.contains(where: { $0.id == note.id }) {
+                    recentNotes.insert(note, at: 0)
+                    // Keep only the 5 most recent notes
+                    if recentNotes.count > 5 {
+                        recentNotes.removeLast()
+                    }
+                }
+            }
+        }
     }
 }
 
+// MARK: - Camera View
+struct CameraView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var isShowing: Bool
+    @StateObject private var camera = CameraModel()
+    
+    var body: some View {
+        ZStack {
+            CameraPreview(camera: camera)
+                .ignoresSafeArea()
+            
+            VStack {
+                Spacer()
+                
+                HStack {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isShowing = false
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .shadow(radius: 2)
+                    }
+                    .padding()
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        camera.takePicture()
+                    }) {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 65, height: 65)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 2)
+                                    .frame(width: 75, height: 75)
+                            )
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        camera.switchCamera()
+                    }) {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .shadow(radius: 2)
+                    }
+                    .padding()
+                }
+                .padding(.bottom, 30)
+            }
+        }
+        .onAppear {
+            camera.checkPermissions()
+        }
+        .onChange(of: camera.photo) { oldValue, newValue in
+            if let image = newValue {
+                // Convert UIImage to PhotosPickerItem
+                if let data = image.jpegData(compressionQuality: 0.8) {
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("camera_photo.jpg")
+                    try? data.write(to: tempURL)
+                    selectedPhoto = PhotosPickerItem(itemIdentifier: tempURL.absoluteString)
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isShowing = false
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Camera Model
+class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+    @Published var isTaken = false
+    @Published var session = AVCaptureSession()
+    @Published var alert = false
+    @Published var output = AVCapturePhotoOutput()
+    @Published var preview: AVCaptureVideoPreviewLayer!
+    @Published var photo: UIImage?
+    @Published var isCameraAuthorized = false
+    
+    func checkPermissions() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isCameraAuthorized = true
+            setUp()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { status in
+                if status {
+                    DispatchQueue.main.async {
+                        self.isCameraAuthorized = true
+                        self.setUp()
+                    }
+                }
+            }
+        default:
+            isCameraAuthorized = false
+            alert = true
+            return
+        }
+    }
+    
+    func setUp() {
+        do {
+            self.session.beginConfiguration()
+            
+            let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+            let input = try AVCaptureDeviceInput(device: device!)
+            
+            if self.session.canAddInput(input) {
+                self.session.addInput(input)
+            }
+            
+            if self.session.canAddOutput(self.output) {
+                self.session.addOutput(self.output)
+            }
+            
+            self.session.commitConfiguration()
+        } catch {
+            print(error.localizedDescription)
+        }
+    }
+    
+    func takePicture() {
+        DispatchQueue.global(qos: .background).async {
+            self.output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+            DispatchQueue.main.async {
+                withAnimation { self.isTaken.toggle() }
+            }
+        }
+    }
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if error != nil {
+            return
+        }
+        
+        guard let imageData = photo.fileDataRepresentation() else { return }
+        self.photo = UIImage(data: imageData)
+    }
+    
+    func switchCamera() {
+        session.beginConfiguration()
+        
+        // Remove existing input
+        guard let currentInput = session.inputs.first as? AVCaptureDeviceInput else { return }
+        session.removeInput(currentInput)
+        
+        // Get new camera position
+        let newPosition: AVCaptureDevice.Position = currentInput.device.position == .back ? .front : .back
+        
+        // Get new device
+        guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition) else { return }
+        
+        // Add new input
+        do {
+            let newInput = try AVCaptureDeviceInput(device: newDevice)
+            if session.canAddInput(newInput) {
+                session.addInput(newInput)
+            }
+        } catch {
+            print(error.localizedDescription)
+        }
+        
+        session.commitConfiguration()
+    }
+}
+
+// MARK: - Camera Preview
+struct CameraPreview: UIViewRepresentable {
+    @ObservedObject var camera: CameraModel
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: UIScreen.main.bounds)
+        camera.preview = AVCaptureVideoPreviewLayer(session: camera.session)
+        camera.preview.frame = view.frame
+        camera.preview.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(camera.preview)
+        camera.session.startRunning()
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+    }
+}
+
+// MARK: - Attachment Menu View
 struct AttachmentMenuView: View {
     @Binding var isShowing: Bool
     @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var selectedDocument: URL?
+    @Binding var isDocumentPickerPresented: Bool
+    @State private var isShowingCamera = false
     
     let menuItems = [
         ("doc.fill", "Document", "Share a document"),
         ("photo.fill", "Photos", "Share photos"),
-        ("camera.fill", "Camera", "Take a photo"),
-        ("location.fill", "Location", "Share your location"),
-        ("person.fill", "Contact", "Share a contact")
+        ("camera.fill", "Camera", "Take a photo")
     ]
     
     var body: some View {
         VStack(spacing: 0) {
-            // Menu Items
             VStack(spacing: 0) {
                 ForEach(menuItems, id: \.1) { item in
                     if item.1 == "Photos" {
                         PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                            HStack(spacing: 16) {
-                                Image(systemName: item.0)
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
-                                    .frame(width: 32)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(item.1)
-                                        .font(.body)
-                                        .foregroundColor(.appText)
-                                    Text(item.2)
-                                        .font(.caption)
-                                        .foregroundColor(.appText.opacity(0.6))
-                                }
-                                
-                                Spacer()
-                            }
-                            .padding()
-                            .background(Color.appHeaderBackground)
+                            menuItemView(item)
                         }
-                    } else {
+                    } else if item.1 == "Document" {
                         Button(action: {
+                            isDocumentPickerPresented = true
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 isShowing = false
                             }
                         }) {
-                            HStack(spacing: 16) {
-                                Image(systemName: item.0)
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
-                                    .frame(width: 32)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(item.1)
-                                        .font(.body)
-                                        .foregroundColor(.appText)
-                                    Text(item.2)
-                                        .font(.caption)
-                                        .foregroundColor(.appText.opacity(0.6))
-                                }
-                                
-                                Spacer()
-                            }
-                            .padding()
-                            .background(Color.appHeaderBackground)
+                            menuItemView(item)
+                        }
+                    } else if item.1 == "Camera" {
+                        Button(action: {
+                            isShowingCamera = true
+                        }) {
+                            menuItemView(item)
                         }
                     }
                 }
             }
             .background(Color.appHeaderBackground)
         }
-        .frame(height: 330)
+        .frame(height: 190)
+        .background(Color.appHeaderBackground)
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            CameraView(selectedPhoto: $selectedPhoto, isShowing: $isShowingCamera)
+        }
+    }
+    
+    private func menuItemView(_ item: (String, String, String)) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: item.0)
+                .font(.system(size: 24))
+                .foregroundColor(.appAccent)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.1)
+                    .font(.body)
+                    .foregroundColor(.appText)
+                Text(item.2)
+                    .font(.caption)
+                    .foregroundColor(.appText.opacity(0.6))
+            }
+            
+            Spacer()
+        }
+        .padding()
         .background(Color.appHeaderBackground)
     }
 }
@@ -332,6 +719,7 @@ struct RoundedCorner: Shape {
     }
 }
 
+// MARK: - Main Content View
 struct ContentView: View {
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var promptText: String = ""
@@ -341,311 +729,480 @@ struct ContentView: View {
     @State private var showActionCards: Bool = true
     @State private var showNotebook: Bool = false
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedDocument: URL?
+    @State private var isDocumentPickerPresented = false
     @State private var messages: [ChatMessage] = []
+    @State private var isProcessingMessage: Bool = false
     @FocusState private var isFocused: Bool
     @State private var animatedText = ""
     @State private var hasAnimatedText = false
     @AppStorage("isDarkMode") private var isDarkMode = false
-    let fullText = "Hello, what can I help you with?"
     
-    // Action buttons data
-    private let actionButtons = [
-        "Explain my notes of CS",
-        "Summarize this text",
-        "Create flashcards",
-        "Generate quiz questions",
-        "Find key concepts",
-        "Compare and contrast",
-        "Explain like I'm 5"
-    ]
+    let welcomeMessage = "Hello! What can I help you with?"
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.appBackground
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        isFocused = false
-                    }
                 
                 VStack(spacing: 0) {
-                    // Main Content
-                    if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
-                        NoteView(note: note, isPresented: $noteDisplayState.isShowingNote)
-                    } else if showNotebook {
-                        NotebookView(isPresented: $showNotebook)
-                            .environmentObject(noteDisplayState)
-                    } else if messages.isEmpty {
-                        // Welcome View
-                        VStack(spacing: 20) {
-                            Spacer()
-                            
-                            Image("ThreeDots")
-                                .frame(width: 97, height: 97)
-                                .foregroundColor(.appAccent)
-                            
-                            Text(hasAnimatedText ? fullText : animatedText)
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.appText)
-                                .onAppear {
-                                    if !hasAnimatedText {
-                                        animateText()
-                                    }
-                                }
-                            
-                            Spacer()
-                            
-                            // Action Cards
-                            if showActionCards {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 12) {
-                                        // First set of cards
-                                        ForEach(actionButtons, id: \.self) { action in
-                                            Button(action: {
-                                                promptText = action
-                                                isFocused = true
-                                                showActionCards = false
-                                            }) {
-                                                Text(action)
-                                                    .fontWeight(.medium)
-                                                    .foregroundColor(.appText)
-                                                    .multilineTextAlignment(.leading)
-                                                    .frame(width: 220)
-                                                    .frame(height: 50)
-                                                    .background(Color.appCardBackground)
-                                                    .cornerRadius(13)
-                                                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                                            }
-                                        }
-                                        
-                                        // Duplicate set of cards to create infinite effect
-                                        ForEach(actionButtons, id: \.self) { action in
-                                            Button(action: {
-                                                promptText = action
-                                                isFocused = true
-                                                showActionCards = false
-                                            }) {
-                                                Text(action)
-                                                    .fontWeight(.medium)
-                                                    .foregroundColor(.appText)
-                                                    .multilineTextAlignment(.leading)
-                                                    .frame(width: 220)
-                                                    .frame(height: 50)
-                                                    .background(Color.appCardBackground)
-                                                    .cornerRadius(13)
-                                                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                                .frame(height: 100)
-                                .padding(.bottom, 90)
-                            }
-                        }
-                        .frame(maxHeight: .infinity)
-                    } else {
-                        // Chat View
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: 16) {
-                                    ForEach(messages) { message in
-                                        ChatMessageView(message: message)
-                                    }
-                                }
-                                .padding()
-                            }
-                            .onChange(of: messages.count) { _, _ in
-                                withAnimation {
-                                    proxy.scrollTo(messages.last?.id, anchor: .bottom)
-                                }
-                            }
-                        }
+                    if !showNotebook {
+                        topBarView
                     }
-                }
-                .offset(x: isSidebarShowing ? 280 : 0)
-                .animation(.easeInOut(duration: 0.25), value: isSidebarShowing)
-                
-                // Bottom Bar and Attachment Menu Container
-                if !showNotebook {
-                    VStack(spacing: 0) {
-                        Spacer()
-                        
-                        // Bottom Bar
-                        HStack(spacing: 12) {
-                            // Plus button
-                            Button(action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    isAttachmentMenuShowing.toggle()
-                                    if isAttachmentMenuShowing {
-                                        isFocused = false
-                                        showActionCards = false
-                                    }
-                                }
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 32))
-                                    .foregroundColor(.appAccent)
-                            }
-                            .padding(.leading, 5)
-                            
-                            // Text input field
-                            TextField("Message", text: $promptText)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(Color.appCardBackground)
-                                .cornerRadius(20)
-                                .frame(maxWidth: isTextFieldFocused ? .infinity : geometry.size.width * 0.6)
-                                .foregroundColor(.appText)
-                                .accentColor(.appAccent)
-                                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                                .focused($isFocused)
-                                .onChange(of: isFocused) { oldValue, newValue in
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isTextFieldFocused = newValue
-                                    }
-                                }
-                                .submitLabel(.send)
-                                .onSubmit {
-                                    sendMessage()
-                                }
-                            
-                            if !isTextFieldFocused {
-                                // Camera button
-                                Button(action: {
-                                    // TODO: Implement camera functionality
-                                }) {
-                                    Image(systemName: "camera.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.appAccent)
-                                }
-                                
-                                // Microphone button
-                                Button(action: {
-                                    // Microphone action
-                                }) {
-                                    Image(systemName: "mic.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.appAccent)
-                                }
-                            } else {
-                                // Send button
-                                Button(action: {
-                                    sendMessage()
-                                }) {
-                                    Image(systemName: "arrow.up.circle.fill")
-                                        .font(.system(size: 32))
-                                        .foregroundColor(.appAccent)
-                                }
-                            }
-                        }
-                        .padding([.leading, .bottom, .trailing], 20)
-                        .frame(height: 94)
-                        .background(Color.appHeaderBackground)
-                        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: -5)
-                        
-                        // Attachment Menu
-                        if isAttachmentMenuShowing {
-                            AttachmentMenuView(isShowing: $isAttachmentMenuShowing, selectedPhoto: $selectedPhoto)
-                                .transition(.move(edge: .bottom))
-                        }
-                    }
-                    .offset(y: isAttachmentMenuShowing ? -10 : 0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isAttachmentMenuShowing)
-                }
-                
-                if isSidebarShowing {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            isSidebarShowing = false
-                        }
                     
-                    HStack {
-                        SidebarView(isShowing: $isSidebarShowing)
-                            .transition(.move(edge: .leading))
-                        
-                        Spacer()
-                    }
+                    mainContentView
                 }
+                
+                sidebarOverlay
             }
-            .safeAreaInset(edge: .top) {
-                // Top Bar
-                if !showNotebook {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Button(action: {
-                                withAnimation {
-                                    isSidebarShowing.toggle()
-                                }
-                            }) {
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
-                            }
-                            .padding(.horizontal, 34)
-                            .padding(.vertical, 26)
-                            
-                            Spacer()
-                            
-                            if noteDisplayState.isShowingNote {
-                                Button(action: {
-                                    noteDisplayState.isShowingNote = false
-                                    noteDisplayState.currentNote = nil
-                                    noteDisplayState.currentTopic = nil
-                                    noteDisplayState.currentSubtopic = nil
-                                    isAttachmentMenuShowing = false
-                                }) {
-                                    Image(systemName: "house.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.appAccent)
-                                }
-                                .padding(.horizontal, 34)
-                                .padding(.vertical, 20)
-                            } else {
-                                Button(action: {
-                                    showNotebook = true
-                                    isAttachmentMenuShowing = false
-                                }) {
-                                    Image(systemName: "note.text")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.appAccent)
-                                }
-                                .padding(.horizontal, 34)
-                                .padding(.vertical, 20)
-                            }
-                        }
+            .fileImporter(
+                isPresented: $isDocumentPickerPresented,
+                allowedContentTypes: [.pdf, .text, .plainText, .rtf, .rtfd],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        selectedDocument = url
                     }
-                    .frame(height: 120)
-                    .background(Color.appHeaderBackground)
-                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
+                case .failure(let error):
+                    print("Error selecting document: \(error.localizedDescription)")
                 }
             }
         }
-        .ignoresSafeArea()
-        .preferredColorScheme(isDarkMode ? .dark : .light)
     }
     
+    // MARK: - Subviews
+    private var mainContentView: some View {
+        Group {
+            if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
+                NoteView(note: note, isPresented: $noteDisplayState.isShowingNote)
+            } else if showNotebook {
+                NotebookView(isPresented: $showNotebook)
+                    .environmentObject(noteDisplayState)
+            } else {
+                chatView
+            }
+        }
+    }
+    
+    private var chatView: some View {
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                chatMessagesView
+                chatInputView
+                attachmentMenuView
+            }
+            
+            if showActionCards {
+                actionCardsView
+                    .offset(y: isAttachmentMenuShowing ? -270 : -80)
+                    .animation(.easeInOut(duration: 0.3), value: isAttachmentMenuShowing)
+            }
+        }
+    }
+    
+    private var chatMessagesView: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 20) {
+                    if messages.isEmpty {
+                        welcomeView
+                    } else {
+                        messagesList
+                    }
+                }
+                .padding(.vertical)
+            }
+            .onChange(of: messages) { _, _ in
+                withAnimation {
+                    proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                }
+            }
+        }
+    }
+    
+    private var welcomeView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            
+            Image("ThreeDots")
+                .frame(width: 97, height: 97)
+                .foregroundColor(.appAccent)
+            
+            Text(hasAnimatedText ? welcomeMessage : animatedText)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.appText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .onAppear {
+                    if !hasAnimatedText {
+                        animateText()
+                    }
+                }
+            
+            Spacer()
+        }
+        .frame(maxHeight: .infinity)
+    }
+    
+    private var actionCardsView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach([
+                    "Categorize my notes",
+                    "Create a new topic",
+                    "Find related content",
+                    "Summarize this text",
+                    "Generate flashcards",
+                    "Explain this concept"
+                ], id: \.self) { action in
+                    actionCardButton(action)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .frame(height: 70)
+        .background(Color.appBackground)
+    }
+    
+    private func actionCardButton(_ action: String) -> some View {
+        Button(action: {
+            promptText = action
+            isFocused = true
+            showActionCards = false
+        }) {
+            Text(action)
+                .fontWeight(.medium)
+                .foregroundColor(.appText)
+                .multilineTextAlignment(.leading)
+                .frame(width: 220)
+                .frame(height: 50)
+                .background(Color.appCardBackground)
+                .cornerRadius(13)
+                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contentShape(Rectangle())
+    }
+    
+    private var messagesList: some View {
+        ForEach(messages) { message in
+            ChatMessageView(message: message)
+                .id(message.id)
+        }
+    }
+    
+    private var chatInputView: some View {
+        VStack(spacing: 0) {
+            if let selectedPhoto = selectedPhoto {
+                photoPreviewView(selectedPhoto)
+            }
+            
+            if let selectedDocument = selectedDocument {
+                documentPreviewView(selectedDocument)
+            }
+            
+            inputBarView
+        }
+    }
+    
+    private func photoPreviewView(_ photo: PhotosPickerItem) -> some View {
+        HStack {
+            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                HStack {
+                    Image(systemName: "photo")
+                        .foregroundColor(.appAccent)
+                    Text("Change Photo")
+                        .foregroundColor(.appAccent)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.appCardBackground)
+                .cornerRadius(16)
+            }
+            
+            Button(action: {
+                self.selectedPhoto = nil
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
+    
+    private func documentPreviewView(_ document: URL) -> some View {
+        HStack {
+            HStack {
+                Image(systemName: "doc.fill")
+                    .foregroundColor(.appAccent)
+                Text(document.lastPathComponent)
+                    .foregroundColor(.appAccent)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.appCardBackground)
+            .cornerRadius(16)
+            
+            Button(action: {
+                self.selectedDocument = nil
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
+    
+    private var inputBarView: some View {
+        HStack(spacing: 12) {
+            attachmentButton
+            textInputField
+            sendButton
+        }
+        .padding([.horizontal, .bottom], 20)
+        .padding(.top, 8)
+        .background(Color.appHeaderBackground)
+    }
+    
+    private var attachmentButton: some View {
+        Button(action: {
+            withAnimation {
+                isAttachmentMenuShowing.toggle()
+            }
+        }) {
+            Image(systemName: "plus.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.appAccent)
+        }
+    }
+    
+    private var textInputField: some View {
+        TextField("Message", text: $promptText)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.appCardBackground)
+            .cornerRadius(20)
+            .frame(maxWidth: .infinity)
+            .foregroundColor(.appText)
+            .accentColor(.appAccent)
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            .focused($isFocused)
+            .onChange(of: isFocused) { oldValue, newValue in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isTextFieldFocused = newValue
+                }
+            }
+            .submitLabel(.send)
+            .onSubmit {
+                sendMessage()
+            }
+    }
+    
+    private var sendButton: some View {
+        Button(action: {
+            sendMessage()
+        }) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.appAccent)
+                .opacity(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil ? 0.5 : 1)
+        }
+        .disabled(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil)
+    }
+    
+    private var attachmentMenuView: some View {
+        Group {
+            if isAttachmentMenuShowing {
+                AttachmentMenuView(isShowing: $isAttachmentMenuShowing, selectedPhoto: $selectedPhoto, selectedDocument: $selectedDocument, isDocumentPickerPresented: $isDocumentPickerPresented)
+                    .transition(.move(edge: .bottom))
+            }
+        }
+    }
+    
+    private var sidebarOverlay: some View {
+        Group {
+            if isSidebarShowing {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isSidebarShowing = false
+                    }
+                
+                HStack {
+                    SidebarView(isShowing: $isSidebarShowing)
+                        .transition(.move(edge: .leading))
+                    
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    private var topBarView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                menuButton
+                Spacer()
+                navigationButton
+            }
+            .background(Color.appHeaderBackground)
+        }
+    }
+    
+    private var menuButton: some View {
+        Button(action: {
+            withAnimation {
+                isSidebarShowing.toggle()
+            }
+        }) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 24))
+                .foregroundColor(.appAccent)
+        }
+        .padding(.horizontal, 34)
+        .padding(.vertical, 26)
+    }
+    
+    private var navigationButton: some View {
+        Group {
+            if noteDisplayState.isShowingNote {
+                Button(action: {
+                    noteDisplayState.isShowingNote = false
+                    noteDisplayState.currentNote = nil
+                    noteDisplayState.currentTopic = nil
+                    noteDisplayState.currentSubtopic = nil
+                    isAttachmentMenuShowing = false
+                }) {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.appAccent)
+                }
+                .padding(.horizontal, 34)
+                .padding(.vertical, 20)
+            } else {
+                Button(action: {
+                    showNotebook = true
+                }) {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 24))
+                        .foregroundColor(.appAccent)
+                }
+                .padding(.horizontal, 34)
+                .padding(.vertical, 20)
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods
     private func sendMessage() {
-        guard !promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        messages.append(ChatMessage(content: promptText, image: nil, isUser: true, timestamp: Date()))
+        guard !promptText.isEmpty || selectedPhoto != nil || selectedDocument != nil else { return }
+        
+        // Add user message
+        let userMessage = ChatMessage(
+            content: promptText,
+            image: nil,
+            document: selectedDocument.map { url in
+                DocumentMessage(
+                    url: url,
+                    name: url.lastPathComponent,
+                    type: url.pathExtension
+                )
+            },
+            isUser: true,
+            timestamp: Date()
+        )
+        messages.append(userMessage)
+        
+        // Clear input
+        let currentPhoto = selectedPhoto
+        let currentDocument = selectedDocument
         promptText = ""
-        isFocused = false
-        showActionCards = false
+        selectedPhoto = nil
+        selectedDocument = nil
+        
+        // Add processing message
+        let processingMessage = ChatMessage(
+            content: "Processing...",
+            image: nil,
+            document: nil,
+            isUser: false,
+            timestamp: Date(),
+            isProcessing: true
+        )
+        messages.append(processingMessage)
+        
+        // Process the photo if one was selected
+        if let photo = currentPhoto {
+            Task {
+                if let data = try? await photo.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    // Add the photo message
+                    DispatchQueue.main.async {
+                        messages.removeLast() // Remove processing message
+                        let photoMessage = ChatMessage(
+                            content: "Here's the image you shared",
+                            image: uiImage,
+                            document: nil,
+                            isUser: false,
+                            timestamp: Date()
+                        )
+                        messages.append(photoMessage)
+                    }
+                }
+            }
+        } else if let document = currentDocument {
+            // Handle document
+            DispatchQueue.main.async {
+                messages.removeLast() // Remove processing message
+                let documentMessage = ChatMessage(
+                    content: "I've received your document: \(document.lastPathComponent)",
+                    image: nil,
+                    document: DocumentMessage(url: document, name: document.lastPathComponent, type: document.pathExtension),
+                    isUser: false,
+                    timestamp: Date()
+                )
+                messages.append(documentMessage)
+            }
+        } else {
+            // Simulate AI response for text-only messages
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                messages.removeLast() // Remove processing message
+                let aiResponse = ChatMessage(
+                    content: "I understand you want to \(userMessage.content). I'll help you organize this content into appropriate topics and notes.",
+                    image: nil,
+                    document: nil,
+                    isUser: false,
+                    timestamp: Date()
+                )
+                messages.append(aiResponse)
+            }
+        }
     }
     
     private func animateText() {
-        var charIndex = 0
+        let fullText = welcomeMessage
+        var currentIndex = 0
+        
         Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
-            if charIndex < fullText.count {
-                let index = fullText.index(fullText.startIndex, offsetBy: charIndex)
+            if currentIndex < fullText.count {
+                let index = fullText.index(fullText.startIndex, offsetBy: currentIndex)
                 animatedText += String(fullText[index])
-                charIndex += 1
+                currentIndex += 1
             } else {
-                hasAnimatedText = true
                 timer.invalidate()
+                hasAnimatedText = true
             }
         }
     }
@@ -669,12 +1226,36 @@ struct ChatMessageView: View {
                         .cornerRadius(12)
                 }
                 
+                if let document = message.document {
+                    HStack {
+                        Image(systemName: "doc.fill")
+                            .foregroundColor(.appAccent)
+                        Text(document.name)
+                            .foregroundColor(.appAccent)
+                    }
+                    .padding(12)
+                    .background(Color.appCardBackground)
+                    .cornerRadius(16)
+                }
+                
                 if !message.content.isEmpty {
                     Text(message.content)
                         .padding(12)
                         .background(message.isUser ? Color.appAccent : Color.appCardBackground)
                         .foregroundColor(message.isUser ? .white : .appText)
                         .cornerRadius(16)
+                }
+                
+                if message.isProcessing {
+                    ProgressView()
+                        .padding(.top, 4)
+                }
+                
+                if let error = message.error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.top, 4)
                 }
                 
                 Text(message.timestamp, style: .time)
@@ -686,6 +1267,7 @@ struct ChatMessageView: View {
                 Spacer()
             }
         }
+        .padding(.horizontal)
     }
 }
 

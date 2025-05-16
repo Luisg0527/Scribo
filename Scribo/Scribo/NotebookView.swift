@@ -1,33 +1,5 @@
 import SwiftUI
 
-// MARK: - Search State
-class SearchState: ObservableObject {
-    @Published var searchText: String = ""
-}
-
-// MARK: - Models
-struct Topic: Identifiable {
-    let id = UUID()
-    var title: String
-    var subtopics: [Subtopic]
-    var date: Date
-}
-
-struct Subtopic: Identifiable {
-    let id = UUID()
-    var title: String
-    var notes: [Note]
-    var date: Date
-}
-
-struct Note: Identifiable {
-    let id = UUID()
-    var title: String
-    var content: String
-    var photoURL: URL?
-    var date: Date
-}
-
 // MARK: - Highlighted Text View
 struct HighlightedText: View {
     let text: String
@@ -58,20 +30,15 @@ struct TopicPreviewView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var isPresented: Bool
     @EnvironmentObject var searchState: SearchState
+    @State private var subtopicToDelete: (Topic, Subtopic)?
+    @State private var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isShowingNewSubtopicSheet = false
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // Header
                 HStack {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20))
-                            .foregroundColor(.appAccent)
-                    }
-                    
                     Text(topic.title)
                         .font(.title2)
                         .fontWeight(.bold)
@@ -107,6 +74,19 @@ struct TopicPreviewView: View {
                             .background(Color.appCardBackground)
                             .cornerRadius(12)
                         }
+                        .contextMenu {
+                            Button(action: {
+                                // Add note action
+                            }) {
+                                Label("Add Note", systemImage: "note.text.badge.plus")
+                            }
+                            
+                            Button(role: .destructive, action: {
+                                subtopicToDelete = (topic, subtopic)
+                            }) {
+                                Label("Delete Subtopic", systemImage: "trash")
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -114,6 +94,34 @@ struct TopicPreviewView: View {
             .padding(.vertical)
         }
         .background(Color.appBackground)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    isShowingNewSubtopicSheet = true
+                }) {
+                    Image(systemName: "plus")
+                        .foregroundColor(.appAccent)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingNewSubtopicSheet) {
+            NewSubtopicView(topic: topic, topics: .constant([]))
+        }
+        .alert("Delete Subtopic", isPresented: .init(
+            get: { subtopicToDelete != nil },
+            set: { if !$0 { subtopicToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                subtopicToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                // Delete subtopic action
+                subtopicToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
+        }
     }
 }
 
@@ -124,20 +132,14 @@ struct SubtopicPreviewView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var searchState: SearchState
     @EnvironmentObject var noteDisplayState: NoteDisplayState
+    @State private var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isShowingNewNoteSheet = false
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // Header
                 HStack {
-                    Button(action: {
-                        isPresented = false
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20))
-                            .foregroundColor(.appAccent)
-                    }
-                    
                     VStack(alignment: .leading) {
                         Text(topic.title)
                             .font(.subheadline)
@@ -200,6 +202,13 @@ struct SubtopicPreviewView: View {
                             .background(Color.appCardBackground)
                             .cornerRadius(12)
                         }
+                        .contextMenu {
+                            Button(role: .destructive, action: {
+                                noteToDelete = (topic, subtopic, note)
+                            }) {
+                                Label("Delete Note", systemImage: "trash")
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -207,6 +216,34 @@ struct SubtopicPreviewView: View {
             .padding(.vertical)
         }
         .background(Color.appBackground)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    isShowingNewNoteSheet = true
+                }) {
+                    Image(systemName: "plus")
+                        .foregroundColor(.appAccent)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingNewNoteSheet) {
+            NewNoteView(topic: topic, subtopic: subtopic, topics: .constant([]))
+        }
+        .alert("Delete Note", isPresented: .init(
+            get: { noteToDelete != nil },
+            set: { if !$0 { noteToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                noteToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                // Delete note action
+                noteToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this note?")
+        }
     }
 }
 
@@ -233,6 +270,11 @@ struct NotebookView: View {
     @State private var selectedSubtopic: Subtopic?
     @State private var selectedNote: Note?
     @State private var isShowingNewTopicSheet = false
+    @State private var isShowingNewSubtopicSheet = false
+    @State private var isShowingNewNoteSheet = false
+    @State private var topicToDelete: Topic?
+    @State private var subtopicToDelete: (Topic, Subtopic)?
+    @State private var noteToDelete: (Topic, Subtopic, Note)?
     
     var filteredTopics: [Topic] {
         if searchState.searchText.isEmpty {
@@ -297,6 +339,27 @@ struct NotebookView: View {
                 List {
                     ForEach(filteredTopics) { topic in
                         TopicRow(topic: topic, selectedTopic: $selectedTopic, selectedSubtopic: $selectedSubtopic, selectedNote: $selectedNote, isPresented: $isPresented)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    topicToDelete = topic
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .contextMenu {
+                                Button(action: {
+                                    selectedTopic = topic
+                                    isShowingNewSubtopicSheet = true
+                                }) {
+                                    Label("Add Subtopic", systemImage: "folder.badge.plus")
+                                }
+                                
+                                Button(role: .destructive, action: {
+                                    topicToDelete = topic
+                                }) {
+                                    Label("Delete Topic", systemImage: "trash")
+                                }
+                            }
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -323,6 +386,67 @@ struct NotebookView: View {
             .sheet(isPresented: $isShowingNewTopicSheet) {
                 NewTopicView(topics: $topics)
             }
+            .sheet(isPresented: $isShowingNewSubtopicSheet) {
+                if let topic = selectedTopic {
+                    NewSubtopicView(topic: topic, topics: $topics)
+                }
+            }
+            .sheet(isPresented: $isShowingNewNoteSheet) {
+                if let topic = selectedTopic, let subtopic = selectedSubtopic {
+                    NewNoteView(topic: topic, subtopic: subtopic, topics: $topics)
+                }
+            }
+            .alert("Delete Topic", isPresented: .init(
+                get: { topicToDelete != nil },
+                set: { if !$0 { topicToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    topicToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let topic = topicToDelete {
+                        topics.removeAll { $0.id == topic.id }
+                    }
+                    topicToDelete = nil
+                }
+            } message: {
+                Text("Are you sure you want to delete this topic? This will also delete all its subtopics and notes.")
+            }
+            .alert("Delete Subtopic", isPresented: .init(
+                get: { subtopicToDelete != nil },
+                set: { if !$0 { subtopicToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    subtopicToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let (topic, subtopic) = subtopicToDelete,
+                       let topicIndex = topics.firstIndex(where: { $0.id == topic.id }) {
+                        topics[topicIndex].subtopics.removeAll { $0.id == subtopic.id }
+                    }
+                    subtopicToDelete = nil
+                }
+            } message: {
+                Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
+            }
+            .alert("Delete Note", isPresented: .init(
+                get: { noteToDelete != nil },
+                set: { if !$0 { noteToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    noteToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let (topic, subtopic, note) = noteToDelete,
+                       let topicIndex = topics.firstIndex(where: { $0.id == topic.id }),
+                       let subtopicIndex = topics[topicIndex].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        topics[topicIndex].subtopics[subtopicIndex].notes.removeAll { $0.id == note.id }
+                    }
+                    noteToDelete = nil
+                }
+            } message: {
+                Text("Are you sure you want to delete this note?")
+            }
         }
         .background(Color.appBackground)
         .safeAreaInset(edge: .top) {
@@ -340,6 +464,8 @@ struct TopicRow: View {
     @State private var isExpanded: Bool = false
     @EnvironmentObject var searchState: SearchState
     @Binding var isPresented: Bool
+    @State private var isShowingNewSubtopicSheet = false
+    @State private var isShowingNewNoteSheet = false
     
     var body: some View {
         NavigationLink(destination: TopicPreviewView(topic: topic, isPresented: $isPresented)) {
@@ -352,6 +478,14 @@ struct TopicRow: View {
                 Text(topic.date, style: .date)
                     .font(.caption)
                     .foregroundColor(.gray)
+            }
+        }
+        .contextMenu {
+            Button(action: {
+                selectedTopic = topic
+                isShowingNewSubtopicSheet = true
+            }) {
+                Label("Add Subtopic", systemImage: "folder.badge.plus")
             }
         }
         .onAppear {
@@ -376,6 +510,9 @@ struct SubtopicRow: View {
     @EnvironmentObject var searchState: SearchState
     @Binding var isPresented: Bool
     let topic: Topic
+    @State private var isShowingNewNoteSheet = false
+    @Binding var subtopicToDelete: (Topic, Subtopic)?
+    @Binding var noteToDelete: (Topic, Subtopic, Note)?
     
     var body: some View {
         DisclosureGroup(
@@ -386,6 +523,13 @@ struct SubtopicRow: View {
         ) {
             ForEach(subtopic.notes) { note in
                 NoteRow(note: note, selectedNote: $selectedNote, isPresented: $isPresented, topic: topic, subtopic: subtopic)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            noteToDelete = (topic, subtopic, note)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
         } label: {
             HStack {
@@ -397,6 +541,27 @@ struct SubtopicRow: View {
                 Text(subtopic.date, style: .date)
                     .font(.caption)
                     .foregroundColor(.gray)
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                subtopicToDelete = (topic, subtopic)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button(action: {
+                selectedSubtopic = subtopic
+                isShowingNewNoteSheet = true
+            }) {
+                Label("Add Note", systemImage: "note.text.badge.plus")
+            }
+            
+            Button(role: .destructive, action: {
+                subtopicToDelete = (topic, subtopic)
+            }) {
+                Label("Delete Subtopic", systemImage: "trash")
             }
         }
         .padding(.leading)
@@ -498,6 +663,69 @@ struct NewTopicView: View {
                 trailing: Button("Add") {
                     let newTopic = Topic(title: title, subtopics: [], date: Date())
                     topics.append(newTopic)
+                    dismiss()
+                }
+                .disabled(title.isEmpty)
+            )
+        }
+    }
+}
+
+struct NewSubtopicView: View {
+    @Environment(\.dismiss) var dismiss
+    let topic: Topic
+    @Binding var topics: [Topic]
+    @State private var title = ""
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                TextField("Subtopic Title", text: $title)
+            }
+            .navigationTitle("New Subtopic")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Add") {
+                    if let index = topics.firstIndex(where: { $0.id == topic.id }) {
+                        let newSubtopic = Subtopic(title: title, notes: [], date: Date())
+                        topics[index].subtopics.append(newSubtopic)
+                    }
+                    dismiss()
+                }
+                .disabled(title.isEmpty)
+            )
+        }
+    }
+}
+
+struct NewNoteView: View {
+    @Environment(\.dismiss) var dismiss
+    let topic: Topic
+    let subtopic: Subtopic
+    @Binding var topics: [Topic]
+    @State private var title = ""
+    @State private var content = ""
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                TextField("Note Title", text: $title)
+                TextEditor(text: $content)
+                    .frame(height: 200)
+            }
+            .navigationTitle("New Note")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Add") {
+                    if let topicIndex = topics.firstIndex(where: { $0.id == topic.id }),
+                       let subtopicIndex = topics[topicIndex].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
+                        let newNote = Note(title: title, content: content, photoURL: nil, date: Date())
+                        topics[topicIndex].subtopics[subtopicIndex].notes.append(newNote)
+                    }
                     dismiss()
                 }
                 .disabled(title.isEmpty)

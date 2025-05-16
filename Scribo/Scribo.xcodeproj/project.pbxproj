@@ -29,9 +29,22 @@
 		BF00E8F22CA1038200CCC3B5 /* ScriboUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScriboUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		31B403F92DD7AD6600BFCA45 /* Exceptions for "Scribo" folder in "Scribo" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BF00E8D72CA1038100CCC3B5 /* Scribo */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BF00E8DA2CA1038100CCC3B5 /* Scribo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				31B403F92DD7AD6600BFCA45 /* Exceptions for "Scribo" folder in "Scribo" target */,
+			);
 			path = Scribo;
 			sourceTree = "<group>";
 		};
@@ -396,8 +409,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scribo/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scribo needs access to your camera to take photos for your notes.";
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Scribo needs access to your photo library to add photos to your notes.\"";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -424,8 +442,13 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scribo/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scribo needs access to your camera to take photos for your notes.";
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Scribo needs access to your photo library to add photos to your notes.\"";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
