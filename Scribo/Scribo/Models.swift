@@ -1,21 +1,21 @@
 import Foundation
 
 // MARK: - Models
-struct Topic: Identifiable {
+struct Topic: Identifiable, Codable {
     let id = UUID()
     var title: String
     var subtopics: [Subtopic]
     var date: Date
 }
 
-struct Subtopic: Identifiable {
+struct Subtopic: Identifiable, Codable {
     let id = UUID()
     var title: String
     var notes: [Note]
     var date: Date
 }
 
-struct Note: Identifiable, Equatable {
+struct Note: Identifiable, Codable, Equatable {
     let id = UUID()
     var title: String
     var content: String

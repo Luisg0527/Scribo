@@ -224,6 +224,7 @@ struct SidebarView: View {
     @State private var showProfile = false
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var recentNotes: [Note] = []
+    @ObservedObject var authManager: AuthManager
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -339,7 +340,25 @@ struct SidebarView: View {
                 }
             }
             .padding(.top, 3.0)
+            
             Spacer()
+            
+            // Sign Out Button
+            Button(action: {
+                Task {
+                    await authManager.signOut()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .foregroundColor(.red)
+                    Text("Sign Out")
+                        .foregroundColor(.red)
+                    Spacer()
+                }
+                .padding()
+                .background(Color.appCardBackground)
+            }
         }
         .frame(width: 280)
         .background(Color.appCardBackground)
@@ -721,6 +740,7 @@ struct RoundedCorner: Shape {
 
 // MARK: - Main Content View
 struct ContentView: View {
+    @StateObject private var authManager = AuthManager()
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var promptText: String = ""
     @State private var isTextFieldFocused: Bool = false
@@ -740,7 +760,23 @@ struct ContentView: View {
     
     let welcomeMessage = "Hello! What can I help you with?"
     
+    // Add this computed property
+    var preferredColorScheme: ColorScheme? {
+        isDarkMode ? .dark : .light
+    }
+    
     var body: some View {
+        Group {
+            if authManager.isAuthenticated {
+                mainView
+            } else {
+                LoginView(authManager: authManager)
+            }
+        }
+        .preferredColorScheme(preferredColorScheme)
+    }
+    
+    private var mainView: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.appBackground
@@ -798,7 +834,20 @@ struct ContentView: View {
             if showActionCards {
                 actionCardsView
                     .offset(y: isAttachmentMenuShowing ? -270 : -80)
-                    .animation(.easeInOut(duration: 0.3), value: isAttachmentMenuShowing)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: isAttachmentMenuShowing)
+        .onTapGesture {
+            isFocused = false
+        }
+        .onChange(of: selectedPhoto) { oldValue, newValue in
+            withAnimation {
+                showActionCards = newValue == nil
+            }
+        }
+        .onChange(of: selectedDocument) { oldValue, newValue in
+            withAnimation {
+                showActionCards = newValue == nil
             }
         }
     }
@@ -833,7 +882,7 @@ struct ContentView: View {
             
             Text(hasAnimatedText ? welcomeMessage : animatedText)
                 .font(.title3)
-                .fontWeight(.bold)
+                .fontWeight(.medium)
                 .foregroundColor(.appText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -845,6 +894,7 @@ struct ContentView: View {
             
             Spacer()
         }
+        .padding([.top, .leading, .trailing], 30)
         .frame(maxHeight: .infinity)
     }
     
@@ -876,10 +926,11 @@ struct ContentView: View {
             showActionCards = false
         }) {
             Text(action)
-                .fontWeight(.medium)
-                .foregroundColor(.appText)
+                .font(.body)
+                .fontWeight(.regular)
+                .foregroundColor(.gray)
                 .multilineTextAlignment(.leading)
-                .frame(width: 220)
+                .frame(width: 200)
                 .frame(height: 50)
                 .background(Color.appCardBackground)
                 .cornerRadius(13)
@@ -1002,6 +1053,9 @@ struct ContentView: View {
             .onChange(of: isFocused) { oldValue, newValue in
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isTextFieldFocused = newValue
+                    if newValue {
+                        isAttachmentMenuShowing = false
+                    }
                 }
             }
             .submitLabel(.send)
@@ -1015,7 +1069,7 @@ struct ContentView: View {
             sendMessage()
         }) {
             Image(systemName: "arrow.up.circle.fill")
-                .font(.system(size: 32))
+                .font(.system(size: 24))
                 .foregroundColor(.appAccent)
                 .opacity(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil ? 0.5 : 1)
         }
@@ -1026,7 +1080,6 @@ struct ContentView: View {
         Group {
             if isAttachmentMenuShowing {
                 AttachmentMenuView(isShowing: $isAttachmentMenuShowing, selectedPhoto: $selectedPhoto, selectedDocument: $selectedDocument, isDocumentPickerPresented: $isDocumentPickerPresented)
-                    .transition(.move(edge: .bottom))
             }
         }
     }
@@ -1041,7 +1094,7 @@ struct ContentView: View {
                     }
                 
                 HStack {
-                    SidebarView(isShowing: $isSidebarShowing)
+                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
                         .transition(.move(edge: .leading))
                     
                     Spacer()
@@ -1068,7 +1121,7 @@ struct ContentView: View {
             }
         }) {
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 24))
+                .font(.system(size: 20))
                 .foregroundColor(.appAccent)
         }
         .padding(.horizontal, 34)
@@ -1096,7 +1149,7 @@ struct ContentView: View {
                     showNotebook = true
                 }) {
                     Image(systemName: "note.text")
-                        .font(.system(size: 24))
+                        .font(.system(size: 20))
                         .foregroundColor(.appAccent)
                 }
                 .padding(.horizontal, 34)
