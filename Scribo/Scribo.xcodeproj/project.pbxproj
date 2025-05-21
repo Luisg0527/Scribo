@@ -34,7 +34,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		31B404282DD7C06F00BFCA45 /* Exceptions for "Scribo" folder in "Scribo" target */ = {
+		31E951482DDD7B450044BE1D /* Exceptions for "Scribo" folder in "Scribo" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -47,7 +47,7 @@
 		BF00E8DA2CA1038100CCC3B5 /* Scribo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				31B404282DD7C06F00BFCA45 /* Exceptions for "Scribo" folder in "Scribo" target */,
+				31E951482DDD7B450044BE1D /* Exceptions for "Scribo" folder in "Scribo" target */,
 			);
 			path = Scribo;
 			sourceTree = "<group>";
@@ -425,7 +425,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -458,7 +458,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

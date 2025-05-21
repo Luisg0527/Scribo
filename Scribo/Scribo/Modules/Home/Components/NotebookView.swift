@@ -175,10 +175,12 @@ struct SubtopicPreviewView: View {
                 noteToDelete = nil
             }
             Button("Delete", role: .destructive) {
-                if let (topic, subtopic, note) = noteToDelete {
-                    dataManager.deleteNote(note, from: subtopic, from: topic)
+                Task {
+                    if let (topic, subtopic, note) = noteToDelete {
+                        try? await dataManager.deleteNote(note)
+                    }
+                    noteToDelete = nil
                 }
-                noteToDelete = nil
             }
         } message: {
             Text("Are you sure you want to delete this note?")
@@ -272,7 +274,7 @@ struct SubtopicPreviewView: View {
     }
                                 
     private func noteDate(_ note: Note) -> some View {
-                                Text(note.date, style: .date)
+                                Text(note.createdAt, style: .date)
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
@@ -289,202 +291,138 @@ struct SubtopicPreviewView: View {
 
 // MARK: - Notebook View
 struct NotebookView: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var searchState = SearchState()
-    @StateObject private var dataManager = DataManager()
     @Binding var isPresented: Bool
+    @ObservedObject var authManager: AuthManager
+    @State private var topics: [Topic] = []
     @State private var selectedTopic: Topic?
     @State private var selectedSubtopic: Subtopic?
-    @State private var selectedNote: Note?
-    @State private var isShowingNewTopicSheet = false
-    @State private var isShowingNewSubtopicSheet = false
-    @State private var isShowingNewNoteSheet = false
-    @State private var topicToDelete: Topic?
-    @State private var subtopicToDelete: (Topic, Subtopic)?
-    @State private var noteToDelete: (Topic, Subtopic, Note)?
-    
-    var filteredTopics: [Topic] {
-        if searchState.searchText.isEmpty {
-            return dataManager.topics
-        }
-        
-        return dataManager.topics.compactMap { topic in
-            let matchingSubtopics = topic.subtopics.compactMap { subtopic -> Subtopic? in
-                let matchingNotes = subtopic.notes.filter { note in
-                    note.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                    note.content.localizedCaseInsensitiveContains(searchState.searchText)
-                }
-                
-                if !matchingNotes.isEmpty || subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) {
-                    return Subtopic(
-                        title: subtopic.title,
-                        notes: matchingNotes,
-                        date: subtopic.date
-                    )
-                }
-                return nil
-            }
-            
-            if !matchingSubtopics.isEmpty || topic.title.localizedCaseInsensitiveContains(searchState.searchText) {
-                return Topic(
-                    title: topic.title,
-                    subtopics: matchingSubtopics,
-                    date: topic.date
-                )
-            }
-            return nil
-        }
-    }
+    @State private var notes: [Note] = []
+    @State private var isAddingTopic: Bool = false
+    @State private var isAddingSubtopic: Bool = false
+    @State private var isAddingNote: Bool = false
+    @State private var newTopicTitle: String = ""
+    @State private var newTopicDescription: String = ""
+    @State private var newSubtopicTitle: String = ""
+    @State private var newSubtopicDescription: String = ""
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Search Bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    
-                    TextField("Search notes...", text: $searchState.searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                    
-                    if !searchState.searchText.isEmpty {
-                        Button(action: {
-                            searchState.searchText = ""
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(.gray)
-                        }
-                    }
+            List {
+                ForEach(topics) { topic in
+                    TopicSection(
+                        topic: topic,
+                        selectedTopic: $selectedTopic,
+                        selectedSubtopic: $selectedSubtopic,
+                        notes: $notes,
+                        isAddingSubtopic: $isAddingSubtopic,
+                        newSubtopicTitle: $newSubtopicTitle,
+                        newSubtopicDescription: $newSubtopicDescription
+                    )
                 }
-                .padding(8)
-                .background(Color.appCardBackground)
-                .cornerRadius(10)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                
-                // List of Topics
-                List {
-                    ForEach(filteredTopics) { topic in
-                        NavigationLink(destination: TopicPreviewView(topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-                            TopicRow(topic: topic, 
-                                   selectedTopic: $selectedTopic, 
-                                   selectedSubtopic: $selectedSubtopic, 
-                                   selectedNote: $selectedNote, 
-                                   isPresented: $isPresented,
-                                   dataManager: dataManager)
-                        }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    topicToDelete = topic
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                            .contextMenu {
-                                Button(action: {
-                                    selectedTopic = topic
-                                    isShowingNewSubtopicSheet = true
-                                }) {
-                                    Label("Add Subtopic", systemImage: "folder.badge.plus")
-                                }
-                                
-                                Button(role: .destructive, action: {
-                                    topicToDelete = topic
-                                }) {
-                                    Label("Delete Topic", systemImage: "trash")
-                                }
-                            }
-                    }
-                }
-                .listStyle(PlainListStyle())
             }
+            .listStyle(SidebarListStyle())
             .navigationTitle("Notebook")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        isPresented = false
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.appAccent)
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        isShowingNewTopicSheet = true
+                        isAddingTopic = true
                     }) {
                         Image(systemName: "plus")
                     }
                 }
-            }
-            .sheet(isPresented: $isShowingNewTopicSheet) {
-                NewTopicView(dataManager: dataManager)
-            }
-            .sheet(isPresented: $isShowingNewSubtopicSheet) {
-                if let topic = selectedTopic {
-                    NewSubtopicView(topic: topic, dataManager: DataManager())
-                }
-            }
-            .sheet(isPresented: $isShowingNewNoteSheet) {
-                if let topic = selectedTopic, let subtopic = selectedSubtopic {
-                    NewNoteView(topic: topic, subtopic: subtopic, dataManager: dataManager)
-                }
-            }
-            .alert("Delete Topic", isPresented: .init(
-                get: { topicToDelete != nil },
-                set: { if !$0 { topicToDelete = nil } }
-            )) {
-                Button("Cancel", role: .cancel) {
-                    topicToDelete = nil
-                }
-                Button("Delete", role: .destructive) {
-                    if let topic = topicToDelete {
-                        dataManager.deleteTopic(topic)
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isPresented = false
+                    }) {
+                        Image(systemName: "xmark")
                     }
-                    topicToDelete = nil
                 }
-            } message: {
-                Text("Are you sure you want to delete this topic? This will also delete all its subtopics and notes.")
             }
-            .alert("Delete Subtopic", isPresented: .init(
-                get: { subtopicToDelete != nil },
-                set: { if !$0 { subtopicToDelete = nil } }
-            )) {
-                Button("Cancel", role: .cancel) {
-                    subtopicToDelete = nil
-                }
-                Button("Delete", role: .destructive) {
-                    if let (topic, subtopic) = subtopicToDelete {
-                        dataManager.deleteSubtopic(subtopic, from: topic)
-                    }
-                    subtopicToDelete = nil
-                }
-            } message: {
-                Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
-            }
-            .alert("Delete Note", isPresented: .init(
-                get: { noteToDelete != nil },
-                set: { if !$0 { noteToDelete = nil } }
-            )) {
-                Button("Cancel", role: .cancel) {
-                    noteToDelete = nil
-                }
-                Button("Delete", role: .destructive) {
-                    if let (topic, subtopic, note) = noteToDelete {
-                        dataManager.deleteNote(note, from: subtopic, from: topic)
-                    }
-                    noteToDelete = nil
-                }
-            } message: {
-                Text("Are you sure you want to delete this note?")
+            .sheet(isPresented: $isAddingTopic) {
+                AddTopicView(
+                    isPresented: $isAddingTopic,
+                    title: $newTopicTitle,
+                    description: $newTopicDescription,
+                    onSave: addTopic
+                )
             }
         }
-        .background(Color.appBackground)
-        .safeAreaInset(edge: .top) {
-            Color.clear.frame(height: 120)
+    }
+    
+    private func addTopic() {
+        Task {
+            let newTopic = Topic(
+                title: newTopicTitle,
+                description: newTopicDescription
+            )
+            topics.append(newTopic)
+            newTopicTitle = ""
+            newTopicDescription = ""
         }
-        .environmentObject(searchState)
+    }
+}
+
+struct TopicSection: View {
+    let topic: Topic
+    @Binding var selectedTopic: Topic?
+    @Binding var selectedSubtopic: Subtopic?
+    @Binding var notes: [Note]
+    @Binding var isAddingSubtopic: Bool
+    @Binding var newSubtopicTitle: String
+    @Binding var newSubtopicDescription: String
+    
+    var body: some View {
+        Section(header: Text(topic.title)) {
+            ForEach(notes.filter { $0.topicId == topic.id }) { note in
+                NavigationLink(destination: NoteView(note: note, isPresented: .constant(true))) {
+                    VStack(alignment: .leading) {
+                        Text(note.title)
+                            .font(.headline)
+                        Text(note.content)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            
+            Button(action: {
+                selectedTopic = topic
+                isAddingSubtopic = true
+            }) {
+                Label("Add Subtopic", systemImage: "plus")
+            }
+        }
+    }
+}
+
+struct AddTopicView: View {
+    @Binding var isPresented: Bool
+    @Binding var title: String
+    @Binding var description: String
+    let onSave: () -> Void
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Topic Details")) {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $description)
+                }
+            }
+            .navigationTitle("New Topic")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    isPresented = false
+                },
+                trailing: Button("Save") {
+                    onSave()
+                    isPresented = false
+                }
+                .disabled(title.isEmpty)
+            )
+        }
     }
 }
 
@@ -500,6 +438,10 @@ struct TopicRow: View {
     @State private var isShowingNewNoteSheet = false
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
+    @State private var subtopicToEdit: (Topic, Subtopic)?
+    @State private var editedSubtopicTitle: String = ""
+    @State private var isShowingEditSubtopicSheet = false
+    @State private var subtopicToDelete: (Topic, Subtopic)?
     
     var body: some View {
         DisclosureGroup(
@@ -518,9 +460,21 @@ struct TopicRow: View {
                             HighlightedText(text: subtopic.title, searchText: searchState.searchText)
                                 .font(.subheadline)
                             Spacer()
-                            Text(subtopic.date, style: .date)
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                        }
+                    }
+                    .contextMenu {
+                        Button {
+                            subtopicToEdit = (topic, subtopic)
+                            editedSubtopicTitle = subtopic.title
+                            isShowingEditSubtopicSheet = true
+                        } label: {
+                            Label("Edit Title", systemImage: "pencil")
+                        }
+                        
+                        Button(role: .destructive) {
+                            subtopicToDelete = (topic, subtopic)
+                        } label: {
+                            Label("Delete Subtopic", systemImage: "trash")
                         }
                     }
                 }
@@ -533,9 +487,6 @@ struct TopicRow: View {
                 HighlightedText(text: topic.title, searchText: searchState.searchText)
                     .font(.headline)
                 Spacer()
-                Text(topic.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
         }
         .contextMenu {
@@ -545,6 +496,48 @@ struct TopicRow: View {
             }) {
                 Label("Add Subtopic", systemImage: "folder.badge.plus")
             }
+        }
+        .sheet(isPresented: $isShowingEditSubtopicSheet) {
+            NavigationView {
+                Form {
+                    TextField("Subtopic Title", text: $editedSubtopicTitle)
+                }
+                .navigationTitle("Edit Subtopic Title")
+                .navigationBarItems(
+                    leading: Button("Cancel") {
+                        isShowingEditSubtopicSheet = false
+                    },
+                    trailing: Button("Save") {
+                        if let (topic, subtopic) = subtopicToEdit {
+                            Task {
+                                var updatedSubtopic = subtopic
+                                updatedSubtopic.title = editedSubtopicTitle
+                                try? await dataManager.updateSubtopic(updatedSubtopic)
+                            }
+                        }
+                        isShowingEditSubtopicSheet = false
+                    }
+                    .disabled(editedSubtopicTitle.isEmpty)
+                )
+            }
+        }
+        .alert("Delete Subtopic", isPresented: .init(
+            get: { subtopicToDelete != nil },
+            set: { if !$0 { subtopicToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                subtopicToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let (topic, subtopic) = subtopicToDelete {
+                    Task {
+                        try? await dataManager.deleteSubtopic(subtopic)
+                    }
+                }
+                subtopicToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
         }
         .onAppear {
             if !searchState.searchText.isEmpty {
@@ -596,9 +589,6 @@ struct SubtopicRow: View {
                 HighlightedText(text: subtopic.title, searchText: searchState.searchText)
                     .font(.subheadline)
                 Spacer()
-                Text(subtopic.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
         }
         .swipeActions(edge: .trailing) {
@@ -658,7 +648,7 @@ struct NoteRow: View {
                 HighlightedText(text: note.title, searchText: searchState.searchText)
                     .font(.subheadline)
                 Spacer()
-                Text(note.date, style: .date)
+                Text(note.createdAt, style: .date)
                     .font(.caption)
                     .foregroundColor(.gray)
             }
@@ -693,7 +683,7 @@ struct NoteDetailView: View {
                 HighlightedText(text: note.content, searchText: searchState.searchText)
                     .font(.body)
                 
-                Text(note.date, style: .date)
+                Text(note.createdAt, style: .date)
                     .font(.caption)
                     .foregroundColor(.gray)
             }
@@ -719,8 +709,11 @@ struct NewTopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addTopic(title: title)
-                    dismiss()
+                    Task {
+                        let newTopic = Topic(title: title, description: "")
+                        try? await dataManager.createTopic(newTopic)
+                        dismiss()
+                    }
                 }
                 .disabled(title.isEmpty)
             )
@@ -745,8 +738,11 @@ struct NewSubtopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addSubtopic(to: topic, title: title)
-                    dismiss()
+                    Task {
+                        let newSubtopic = Subtopic(title: title, description: "", topicId: topic.id)
+                        try? await dataManager.createSubtopic(newSubtopic)
+                        dismiss()
+                    }
                 }
                 .disabled(title.isEmpty)
             )
@@ -775,7 +771,7 @@ struct NewNoteView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
+                    dataManager.addNoteToSubtopic(to: subtopic, in: topic, title: title, content: content)
                     dismiss()
                 }
                 .disabled(title.isEmpty)
@@ -786,6 +782,6 @@ struct NewNoteView: View {
 
 struct NotebookView_Previews: PreviewProvider {
     static var previews: some View {
-        NotebookView(isPresented: .constant(true))
+        NotebookView(isPresented: .constant(true), authManager: AuthManager())
     }
 }

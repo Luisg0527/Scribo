@@ -4,12 +4,14 @@ import Supabase
 
 class AuthManager: ObservableObject {
     @Published var isAuthenticated = false
-    @Published var currentUser: User?
+    @Published var currentUser: User
     @Published var error: String?
     
     private let supabase = SupabaseConfig.shared.client
     
     init() {
+        // Initialize currentUser with a default value
+        self.currentUser = User(id: "", email: "", createdAt: Date())
         // Check for existing session
         Task {
             await checkSession()
@@ -24,7 +26,7 @@ class AuthManager: ObservableObject {
             currentUser = session.user
         } catch {
             isAuthenticated = false
-            currentUser = nil
+            currentUser = User(id: "", email: "", createdAt: Date())  // Reset to default
             self.error = error.localizedDescription
         }
     }
@@ -67,7 +69,7 @@ class AuthManager: ObservableObject {
             
             // Clear local state
             isAuthenticated = false
-            currentUser = nil
+            currentUser = User(id: "", email: "", createdAt: Date())  // Reset to default
             self.error = nil
             
             // Verify session is cleared
