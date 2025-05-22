@@ -835,7 +835,7 @@ struct ContentView: View {
             .padding(.vertical, 10)
         }
         .frame(height: 70)
-        .background(Color.appBackground)
+        .background(Color.clear)
     }
     
     private func actionCardButton(_ action: String) -> some View {

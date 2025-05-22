@@ -166,6 +166,7 @@ struct NoteView: View {
             dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrl: attachmentUrl)
         } else if let note = noteDisplayState.currentNote {
             // Update existing note
+            print("Updating note: \(note.id)")
             dataManager.updateNote(note, in: subtopic, in: topic, newTitle: editedTitle, newContent: editedContent, newAttachmentUrl: attachmentUrl)
         }
     }

@@ -187,7 +187,7 @@ class DataManager: ObservableObject {
                        let subtopicIndex = topics[topicIndex].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
                         topics[topicIndex].subtopics[subtopicIndex].title = newTitle
                     }
-                }
+                }   
             } catch {
                 print("Error updating subtopic: \(error)")
             }
@@ -310,7 +310,7 @@ class DataManager: ObservableObject {
                 try await supabase
                     .from("notes_view")
                     .update(["updated_at_check": ISO8601DateFormatter().string(from: Date())])
-                    .eq("note_id", value: note.id.uuidString)
+                    .eq("note_id", value: note.id)
                     .execute()
                 
                 await MainActor.run {
@@ -329,10 +329,16 @@ class DataManager: ObservableObject {
     func deleteNote(_ note: Note, from subtopic: Subtopic, from topic: Topic) {
         Task {
             do {
+                // Get the current user's ID from the session
+                let session = try await supabase.auth.session
+                let userId = session.user.id
+                
+                // Delete the note (notes_view records will be automatically deleted due to ON DELETE CASCADE)
                 try await supabase
                     .from("notes")
                     .delete()
                     .eq("id", value: note.id.uuidString)
+                    .eq("user_id", value: userId.uuidString)
                     .execute()
                 
                 await MainActor.run {
