@@ -9,12 +9,22 @@ struct NoteView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var noteImage: UIImage?
     let isNewNote: Bool
+    @ObservedObject var dataManager: DataManager
     
-    init(note: Note?, isPresented: Binding<Bool>) {
+    init(note: Note?, isPresented: Binding<Bool>, dataManager: DataManager) {
+        print("NoteView initialized with note: \(String(describing: note?.id))")
         self._isPresented = isPresented
         self._editedTitle = State(initialValue: note?.title ?? "")
         self._editedContent = State(initialValue: note?.content ?? "")
         self.isNewNote = note == nil
+        self.dataManager = dataManager
+        
+        // Load existing image if note has an attachment_url
+        if let note = note, let attachmentUrl = note.attachment_url {
+            if let image = loadImage(from: attachmentUrl) {
+                self._noteImage = State(initialValue: image)
+            }
+        }
     }
     
     var body: some View {
@@ -48,6 +58,24 @@ struct NoteView: View {
             }
             .padding()
             .background(Color.appHeaderBackground)
+            .onAppear {
+                print("NoteView appeared with note: \(String(describing: noteDisplayState.currentNote?.id))")
+                print("Current topic: \(String(describing: noteDisplayState.currentTopic?.id))")
+                print("Current subtopic: \(String(describing: noteDisplayState.currentSubtopic?.id))")
+                
+                // Add to recent notes when view appears
+                if let note = noteDisplayState.currentNote {
+                    print("Adding note to recent notes: \(note.id)")
+                    Task {
+                        do {
+                            try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                            print("Successfully added note to recent notes")
+                        } catch {
+                            print("Error adding recent note: \(error)")
+                        }
+                    }
+                }
+            }
             
             // Note Content
             ScrollView {
@@ -124,24 +152,46 @@ struct NoteView: View {
     }
     
     private func saveNote() {
-        // TODO: Implement save functionality
-        // This should save the note to your data store
-        // For now, we'll just update the display state
-        if isNewNote {
-            let newNote = Note(
-                title: editedTitle,
-                content: editedContent,
-                photoURL: nil, // TODO: Save image and get URL
-                date: Date()
-            )
-            noteDisplayState.currentNote = newNote
-        } else {
-            // Update existing note
-            var updatedNote = noteDisplayState.currentNote
-            updatedNote?.title = editedTitle
-            updatedNote?.content = editedContent
-            // TODO: Update image URL if changed
-            noteDisplayState.currentNote = updatedNote
+        guard let topic = noteDisplayState.currentTopic,
+              let subtopic = noteDisplayState.currentSubtopic else { return }
+        
+        // Save image if present
+        var attachmentUrl: String? = nil
+        if let image = noteImage {
+            attachmentUrl = saveImage(image)
         }
+        
+        if isNewNote {
+            // Create new note
+            dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrl: attachmentUrl)
+        } else if let note = noteDisplayState.currentNote {
+            // Update existing note
+            dataManager.updateNote(note, in: subtopic, in: topic, newTitle: editedTitle, newContent: editedContent, newAttachmentUrl: attachmentUrl)
+        }
+    }
+    
+    private func saveImage(_ image: UIImage) -> String? {
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
+        
+        let fileName = "\(UUID().uuidString).jpg"
+        let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: fileURL)
+            return fileName
+        } catch {
+            print("Error saving image: \(error)")
+            return nil
+        }
+    }
+    
+    private func loadImage(from fileName: String) -> UIImage? {
+        let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return UIImage(data: data)
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 } 

@@ -73,150 +73,6 @@ extension Color {
     })
 }
 
-// MARK: - Profile View
-struct ProfileView: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var profileImage: UIImage?
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var name: String = ""
-    @State private var email: String = ""
-    @State private var bio: String = ""
-    @AppStorage("isDarkMode") private var isDarkMode = false
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Profile Image Section
-                    VStack {
-                        if let profileImage = profileImage {
-                            Image(uiImage: profileImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.appAccent, lineWidth: 3)
-                                )
-                        } else {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 120, height: 120)
-                                .foregroundColor(.appAccent)
-                        }
-                        
-                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                            Text("Change Photo")
-                                .font(.subheadline)
-                                .foregroundColor(.appAccent)
-                        }
-                        .onChange(of: selectedPhoto) { oldValue, newValue in
-                            if let newValue {
-                                Task {
-                                    if let data = try? await newValue.loadTransferable(type: Data.self),
-                                       let uiImage = UIImage(data: data) {
-                                        profileImage = uiImage
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top)
-                    
-                    // Profile Information
-                    VStack(spacing: 20) {
-                        // Name Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Name")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            TextField("Your name", text: $name)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .foregroundColor(.appText)
-                        }
-                        
-                        // Email Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Email")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            TextField("Your email", text: $email)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .foregroundColor(.appText)
-                                .keyboardType(.emailAddress)
-                                .autocapitalization(.none)
-                        }
-                        
-                        // Bio Field
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Bio")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            TextEditor(text: $bio)
-                                .frame(height: 100)
-                                .padding(4)
-                                .background(Color.appCardBackground)
-                                .cornerRadius(8)
-                                .foregroundColor(.appText)
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Preferences Section
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Preferences")
-                            .font(.headline)
-                            .foregroundColor(.appText)
-                        
-                        // Dark Mode Toggle
-                        Toggle(isOn: $isDarkMode) {
-                            HStack {
-                                Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
-                                    .foregroundColor(.appAccent)
-                                Text("Dark Mode")
-                                    .foregroundColor(.appText)
-                            }
-                        }
-                        .toggleStyle(SwitchToggleStyle(tint: .appAccent))
-                    }
-                    .padding()
-                    .background(Color.appCardBackground)
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                }
-            }
-            .background(Color.appBackground)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(.appAccent)
-                    }
-                }
-                
-                ToolbarItem(placement: .principal) {
-                    Text("Profile")
-                        .font(.headline)
-                        .foregroundColor(.appText)
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        // Save profile changes
-                        dismiss()
-                    }
-                    .foregroundColor(.appAccent)
-                }
-            }
-        }
-    }
-}
-
 struct SidebarView: View {
     @Binding var isShowing: Bool
     @AppStorage("isDarkMode") private var isDarkMode = false
@@ -225,6 +81,9 @@ struct SidebarView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var recentNotes: [Note] = []
     @ObservedObject var authManager: AuthManager
+    @StateObject private var dataManager = DataManager()
+    @State private var profileImage: UIImage?
+    @State private var isLoadingRecentNotes = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -233,9 +92,17 @@ struct SidebarView: View {
                 showProfile = true
             }) {
                 HStack {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(.appAccent)
+                    if let profileImage {
+                        Image(uiImage: profileImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } else {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.appAccent)
+                    }
                     
                     VStack(alignment: .leading) {
                         Text("Profile")
@@ -308,7 +175,10 @@ struct SidebarView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                 
-                if recentNotes.isEmpty {
+                if isLoadingRecentNotes {
+                    ProgressView()
+                        .padding()
+                } else if recentNotes.isEmpty {
                     Text("No recent notes")
                         .font(.subheadline)
                         .foregroundColor(.gray)
@@ -316,26 +186,7 @@ struct SidebarView: View {
                         .padding(.vertical, 12)
                 } else {
                     ForEach(recentNotes) { note in
-                        Button(action: {
-                            noteDisplayState.currentNote = note
-                            noteDisplayState.isShowingNote = true
-                            isShowing = false
-                        }) {
-                            HStack {
-                                Image(systemName: "note.text")
-                                    .foregroundColor(.appAccent)
-                                VStack(alignment: .leading) {
-                                    Text(note.title)
-                                        .foregroundColor(.appText)
-                                    Text(note.date, style: .date)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 12)
-                        }
+                        recentNoteButton(note)
                     }
                 }
             }
@@ -368,16 +219,83 @@ struct SidebarView: View {
             }
         }
         .onChange(of: noteDisplayState.currentNote) { oldValue, newValue in
+            print("Note changed - Old: \(String(describing: oldValue?.id)), New: \(String(describing: newValue?.id))")
             if let note = newValue {
-                // Add the note to recent notes if it's not already there
-                if !recentNotes.contains(where: { $0.id == note.id }) {
-                    recentNotes.insert(note, at: 0)
-                    // Keep only the 5 most recent notes
-                    if recentNotes.count > 5 {
-                        recentNotes.removeLast()
+                print("Adding note to recent notes: \(note.id)")
+                Task {
+                    do {
+                        try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                        print("Successfully added note to recent notes")
+                        await loadRecentNotes()
+                    } catch {
+                        print("Error adding recent note: \(error)")
                     }
                 }
             }
+        }
+        .onAppear {
+            print("SidebarView appeared - loading initial data")
+            Task {
+                await loadProfileImage()
+                await loadRecentNotes()
+            }
+        }
+        .onChange(of: isShowing) { oldValue, newValue in
+            if newValue {
+                print("Sidebar shown - refreshing recent notes")
+                Task {
+                    await loadRecentNotes()
+                }
+            }
+        }
+    }
+    
+    private func loadRecentNotes() async {
+        print("Loading recent notes...")
+        isLoadingRecentNotes = true
+        do {
+            recentNotes = try await dataManager.getRecentNotes()
+            print("Loaded \(recentNotes.count) recent notes")
+        } catch {
+            print("Failed to load recent notes: \(error.localizedDescription)")
+        }
+        isLoadingRecentNotes = false
+    }
+    
+    private func loadProfileImage() async {
+        do {
+            let user = try await dataManager.getUserProfile()
+            if let avatarUrl = user.avatar_url {
+                let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(avatarUrl)
+                if let data = try? Data(contentsOf: fileURL),
+                   let image = UIImage(data: data) {
+                    await MainActor.run {
+                        profileImage = image
+                    }
+                }
+            }
+        } catch {
+            print("Failed to load profile image: \(error.localizedDescription)")
+        }
+    }
+    
+    private func recentNoteButton(_ note: Note) -> some View {
+        Button(action: {
+            noteDisplayState.currentNote = note
+            noteDisplayState.isShowingNote = true
+            isShowing = false
+        }) {
+            HStack {
+                Image(systemName: "note.text")
+                    .foregroundColor(.appAccent)
+                VStack(alignment: .leading) {
+                    Text(note.title)
+                        .foregroundColor(.appText)
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
         }
     }
 }
@@ -757,6 +675,7 @@ struct ContentView: View {
     @State private var animatedText = ""
     @State private var hasAnimatedText = false
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @StateObject private var dataManager = DataManager()
     
     let welcomeMessage = "Hello! What can I help you with?"
     
@@ -813,7 +732,7 @@ struct ContentView: View {
     private var mainContentView: some View {
         Group {
             if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
-                NoteView(note: note, isPresented: $noteDisplayState.isShowingNote)
+                NoteView(note: note, isPresented: $noteDisplayState.isShowingNote, dataManager: dataManager)
             } else if showNotebook {
                 NotebookView(isPresented: $showNotebook)
                     .environmentObject(noteDisplayState)

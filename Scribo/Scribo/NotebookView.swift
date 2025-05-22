@@ -34,6 +34,8 @@ struct TopicPreviewView: View {
     @State private var subtopicToDelete: (Topic, Subtopic)?
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewSubtopicSheet = false
+    @State private var selectedSubtopic: Subtopic?
+    @State private var isShowingEditSubtopicSheet = false
     
     var body: some View {
         ScrollView {
@@ -53,6 +55,11 @@ struct TopicPreviewView: View {
         .sheet(isPresented: $isShowingNewSubtopicSheet) {
             NewSubtopicView(topic: topic, dataManager: dataManager)
         }
+        .sheet(isPresented: $isShowingEditSubtopicSheet) {
+            if let subtopic = selectedSubtopic {
+                EditSubtopicView(subtopic: subtopic, topic: topic, dataManager: dataManager)
+            }
+        }
         .alert("Delete Subtopic", isPresented: .init(
             get: { subtopicToDelete != nil },
             set: { if !$0 { subtopicToDelete = nil } }
@@ -61,7 +68,9 @@ struct TopicPreviewView: View {
                 subtopicToDelete = nil
             }
             Button("Delete", role: .destructive) {
-                // Delete subtopic action
+                if let (topic, subtopic) = subtopicToDelete {
+                    dataManager.deleteSubtopic(subtopic, from: topic)
+                }
                 subtopicToDelete = nil
             }
         } message: {
@@ -94,39 +103,46 @@ struct TopicPreviewView: View {
     
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
         NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Image(systemName: "folder.fill.badge.person.crop")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
-                                
-                                Text(subtopic.title)
-                                    .font(.headline)
-                                    .foregroundColor(.appText)
-                                    .lineLimit(2)
-                                
-                                Text("\(subtopic.notes.count) notes")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color.appCardBackground)
-                            .cornerRadius(12)
-                        }
-                        .contextMenu {
-                            Button(action: {
-                                // Add note action
-                            }) {
-                                Label("Add Note", systemImage: "note.text.badge.plus")
-                            }
-                            
-                            Button(role: .destructive, action: {
-                                subtopicToDelete = (topic, subtopic)
-                            }) {
-                                Label("Delete Subtopic", systemImage: "trash")
-                            }
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: "folder.fill.badge.person.crop")
+                    .font(.system(size: 24))
+                    .foregroundColor(.appAccent)
+                
+                Text(subtopic.title)
+                    .font(.headline)
+                    .foregroundColor(.appText)
+                    .lineLimit(2)
+                
+                Text("\(subtopic.notes.count) notes")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color.appCardBackground)
+            .cornerRadius(12)
+        }
+        .contextMenu {
+            Button(action: {
+                // Add note action
+            }) {
+                Label("Add Note", systemImage: "note.text.badge.plus")
+            }
+            
+            Button(action: {
+                selectedSubtopic = subtopic
+                isShowingEditSubtopicSheet = true
+            }) {
+                Label("Edit Subtopic", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive, action: {
+                subtopicToDelete = (topic, subtopic)
+            }) {
+                Label("Delete Subtopic", systemImage: "trash")
+            }
+        }
+    }
     
     private var addSubtopicButton: some View {
                 Button(action: {
@@ -214,17 +230,16 @@ struct SubtopicPreviewView: View {
     }
     
     private func noteCard(_ note: Note) -> some View {
-                        Button(action: {
-                            noteDisplayState.currentNote = note
-                            noteDisplayState.currentTopic = topic
-                            noteDisplayState.currentSubtopic = subtopic
-                            noteDisplayState.isShowingNote = true
-                            isPresented = false
-                        }) {
-                            VStack(alignment: .leading, spacing: 8) {
+        Button(action: {
+            noteDisplayState.currentNote = note
+            noteDisplayState.currentTopic = topic
+            noteDisplayState.currentSubtopic = subtopic
+            noteDisplayState.isShowingNote = true
+            isPresented = false
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
                 noteImage(note)
                 noteTitle(note)
-                noteDate(note)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -242,40 +257,46 @@ struct SubtopicPreviewView: View {
     
     private func noteImage(_ note: Note) -> some View {
         Group {
-                                if let photoURL = note.photoURL {
-                                    AsyncImage(url: photoURL) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(height: 120)
-                                            .clipped()
-                                    } placeholder: {
-                                        Rectangle()
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(height: 120)
-                                    }
-                                    .cornerRadius(8)
-                                } else {
-                                    Image(systemName: "note.text")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.appAccent)
-                                        .frame(height: 120)
+            if let attachmentUrl = note.attachment_url {
+                let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
+                if let image = UIImage(contentsOfFile: fileURL.path) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(8)
+                } else {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                }
+            } else {
+                Image(systemName: "note.text")
+                    .font(.system(size: 24))
+                    .foregroundColor(.gray)
+                    .frame(height: 120)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
             }
         }
-                                }
-                                
-    private func noteTitle(_ note: Note) -> some View {
-                                Text(note.title)
-                                    .font(.headline)
-                                    .foregroundColor(.appText)
-                                    .lineLimit(2)
     }
-                                
-    private func noteDate(_ note: Note) -> some View {
-                                Text(note.date, style: .date)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
+    
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+    
+    private func noteTitle(_ note: Note) -> some View {
+        Text(note.title)
+            .font(.headline)
+            .foregroundColor(.appText)
+            .lineLimit(2)
+    }
     
     private var addNoteButton: some View {
                 Button(action: {
@@ -302,6 +323,8 @@ struct NotebookView: View {
     @State private var topicToDelete: Topic?
     @State private var subtopicToDelete: (Topic, Subtopic)?
     @State private var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isShowingEditTopicSheet = false
+    @State private var isShowingEditSubtopicSheet = false
     
     var filteredTopics: [Topic] {
         if searchState.searchText.isEmpty {
@@ -317,9 +340,10 @@ struct NotebookView: View {
                 
                 if !matchingNotes.isEmpty || subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) {
                     return Subtopic(
+                        id: subtopic.id,
+                        topic_id: subtopic.topic_id,
                         title: subtopic.title,
-                        notes: matchingNotes,
-                        date: subtopic.date
+                        notes: matchingNotes
                     )
                 }
                 return nil
@@ -327,9 +351,10 @@ struct NotebookView: View {
             
             if !matchingSubtopics.isEmpty || topic.title.localizedCaseInsensitiveContains(searchState.searchText) {
                 return Topic(
+                    id: topic.id,
+                    user_id: topic.user_id,
                     title: topic.title,
-                    subtopics: matchingSubtopics,
-                    date: topic.date
+                    subtopics: matchingSubtopics
                 )
             }
             return nil
@@ -389,6 +414,13 @@ struct NotebookView: View {
                                     Label("Add Subtopic", systemImage: "folder.badge.plus")
                                 }
                                 
+                                Button(action: {
+                                    selectedTopic = topic
+                                    isShowingEditTopicSheet = true
+                                }) {
+                                    Label("Edit Topic", systemImage: "pencil")
+                                }
+                                
                                 Button(role: .destructive, action: {
                                     topicToDelete = topic
                                 }) {
@@ -429,6 +461,16 @@ struct NotebookView: View {
             .sheet(isPresented: $isShowingNewNoteSheet) {
                 if let topic = selectedTopic, let subtopic = selectedSubtopic {
                     NewNoteView(topic: topic, subtopic: subtopic, dataManager: dataManager)
+                }
+            }
+            .sheet(isPresented: $isShowingEditTopicSheet) {
+                if let topic = selectedTopic {
+                    EditTopicView(topic: topic, dataManager: dataManager)
+                }
+            }
+            .sheet(isPresented: $isShowingEditSubtopicSheet) {
+                if let topic = selectedTopic, let subtopic = selectedSubtopic {
+                    EditSubtopicView(subtopic: subtopic, topic: topic, dataManager: dataManager)
                 }
             }
             .alert("Delete Topic", isPresented: .init(
@@ -500,6 +542,8 @@ struct TopicRow: View {
     @State private var isShowingNewNoteSheet = false
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
+    @State private var isShowingEditTopicSheet = false
+    @State private var topicToDelete: Topic?
     
     var body: some View {
         DisclosureGroup(
@@ -518,9 +562,6 @@ struct TopicRow: View {
                             HighlightedText(text: subtopic.title, searchText: searchState.searchText)
                                 .font(.subheadline)
                             Spacer()
-                            Text(subtopic.date, style: .date)
-                                .font(.caption)
-                                .foregroundColor(.gray)
                         }
                     }
                 }
@@ -533,9 +574,6 @@ struct TopicRow: View {
                 HighlightedText(text: topic.title, searchText: searchState.searchText)
                     .font(.headline)
                 Spacer()
-                Text(topic.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
         }
         .contextMenu {
@@ -544,6 +582,19 @@ struct TopicRow: View {
                 isShowingNewSubtopicSheet = true
             }) {
                 Label("Add Subtopic", systemImage: "folder.badge.plus")
+            }
+            
+            Button(action: {
+                selectedTopic = topic
+                isShowingEditTopicSheet = true
+            }) {
+                Label("Edit Topic", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive, action: {
+                topicToDelete = topic
+            }) {
+                Label("Delete Topic", systemImage: "trash")
             }
         }
         .onAppear {
@@ -571,6 +622,7 @@ struct SubtopicRow: View {
     @State private var isShowingNewNoteSheet = false
     @Binding var subtopicToDelete: (Topic, Subtopic)?
     @Binding var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isShowingEditSubtopicSheet = false
     
     var body: some View {
         DisclosureGroup(
@@ -596,9 +648,6 @@ struct SubtopicRow: View {
                 HighlightedText(text: subtopic.title, searchText: searchState.searchText)
                     .font(.subheadline)
                 Spacer()
-                Text(subtopic.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
         }
         .swipeActions(edge: .trailing) {
@@ -614,6 +663,13 @@ struct SubtopicRow: View {
                 isShowingNewNoteSheet = true
             }) {
                 Label("Add Note", systemImage: "note.text.badge.plus")
+            }
+            
+            Button(action: {
+                selectedSubtopic = subtopic
+                isShowingEditSubtopicSheet = true
+            }) {
+                Label("Edit Subtopic", systemImage: "pencil")
             }
             
             Button(role: .destructive, action: {
@@ -658,9 +714,6 @@ struct NoteRow: View {
                 HighlightedText(text: note.title, searchText: searchState.searchText)
                     .font(.subheadline)
                 Spacer()
-                Text(note.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
         }
         .padding(.leading, 32)
@@ -674,16 +727,15 @@ struct NoteDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if let photoURL = note.photoURL {
-                    AsyncImage(url: photoURL) { image in
-                        image
+                if let attachmentUrl = note.attachment_url {
+                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
+                    if let image = UIImage(contentsOfFile: fileURL.path) {
+                        Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                    } placeholder: {
-                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .cornerRadius(12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .cornerRadius(12)
                 }
                 
                 HighlightedText(text: note.title, searchText: searchState.searchText)
@@ -692,14 +744,14 @@ struct NoteDetailView: View {
                 
                 HighlightedText(text: note.content, searchText: searchState.searchText)
                     .font(.body)
-                
-                Text(note.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.gray)
             }
             .padding()
         }
         .navigationBarTitleDisplayMode(.inline)
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 }
 
@@ -776,6 +828,72 @@ struct NewNoteView: View {
                 },
                 trailing: Button("Add") {
                     dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
+                    dismiss()
+                }
+                .disabled(title.isEmpty)
+            )
+        }
+    }
+}
+
+struct EditTopicView: View {
+    @Environment(\.dismiss) var dismiss
+    let topic: Topic
+    @ObservedObject var dataManager: DataManager
+    @State private var title: String
+    
+    init(topic: Topic, dataManager: DataManager) {
+        self.topic = topic
+        self.dataManager = dataManager
+        self._title = State(initialValue: topic.title)
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                TextField("Topic Title", text: $title)
+            }
+            .navigationTitle("Edit Topic")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Save") {
+                    dataManager.updateTopic(topic, newTitle: title)
+                    dismiss()
+                }
+                .disabled(title.isEmpty)
+            )
+        }
+    }
+}
+
+struct EditSubtopicView: View {
+    @Environment(\.dismiss) var dismiss
+    let subtopic: Subtopic
+    let topic: Topic
+    @ObservedObject var dataManager: DataManager
+    @State private var title: String
+    
+    init(subtopic: Subtopic, topic: Topic, dataManager: DataManager) {
+        self.subtopic = subtopic
+        self.topic = topic
+        self.dataManager = dataManager
+        self._title = State(initialValue: subtopic.title)
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                TextField("Subtopic Title", text: $title)
+            }
+            .navigationTitle("Edit Subtopic")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Save") {
+                    dataManager.updateSubtopic(subtopic, in: topic, newTitle: title)
                     dismiss()
                 }
                 .disabled(title.isEmpty)
