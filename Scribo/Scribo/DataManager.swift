@@ -7,19 +7,20 @@ struct TopicRecord: Codable {
     let id: UUID
     let user_id: UUID
     let title: String
+    let created_at: String
+    let updated_at: String
 }
 
 struct SubtopicRecord: Codable {
     let id: UUID
     let topic_id: UUID
-    let user_id: UUID
     let title: String
+    let created_at: String
+    let updated_at: String
 }
 
 struct NoteRecord: Codable {
     let id: UUID
-    let user_id: UUID
-    let topic_id: UUID
     let subtopic_id: UUID
     let title: String
     let content: String
@@ -42,14 +43,15 @@ class DataManager: ObservableObject {
     func addTopic(title: String) {
         Task {
             do {
-                // Get the current user's ID from the session
                 let session = try await supabase.auth.session
                 let userId = session.user.id
                 
                 let newTopic = TopicRecord(
-                    id: UUID(), // This will be replaced by the database
+                    id: UUID(),
                     user_id: userId,
-                    title: title
+                    title: title,
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    updated_at: ISO8601DateFormatter().string(from: Date())
                 )
                 
                 let response = try await supabase
@@ -58,7 +60,6 @@ class DataManager: ObservableObject {
                     .select()
                     .execute()
                 
-                // Decode the array response and get the first item
                 let topicRecords = try JSONDecoder().decode([TopicRecord].self, from: response.data)
                 guard let topicRecord = topicRecords.first else {
                     throw NSError(domain: "DataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No topic record returned"])
@@ -68,7 +69,9 @@ class DataManager: ObservableObject {
                     id: topicRecord.id,
                     user_id: topicRecord.user_id,
                     title: topicRecord.title,
-                    subtopics: []
+                    subtopics: [],
+                    created_at: topicRecord.created_at,
+                    updated_at: topicRecord.updated_at
                 )
                 await MainActor.run {
                     topics.append(topic)
@@ -85,7 +88,9 @@ class DataManager: ObservableObject {
                 let updateData = TopicRecord(
                     id: topic.id,
                     user_id: topic.user_id,
-                    title: newTitle
+                    title: newTitle,
+                    created_at: topic.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
                 )
                 
                 try await supabase
@@ -127,16 +132,15 @@ class DataManager: ObservableObject {
     func addSubtopic(to topic: Topic, title: String) {
         Task {
             do {
-                // Get the current user's ID from the session
                 let session = try await supabase.auth.session
                 let userId = session.user.id
                 
-                // Create the subtopic with the exact structure
                 let newSubtopic = SubtopicRecord(
-                    id: UUID(), // This will be replaced by the database
+                    id: UUID(),
                     topic_id: topic.id,
-                    user_id: userId,
-                    title: title
+                    title: title,
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    updated_at: ISO8601DateFormatter().string(from: Date())
                 )
                 
                 let response = try await supabase
@@ -152,7 +156,9 @@ class DataManager: ObservableObject {
                     id: subtopicRecord.id,
                     topic_id: subtopicRecord.topic_id,
                     title: subtopicRecord.title,
-                    notes: []
+                    notes: [],
+                    created_at: subtopicRecord.created_at,
+                    updated_at: subtopicRecord.updated_at
                 )
                 
                 await MainActor.run {
@@ -172,8 +178,9 @@ class DataManager: ObservableObject {
                 let updateData = SubtopicRecord(
                     id: subtopic.id,
                     topic_id: topic.id,
-                    user_id: topic.user_id,
-                    title: newTitle
+                    title: newTitle,
+                    created_at: subtopic.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
                 )
                 
                 try await supabase
@@ -238,8 +245,6 @@ class DataManager: ObservableObject {
                 
                 let newNote = NoteRecord(
                     id: UUID(),
-                    user_id: userId,
-                    topic_id: topic.id,
                     subtopic_id: subtopic.id,
                     title: title,
                     content: content,
@@ -259,9 +264,12 @@ class DataManager: ObservableObject {
                 
                 let note = Note(
                     id: record.id,
+                    subtopic_id: record.subtopic_id,
                     title: record.title,
                     content: record.content,
-                    attachment_url: record.attachment_url
+                    attachment_url: record.attachment_url,
+                    created_at: record.created_at,
+                    updated_at: record.updated_at
                 )
                 
                 await MainActor.run {
@@ -279,20 +287,20 @@ class DataManager: ObservableObject {
     func updateNote(_ note: Note, in subtopic: Subtopic, in topic: Topic, newTitle: String, newContent: String, newAttachmentUrl: String? = nil) {
         Task {
             do {
-                var updateData: [String: String] = [
-                    "title": newTitle,
-                    "content": newContent,
-                    "updated_at": ISO8601DateFormatter().string(from: Date())
-                ]
-                
-                if let attachmentUrl = newAttachmentUrl {
-                    updateData["attachment_url"] = attachmentUrl
-                }
+                let updateData = NoteRecord(
+                    id: note.id,
+                    subtopic_id: note.subtopic_id,
+                    title: newTitle,
+                    content: newContent,
+                    attachment_url: newAttachmentUrl,
+                    created_at: note.created_at,
+                    updated_at: ISO8601DateFormatter().string(from: Date())
+                )
                 
                 let response = try await supabase
                     .from("notes")
                     .update(updateData)
-                    .eq("id", value: note.id)
+                    .eq("id", value: note.id.uuidString)
                     .select()
                     .execute()
                 
@@ -301,9 +309,12 @@ class DataManager: ObservableObject {
                 
                 let updatedNote = Note(
                     id: record.id,
+                    subtopic_id: record.subtopic_id,
                     title: record.title,
                     content: record.content,
-                    attachment_url: record.attachment_url
+                    attachment_url: record.attachment_url,
+                    created_at: record.created_at,
+                    updated_at: record.updated_at
                 )
                 
                 // Update the updated_at_check in notes_view
@@ -329,16 +340,11 @@ class DataManager: ObservableObject {
     func deleteNote(_ note: Note, from subtopic: Subtopic, from topic: Topic) {
         Task {
             do {
-                // Get the current user's ID from the session
-                let session = try await supabase.auth.session
-                let userId = session.user.id
-                
                 // Delete the note (notes_view records will be automatically deleted due to ON DELETE CASCADE)
                 try await supabase
                     .from("notes")
                     .delete()
                     .eq("id", value: note.id.uuidString)
-                    .eq("user_id", value: userId.uuidString)
                     .execute()
                 
                 await MainActor.run {
@@ -363,14 +369,16 @@ class DataManager: ObservableObject {
                     id,
                     user_id,
                     title,
+                    created_at,
+                    updated_at,
                     subtopics!topic_id (
                         id,
                         topic_id,
-                        user_id,
                         title,
+                        created_at,
+                        updated_at,
                         notes!subtopic_id (
                             id,
-                            topic_id,
                             subtopic_id,
                             title,
                             content,
@@ -399,7 +407,6 @@ class DataManager: ObservableObject {
         ]
         
         if let image = avatarImage {
-            // Save image to Documents directory
             let fileName = "\(userId).jpg"
             let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
             
@@ -412,7 +419,7 @@ class DataManager: ObservableObject {
         try await supabase
             .from("users")
             .update(updateData)
-            .eq("id", value: userId)
+            .eq("auth_id", value: userId)
             .execute()
     }
     
@@ -423,7 +430,7 @@ class DataManager: ObservableObject {
         let response = try await supabase
             .from("users")
             .select()
-            .eq("id", value: userId)
+            .eq("auth_id", value: userId)
             .single()
             .execute()
         
@@ -439,7 +446,6 @@ class DataManager: ObservableObject {
             throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
         }
         
-        // First get the recent note IDs
         let recentResponse = try await supabase
             .from("notes_view")
             .select("note_id")
@@ -454,12 +460,10 @@ class DataManager: ObservableObject {
         
         let recentNotes = try JSONDecoder().decode([RecentNoteRecord].self, from: recentResponse.data)
         
-        // Then fetch the actual notes, removing duplicates
         var seenNoteIds = Set<String>()
         var notes: [Note] = []
         
         for recentNote in recentNotes {
-            // Skip if we've already seen this note
             if seenNoteIds.contains(recentNote.note_id) {
                 continue
             }

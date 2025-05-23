@@ -343,7 +343,9 @@ struct NotebookView: View {
                         id: subtopic.id,
                         topic_id: subtopic.topic_id,
                         title: subtopic.title,
-                        notes: matchingNotes
+                        notes: matchingNotes,
+                        created_at: subtopic.created_at,
+                        updated_at: subtopic.updated_at
                     )
                 }
                 return nil
@@ -353,7 +355,9 @@ struct NotebookView: View {
                     id: topic.id,
                     user_id: topic.user_id,
                     title: topic.title,
-                    subtopics: matchingSubtopics
+                    subtopics: matchingSubtopics,
+                    created_at: topic.created_at,
+                    updated_at: topic.updated_at
                 )
             }
             return nil

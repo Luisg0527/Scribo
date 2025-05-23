@@ -13,55 +13,85 @@ struct ProfileView: View {
     
     var body: some View {
         NavigationView {
-            Form {
-                Section {
-                    HStack {
-                        Spacer()
-                        VStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Profile Image Section
+                    VStack(spacing: 16) {
                             if let avatarImage {
                                 Image(uiImage: avatarImage)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: 100, height: 100)
+                                .frame(width: 120, height: 120)
                                     .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.appAccent, lineWidth: 2)
+                                )
+                                .shadow(color: Color.black.opacity(0.1), radius: 10)
                             } else {
                                 Image(systemName: "person.circle.fill")
                                     .resizable()
-                                    .frame(width: 100, height: 100)
+                                .frame(width: 120, height: 120)
                                     .foregroundColor(.gray)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.appAccent, lineWidth: 2)
+                                )
                             }
                             
                             PhotosPicker(selection: $selectedItem, matching: .images) {
                                 Text("Change Photo")
-                                    .font(.caption)
-                            }
+                                .font(.subheadline)
+                                .foregroundColor(.appAccent)
                         }
-                        Spacer()
                     }
-                    .padding(.vertical)
+                    .padding(.top, 24)
                     
+                    // Profile Information Section
+                    VStack(spacing: 16) {
                     TextField("Full Name", text: $fullName)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .padding(.horizontal)
                 }
+                    .padding(.horizontal)
                 
-                Section {
+                    // Action Buttons
+                    VStack(spacing: 16) {
                     Button(action: saveProfile) {
+                            HStack {
                         if isLoading {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
                             Text("Save Changes")
                         }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.appAccent)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                     }
-                    .disabled(isLoading)
+                        .disabled(isLoading || fullName.isEmpty)
                 }
-                
-                Section {
-                    Button("Sign Out", role: .destructive) {
+                    .padding(.horizontal)
+                    
+                    // Sign Out Button
+                    Button(action: {
                         Task {
                             await authManager.signOut()
                         }
+                    }) {
+                        Text("Sign Out")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.appCardBackground)
+                            .foregroundColor(.appText)
+                            .cornerRadius(12)
                     }
+                    .padding(.horizontal)
                 }
+                .padding(.bottom, 24)
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
@@ -101,7 +131,7 @@ struct ProfileView: View {
     private func loadProfile() async {
         do {
             let user = try await dataManager.getUserProfile()
-            fullName = user.full_name ?? ""
+            fullName = user.full_name
             
             if let avatarUrl = user.avatar_url {
                 let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(avatarUrl)

@@ -12,7 +12,6 @@ struct NoteView: View {
     @ObservedObject var dataManager: DataManager
     
     init(note: Note?, isPresented: Binding<Bool>, dataManager: DataManager) {
-        print("NoteView initialized with note: \(String(describing: note?.id))")
         self._isPresented = isPresented
         self._editedTitle = State(initialValue: note?.title ?? "")
         self._editedContent = State(initialValue: note?.content ?? "")
@@ -59,17 +58,11 @@ struct NoteView: View {
             .padding()
             .background(Color.appHeaderBackground)
             .onAppear {
-                print("NoteView appeared with note: \(String(describing: noteDisplayState.currentNote?.id))")
-                print("Current topic: \(String(describing: noteDisplayState.currentTopic?.id))")
-                print("Current subtopic: \(String(describing: noteDisplayState.currentSubtopic?.id))")
-                
                 // Add to recent notes when view appears
                 if let note = noteDisplayState.currentNote {
-                    print("Adding note to recent notes: \(note.id)")
                     Task {
                         do {
                             try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                            print("Successfully added note to recent notes")
                         } catch {
                             print("Error adding recent note: \(error)")
                         }
@@ -166,7 +159,6 @@ struct NoteView: View {
             dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrl: attachmentUrl)
         } else if let note = noteDisplayState.currentNote {
             // Update existing note
-            print("Updating note: \(note.id)")
             dataManager.updateNote(note, in: subtopic, in: topic, newTitle: editedTitle, newContent: editedContent, newAttachmentUrl: attachmentUrl)
         }
     }
