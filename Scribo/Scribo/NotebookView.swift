@@ -792,6 +792,8 @@ struct NewTopicView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -804,12 +806,36 @@ struct NewTopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addTopic(title: title)
-                    dismiss()
+                    Task {
+                        await saveTopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveTopic() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addTopic(title: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -818,6 +844,8 @@ struct NewSubtopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -830,12 +858,36 @@ struct NewSubtopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addSubtopic(to: topic, title: title)
-                    dismiss()
+                    Task {
+                        await saveSubtopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveSubtopic() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addSubtopic(to: topic, title: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -846,6 +898,8 @@ struct NewNoteView: View {
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
     @State private var content = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -860,12 +914,36 @@ struct NewNoteView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
-                    dismiss()
+                    Task {
+                        await saveNote()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveNote() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -874,6 +952,8 @@ struct EditTopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     init(topic: Topic, dataManager: DataManager) {
         self.topic = topic
@@ -892,12 +972,36 @@ struct EditTopicView: View {
                     dismiss()
                 },
                 trailing: Button("Save") {
-                    dataManager.updateTopic(topic, newTitle: title)
-                    dismiss()
+                    Task {
+                        await saveTopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveTopic() async {
+        isSaving = true
+        do {
+            try await dataManager.updateTopic(topic, newTitle: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -907,6 +1011,8 @@ struct EditSubtopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     init(subtopic: Subtopic, topic: Topic, dataManager: DataManager) {
         self.subtopic = subtopic
@@ -926,12 +1032,36 @@ struct EditSubtopicView: View {
                     dismiss()
                 },
                 trailing: Button("Save") {
-                    dataManager.updateSubtopic(subtopic, in: topic, newTitle: title)
-                    dismiss()
+                    Task {
+                        await saveSubtopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveSubtopic() async {
+        isSaving = true
+        do {
+            try await dataManager.updateSubtopic(subtopic, in: topic, newTitle: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 

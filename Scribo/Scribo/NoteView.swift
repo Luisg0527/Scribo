@@ -145,21 +145,46 @@ struct NoteView: View {
     }
     
     private func saveNote() {
-        guard let topic = noteDisplayState.currentTopic,
-              let subtopic = noteDisplayState.currentSubtopic else { return }
-        
-        // Save image if present
-        var attachmentUrl: String? = nil
-        if let image = noteImage {
-            attachmentUrl = saveImage(image)
-        }
-        
-        if isNewNote {
-            // Create new note
-            dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrl: attachmentUrl)
-        } else if let note = noteDisplayState.currentNote {
-            // Update existing note
-            dataManager.updateNote(note, in: subtopic, in: topic, newTitle: editedTitle, newContent: editedContent, newAttachmentUrl: attachmentUrl)
+        Task {
+            do {
+                guard let topic = noteDisplayState.currentTopic,
+                      let subtopic = noteDisplayState.currentSubtopic else { return }
+                
+                // Save image if present
+                var attachmentUrl: String? = nil
+                if let image = noteImage {
+                    attachmentUrl = saveImage(image)
+                }
+                
+                if isNewNote {
+                    // Create new note
+                    _ = try await dataManager.addNote(
+                        to: subtopic,
+                        in: topic,
+                        title: editedTitle,
+                        content: editedContent,
+                        attachmentUrl: attachmentUrl
+                    )
+                } else if let note = noteDisplayState.currentNote {
+                    // Update existing note
+                    try await dataManager.updateNote(
+                        note,
+                        in: subtopic,
+                        in: topic,
+                        newTitle: editedTitle,
+                        newContent: editedContent,
+                        newAttachmentUrl: attachmentUrl
+                    )
+                }
+                
+                // Dismiss the view after successful save
+                await MainActor.run {
+                    isPresented = false
+                }
+            } catch {
+                print("Error saving note: \(error)")
+                // You might want to show an error alert here
+            }
         }
     }
     

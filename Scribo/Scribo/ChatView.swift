@@ -5,6 +5,14 @@ import UniformTypeIdentifiers
 import AVFoundation
 import Vision
 
+// MARK: - Classification Response
+struct TextClassificationResponse: Codable {
+    let topic: String
+    let subtopic: String
+    let note_name: String
+    let raw_scores: [String: Double]
+}
+
 // MARK: - Chat Message Model
 struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
@@ -49,9 +57,11 @@ struct ChatView: View {
     @State private var hasAnimatedText = false
     @StateObject private var dataManager = DataManager()
     @State private var isProcessingOCR: Bool = false
+    @EnvironmentObject var noteDisplayState: NoteDisplayState
+    @State private var currentImageURL: String?
     @State private var classificationService = TextClassificationService(
-        serverURL: "http://YOUR_SERVER_IP:8000/classify",
-        apiKey: "my-secret-key"
+        serverURL: "http://10.22.149.108:8000/classify",
+        apiKey: "dev-secret-12345"
     )
     
     let welcomeMessage = "Hello! What can I help you with?"
@@ -294,14 +304,18 @@ struct ChatView: View {
             }
             .submitLabel(.send)
             .onSubmit {
-                sendMessage()
+                Task {
+                    await sendMessage()
+                }
             }
     }
     
     private var sendButton: some View {
-        Button(action: {
-            sendMessage()
-        }) {
+        Button {
+            Task {
+                await sendMessage()
+            }
+        } label: {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.system(size: 24))
                 .foregroundColor(.appAccent)
@@ -320,7 +334,25 @@ struct ChatView: View {
     
     // MARK: - Helper Methods
     private func processImageWithOCR(_ image: UIImage) async -> String? {
-        guard let cgImage = image.cgImage else { return nil }
+        guard let cgImage = image.cgImage else { 
+            print("Failed to get CGImage from UIImage")
+            return "No text could be extracted from this image. Please describe the image content."
+        }
+        
+        // Save the image and get its URL
+        let fileName = "\(UUID().uuidString).jpg"
+        let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
+        
+        if let data = image.jpegData(compressionQuality: 0.8) {
+            do {
+                try data.write(to: fileURL)
+                await MainActor.run {
+                    currentImageURL = fileName
+                }
+            } catch {
+                print("Error saving image: \(error)")
+            }
+        }
         
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         let request = VNRecognizeTextRequest()
@@ -328,20 +360,34 @@ struct ChatView: View {
         
         do {
             try requestHandler.perform([request])
-            guard let observations = request.results else { return nil }
+            guard let observations = request.results else { 
+                print("No text observations found in image")
+                return "No text could be extracted from this image. Please describe the image content."
+            }
             
             let recognizedText = observations.compactMap { observation in
                 observation.topCandidates(1).first?.string
             }.joined(separator: "\n")
             
+            print("OCR extracted text: \(recognizedText)")
+            
+            if recognizedText.isEmpty {
+                print("OCR returned empty text")
+                return "No text could be extracted from this image. Please describe the image content."
+            }
+            
             return recognizedText
         } catch {
             print("OCR Error: \(error.localizedDescription)")
-            return nil
+            return "No text could be extracted from this image. Please describe the image content."
         }
     }
     
-    private func sendMessage() {
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+    
+    private func sendMessage() async {
         guard !promptText.isEmpty || selectedPhoto != nil || selectedDocument != nil else { return }
         
         // Add user message
@@ -358,14 +404,18 @@ struct ChatView: View {
             isUser: true,
             timestamp: Date()
         )
-        messages.append(userMessage)
+        await MainActor.run {
+            messages.append(userMessage)
+        }
         
         // Clear input
         let currentPhoto = selectedPhoto
         let currentDocument = selectedDocument
-        promptText = ""
-        selectedPhoto = nil
-        selectedDocument = nil
+        await MainActor.run {
+            promptText = ""
+            selectedPhoto = nil
+            selectedDocument = nil
+        }
         
         // Add processing message
         let processingMessage = ChatMessage(
@@ -376,67 +426,87 @@ struct ChatView: View {
             timestamp: Date(),
             isProcessing: true
         )
-        messages.append(processingMessage)
+        await MainActor.run {
+            messages.append(processingMessage)
+        }
         
         // Process the photo if one was selected
         if let photo = currentPhoto {
-            Task {
-                if let data = try? await photo.loadTransferable(type: Data.self),
-                   let uiImage = UIImage(data: data) {
-                    // Process image with OCR
-                    let recognizedText = await processImageWithOCR(uiImage)
-                    
-                    if let text = recognizedText {
-                        // Classify the text
-                        do {
-                            let classification = try await classificationService.classifyText(text)
-                            
-                            // Add the photo message with OCR results and classification
-                            DispatchQueue.main.async {
-                                messages.removeLast() // Remove processing message
-                                let photoMessage = ChatMessage(
-                                    content: """
-                                    Extracted text:
-                                    \(text)
-                                    
-                                    Suggested Organization:
-                                    Topic: \(classification.topic)
-                                    Subtopic: \(classification.subtopic ?? "General")
-                                    Note Title: \(classification.note_name)
-                                    
-                                    Classification Scores:
-                                    \(classification.raw_scores.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
-                                    """,
-                                    image: uiImage,
-                                    document: nil,
-                                    isUser: false,
-                                    timestamp: Date()
-                                )
-                                messages.append(photoMessage)
-                                
-                                // Create the note
-                                createNoteFromClassification(classification, content: text)
-                            }
-                        } catch {
-                            // Handle classification error
-                            DispatchQueue.main.async {
-                                messages.removeLast() // Remove processing message
-                                let photoMessage = ChatMessage(
-                                    content: "Extracted text:\n\(text)\n\nFailed to classify text: \(error.localizedDescription)",
-                                    image: uiImage,
-                                    document: nil,
-                                    isUser: false,
-                                    timestamp: Date()
-                                )
-                                messages.append(photoMessage)
-                            }
-                        }
-                    } else {
-                        // Handle OCR failure
-                        DispatchQueue.main.async {
+            if let data = try? await photo.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data) {
+                // Process image with OCR
+                let recognizedText = await processImageWithOCR(uiImage)
+                
+                if let text = recognizedText {
+                    // Classify the text
+                    do {
+                        let classification = try await classificationService.classifyText(text)
+                        
+                        // Add the photo message with OCR results and classification
+                        await MainActor.run {
                             messages.removeLast() // Remove processing message
                             let photoMessage = ChatMessage(
-                                content: "Here's the image you shared\n\nFailed to extract text from the image.",
+                                content: """
+                                \(text == "No text could be extracted from this image. Please describe the image content." ? "⚠️ " : "")Extracted text:
+                                \(text)
+                                
+                                Suggested Organization:
+                                Topic: \(classification.topic)
+                                Subtopic: \(classification.subtopic)
+                                Note Title: \(classification.note_name)
+                                
+                                Classification Scores:
+                                \(classification.raw_scores.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
+                                """,
+                                image: uiImage,
+                                document: nil,
+                                isUser: false,
+                                timestamp: Date()
+                            )
+                            messages.append(photoMessage)
+                        }
+                        
+                        // Create the note
+                        try await createNoteFromClassification(classification)
+                    } catch let error as ClassificationError {
+                        // Handle specific classification errors
+                        let errorMessage: String
+                        switch error {
+                        case .invalidURL:
+                            errorMessage = "Invalid server URL. Please check your configuration."
+                        case .networkError(let underlyingError):
+                            errorMessage = "Network error: \(underlyingError.localizedDescription)"
+                        case .invalidResponse(let statusCode):
+                            errorMessage = "Server returned invalid response (Status: \(statusCode))"
+                        case .decodingError(let underlyingError):
+                            errorMessage = "Failed to decode server response: \(underlyingError.localizedDescription)"
+                        case .serverError(let message):
+                            errorMessage = "Server error: \(message)"
+                        }
+                        
+                        await MainActor.run {
+                            messages.removeLast() // Remove processing message
+                            let photoMessage = ChatMessage(
+                                content: """
+                                Extracted text:
+                                \(text)
+                                
+                                Error during classification:
+                                \(errorMessage)
+                                """,
+                                image: uiImage,
+                                document: nil,
+                                isUser: false,
+                                timestamp: Date()
+                            )
+                            messages.append(photoMessage)
+                        }
+                    } catch {
+                        // Handle any other errors
+                        await MainActor.run {
+                            messages.removeLast() // Remove processing message
+                            let photoMessage = ChatMessage(
+                                content: "Extracted text:\n\(text)\n\nUnexpected error: \(error.localizedDescription)",
                                 image: uiImage,
                                 document: nil,
                                 isUser: false,
@@ -445,11 +515,24 @@ struct ChatView: View {
                             messages.append(photoMessage)
                         }
                     }
+                } else {
+                    // Handle OCR failure
+                    await MainActor.run {
+                        messages.removeLast() // Remove processing message
+                        let photoMessage = ChatMessage(
+                            content: "Here's the image you shared\n\nFailed to extract text from the image.",
+                            image: uiImage,
+                            document: nil,
+                            isUser: false,
+                            timestamp: Date()
+                        )
+                        messages.append(photoMessage)
+                    }
                 }
             }
         } else if let document = currentDocument {
             // Handle document
-            DispatchQueue.main.async {
+            await MainActor.run {
                 messages.removeLast() // Remove processing message
                 let documentMessage = ChatMessage(
                     content: "I've received your document: \(document.lastPathComponent)",
@@ -462,7 +545,8 @@ struct ChatView: View {
             }
         } else {
             // Simulate AI response for text-only messages
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            await MainActor.run {
                 messages.removeLast() // Remove processing message
                 let aiResponse = ChatMessage(
                     content: "I understand you want to \(userMessage.content). I'll help you organize this content into appropriate topics and notes.",
@@ -476,42 +560,56 @@ struct ChatView: View {
         }
     }
     
-    private func createNoteFromClassification(_ classification: ClassificationResponse, content: String) {
-        // Find or create the topic
-        let topic = dataManager.topics.first { $0.title == classification.topic } ?? {
-            let newTopic = Topic(
-                id: UUID(),
-                user_id: UUID(), // You'll need to get the actual user ID
-                title: classification.topic,
-                subtopics: [],
-                created_at: ISO8601DateFormatter().string(from: Date()),
-                updated_at: ISO8601DateFormatter().string(from: Date())
-            )
-            dataManager.addTopic(title: classification.topic)
-            return newTopic
-        }()
+    private func createNoteFromClassification(_ classification: TextClassificationResponse) async throws {
+        // Find or create topic
+        var topic = dataManager.topics.first { $0.title == classification.topic }
+        if topic == nil {
+            topic = try await dataManager.addTopic(title: classification.topic)
+        }
+        guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
         
-        // Find or create the subtopic
-        let subtopic = topic.subtopics.first { $0.title == (classification.subtopic ?? "General") } ?? {
-            let newSubtopic = Subtopic(
-                id: UUID(),
-                topic_id: topic.id,
-                title: classification.subtopic ?? "General",
-                notes: [],
-                created_at: ISO8601DateFormatter().string(from: Date()),
-                updated_at: ISO8601DateFormatter().string(from: Date())
-            )
-            dataManager.addSubtopic(to: topic, title: classification.subtopic ?? "General")
-            return newSubtopic
-        }()
+        // Find or create subtopic
+        var subtopic = topic.subtopics.first { $0.title == classification.subtopic }
+        if subtopic == nil {
+            subtopic = try await dataManager.addSubtopic(to: topic, title: classification.subtopic)
+        }
+        guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
         
-        // Create the note
-        dataManager.addNote(
+        // Create note with the OCR text from the message
+        let note = try await dataManager.addNote(
             to: subtopic,
             in: topic,
             title: classification.note_name,
-            content: content
+            content: messages.last?.content ?? "",  // Use the OCR text from the last message
+            attachmentUrl: currentImageURL
         )
+        
+        // Update UI on main thread
+        await MainActor.run {
+            // Add success message
+            let successMessage = ChatMessage(
+                content: "✅ Note created successfully!",
+                image: nil,
+                document: nil,
+                isUser: false,
+                timestamp: Date()
+            )
+            messages.append(successMessage)
+            
+            // Add a small delay before showing the note
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        // Set up note display state and show note
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.currentTopic = topic
+                        noteDisplayState.currentSubtopic = subtopic
+                        noteDisplayState.isShowingNote = true
+                    }
+                }
+            }
+        }
     }
     
     private func animateText() {

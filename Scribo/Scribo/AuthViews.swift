@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Login View
 struct LoginView: View {
     @ObservedObject var authManager: AuthManager
-    @State private var email: String = ""
-    @State private var password: String = ""
+    @State private var email: String = "santiparedes738@gmail.com"
+    @State private var password: String = "admin"
     @State private var showSignUp = false
     @State private var showForgotPassword = false
     @State private var showError = false
