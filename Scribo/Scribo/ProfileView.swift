@@ -25,7 +25,7 @@ struct ProfileView: View {
                                     .clipShape(Circle())
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.appAccent, lineWidth: 2)
+                                        .stroke(Color.appAccent1, lineWidth: 2)
                                 )
                                 .shadow(color: Color.black.opacity(0.1), radius: 10)
                             } else {
@@ -35,14 +35,14 @@ struct ProfileView: View {
                                     .foregroundColor(.gray)
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.appAccent, lineWidth: 2)
+                                        .stroke(Color.appAccent1, lineWidth: 2)
                                 )
                             }
                             
                             PhotosPicker(selection: $selectedItem, matching: .images) {
                                 Text("Change Photo")
                                 .font(.subheadline)
-                                .foregroundColor(.appAccent)
+                                .foregroundColor(.appAccent1)
                         }
                     }
                     .padding(.top, 24)
@@ -68,7 +68,7 @@ struct ProfileView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.appAccent)
+                            .background(Color.appAccent1)
                             .foregroundColor(.white)
                             .cornerRadius(12)
                     }

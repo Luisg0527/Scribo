@@ -34,7 +34,7 @@ struct NoteView: View {
                     if let topic = noteDisplayState.currentTopic {
                         Text(topic.title)
                             .font(.subheadline)
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                     if let subtopic = noteDisplayState.currentSubtopic {
                         Text(subtopic.title)
@@ -52,7 +52,7 @@ struct NoteView: View {
                 }) {
                     Text("Save")
                         .font(.headline)
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
             }
             .padding()
@@ -111,7 +111,7 @@ struct NoteView: View {
                             Text(noteImage == nil ? "Add Image" : "Change Image")
                                 .font(.headline)
                         }
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.appCardBackground)

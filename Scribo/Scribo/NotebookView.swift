@@ -15,8 +15,7 @@ struct HighlightedText: View {
                     Text(part)
                     if index < parts.count - 1 {
                         Text(searchText)
-                            .foregroundColor(.white)
-                            .background(Color.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                 }
             }
@@ -106,7 +105,7 @@ struct TopicPreviewView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Image(systemName: "folder.fill.badge.person.crop")
                                     .font(.system(size: 24))
-                                    .foregroundColor(.appAccent)
+                                    .foregroundColor(.appAccent2)
                                 
                                 Text(subtopic.title)
                                     .font(.headline)
@@ -149,7 +148,7 @@ struct TopicPreviewView: View {
                     isShowingNewSubtopicSheet = true
                 }) {
                     Image(systemName: "plus")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
         }
     }
 }
@@ -206,7 +205,7 @@ struct SubtopicPreviewView: View {
                     VStack(alignment: .leading) {
                         Text(topic.title)
                             .font(.subheadline)
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                         Text(subtopic.title)
                             .font(.title2)
                             .fontWeight(.bold)
@@ -303,7 +302,7 @@ struct SubtopicPreviewView: View {
                     isShowingNewNoteSheet = true
                 }) {
                     Image(systemName: "plus")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
         }
     }
 }
@@ -429,7 +428,7 @@ struct NotebookView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -607,7 +606,7 @@ struct TopicRow: View {
         } label: {
             HStack {
                 Image(systemName: "folder.fill")
-                    .foregroundColor(.appAccent)
+                    .foregroundColor(.appAccent2)
                 HighlightedText(text: topic.title, searchText: searchText)
                     .font(.headline)
                 Spacer()
@@ -683,7 +682,7 @@ struct SubtopicRow: View {
             ) {
                 HStack {
                     Image(systemName: "folder.fill.badge.person.crop")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent2)
                     HighlightedText(text: subtopic.title, searchText: searchText)
                         .font(.subheadline)
                     Spacer()
@@ -729,7 +728,7 @@ struct NoteRow: View {
     var body: some View {
         HStack {
             Image(systemName: "note.text")
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent2)
             HighlightedText(text: note.title, searchText: searchState.searchText)
                 .font(.subheadline)
             Spacer()

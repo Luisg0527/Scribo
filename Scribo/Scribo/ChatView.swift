@@ -13,9 +13,26 @@ struct TextClassificationResponse: Codable {
     let raw_scores: [String: Double]
 }
 
+// MARK: - Chat Model
+struct Chat: Identifiable, Codable {
+    let id: UUID
+    var messages: [ChatMessage]
+    var createdAt: Date
+    var updatedAt: Date
+    var title: String
+    
+    init(id: UUID = UUID(), messages: [ChatMessage] = [], createdAt: Date = Date(), updatedAt: Date = Date(), title: String = "New Chat") {
+        self.id = id
+        self.messages = messages
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.title = title
+    }
+}
+
 // MARK: - Chat Message Model
-struct ChatMessage: Identifiable, Equatable {
-    let id = UUID()
+struct ChatMessage: Identifiable, Equatable, Codable {
+    let id: UUID
     let content: String
     let image: UIImage?
     let document: DocumentMessage?
@@ -32,9 +49,61 @@ struct ChatMessage: Identifiable, Equatable {
         lhs.isProcessing == rhs.isProcessing &&
         lhs.error == rhs.error
     }
+    
+    // Add Codable conformance
+    enum CodingKeys: String, CodingKey {
+        case id, content, isUser, timestamp, isProcessing, error
+        case imageData, document
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        content = try container.decode(String.self, forKey: .content)
+        isUser = try container.decode(Bool.self, forKey: .isUser)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        isProcessing = try container.decode(Bool.self, forKey: .isProcessing)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        
+        if let imageData = try container.decodeIfPresent(Data.self, forKey: .imageData) {
+            image = UIImage(data: imageData)
+        } else {
+            image = nil
+        }
+        
+        document = try container.decodeIfPresent(DocumentMessage.self, forKey: .document)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(content, forKey: .content)
+        try container.encode(isUser, forKey: .isUser)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(isProcessing, forKey: .isProcessing)
+        try container.encodeIfPresent(error, forKey: .error)
+        
+        if let image = image, let imageData = image.jpegData(compressionQuality: 0.8) {
+            try container.encode(imageData, forKey: .imageData)
+        }
+        
+        try container.encodeIfPresent(document, forKey: .document)
+    }
+    
+    // Add initializer for creating new messages
+    init(content: String, image: UIImage? = nil, document: DocumentMessage? = nil, isUser: Bool, timestamp: Date, isProcessing: Bool = false, error: String? = nil) {
+        self.id = UUID()
+        self.content = content
+        self.image = image
+        self.document = document
+        self.isUser = isUser
+        self.timestamp = timestamp
+        self.isProcessing = isProcessing
+        self.error = error
+    }
 }
 
-struct DocumentMessage: Identifiable {
+struct DocumentMessage: Identifiable, Codable {
     let id = UUID()
     let url: URL
     let name: String
@@ -43,6 +112,8 @@ struct DocumentMessage: Identifiable {
 
 // MARK: - Chat View
 struct ChatView: View {
+    @Binding var chats: [Chat]
+    @Binding var currentChat: Chat?
     @State private var promptText: String = ""
     @State private var isTextFieldFocused: Bool = false
     @State private var isAttachmentMenuShowing: Bool = false
@@ -50,8 +121,6 @@ struct ChatView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedDocument: URL?
     @State private var isDocumentPickerPresented = false
-    @State private var messages: [ChatMessage] = []
-    @State private var isProcessingMessage: Bool = false
     @FocusState private var isFocused: Bool
     @State private var animatedText = ""
     @State private var hasAnimatedText = false
@@ -60,7 +129,7 @@ struct ChatView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
     @State private var classificationService = TextClassificationService(
-        serverURL: "http://10.22.149.108:8000/classify",
+        serverURL: "http://192.168.68.120:8000/classify",
         apiKey: "dev-secret-12345"
     )
     
@@ -95,12 +164,17 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - Subviews
+    private func saveChats() {
+        if let encoded = try? JSONEncoder().encode(chats) {
+            UserDefaults.standard.set(encoded, forKey: "savedChats")
+        }
+    }
+    
     private var chatMessagesView: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    if messages.isEmpty {
+                    if let currentChat = currentChat, currentChat.messages.isEmpty {
                         welcomeView
                     } else {
                         messagesList
@@ -108,9 +182,9 @@ struct ChatView: View {
                 }
                 .padding(.vertical)
             }
-            .onChange(of: messages) { _, _ in
+            .onChange(of: currentChat?.messages) { _, _ in
                 withAnimation {
-                    proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                    proxy.scrollTo(currentChat?.messages.last?.id, anchor: .bottom)
                 }
             }
         }
@@ -122,7 +196,7 @@ struct ChatView: View {
             
             Image("ThreeDots")
                 .frame(width: 97, height: 97)
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent1)
             
             Text(hasAnimatedText ? welcomeMessage : animatedText)
                 .font(.title3)
@@ -172,7 +246,7 @@ struct ChatView: View {
             Text(action)
                 .font(.body)
                 .fontWeight(.regular)
-                .foregroundColor(.gray)
+                .foregroundColor(.appTextSecondary)
                 .multilineTextAlignment(.leading)
                 .frame(width: 200)
                 .frame(height: 50)
@@ -185,7 +259,7 @@ struct ChatView: View {
     }
     
     private var messagesList: some View {
-        ForEach(messages) { message in
+        ForEach(currentChat?.messages ?? []) { message in
             ChatMessageView(message: message)
                 .id(message.id)
         }
@@ -210,9 +284,9 @@ struct ChatView: View {
             PhotosPicker(selection: $selectedPhoto, matching: .images) {
                 HStack {
                     Image(systemName: "photo")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                     Text("Change Photo")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -237,9 +311,9 @@ struct ChatView: View {
         HStack {
             HStack {
                 Image(systemName: "doc.fill")
-                    .foregroundColor(.appAccent)
+                    .foregroundColor(.appAccent1)
                 Text(document.lastPathComponent)
-                    .foregroundColor(.appAccent)
+                    .foregroundColor(.appAccent1)
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)
@@ -279,7 +353,7 @@ struct ChatView: View {
         }) {
             Image(systemName: "plus.circle.fill")
                 .font(.system(size: 24))
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent1)
         }
     }
     
@@ -291,7 +365,7 @@ struct ChatView: View {
             .cornerRadius(20)
             .frame(maxWidth: .infinity)
             .foregroundColor(.appText)
-            .accentColor(.appAccent)
+            .accentColor(.appAccent1)
             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
             .focused($isFocused)
             .onChange(of: isFocused) { oldValue, newValue in
@@ -318,7 +392,7 @@ struct ChatView: View {
         } label: {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.system(size: 24))
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent1)
                 .opacity(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil ? 0.5 : 1)
         }
         .disabled(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil)
@@ -389,6 +463,7 @@ struct ChatView: View {
     
     private func sendMessage() async {
         guard !promptText.isEmpty || selectedPhoto != nil || selectedDocument != nil else { return }
+        guard var currentChat = currentChat else { return }
         
         // Add user message
         let userMessage = ChatMessage(
@@ -404,8 +479,18 @@ struct ChatView: View {
             isUser: true,
             timestamp: Date()
         )
+        
         await MainActor.run {
-            messages.append(userMessage)
+            currentChat.messages.append(userMessage)
+            // Update chat title if it's the first message
+            if currentChat.messages.count == 1 {
+                currentChat.title = promptText.prefix(30) + (promptText.count > 30 ? "..." : "")
+            }
+            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                chats[index] = currentChat
+            }
+            self.currentChat = currentChat
+            saveChats()
         }
         
         // Clear input
@@ -427,7 +512,11 @@ struct ChatView: View {
             isProcessing: true
         )
         await MainActor.run {
-            messages.append(processingMessage)
+            currentChat.messages.append(processingMessage)
+            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                chats[index] = currentChat
+            }
+            self.currentChat = currentChat
         }
         
         // Process the photo if one was selected
@@ -444,26 +533,22 @@ struct ChatView: View {
                         
                         // Add the photo message with OCR results and classification
                         await MainActor.run {
-                            messages.removeLast() // Remove processing message
+                            currentChat.messages.removeLast() // Remove processing message
                             let photoMessage = ChatMessage(
                                 content: """
-                                \(text == "No text could be extracted from this image. Please describe the image content." ? "⚠️ " : "")Extracted text:
+                                Extracted Text:
                                 \(text)
-                                
-                                Suggested Organization:
-                                Topic: \(classification.topic)
-                                Subtopic: \(classification.subtopic)
-                                Note Title: \(classification.note_name)
-                                
-                                Classification Scores:
-                                \(classification.raw_scores.map { "\($0.key): \($0.value)" }.joined(separator: "\n"))
                                 """,
                                 image: uiImage,
                                 document: nil,
                                 isUser: false,
                                 timestamp: Date()
                             )
-                            messages.append(photoMessage)
+                            currentChat.messages.append(photoMessage)
+                            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                chats[index] = currentChat
+                            }
+                            self.currentChat = currentChat
                         }
                         
                         // Create the note
@@ -485,7 +570,7 @@ struct ChatView: View {
                         }
                         
                         await MainActor.run {
-                            messages.removeLast() // Remove processing message
+                            currentChat.messages.removeLast() // Remove processing message
                             let photoMessage = ChatMessage(
                                 content: """
                                 Extracted text:
@@ -499,12 +584,16 @@ struct ChatView: View {
                                 isUser: false,
                                 timestamp: Date()
                             )
-                            messages.append(photoMessage)
+                            currentChat.messages.append(photoMessage)
+                            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                chats[index] = currentChat
+                            }
+                            self.currentChat = currentChat
                         }
                     } catch {
                         // Handle any other errors
                         await MainActor.run {
-                            messages.removeLast() // Remove processing message
+                            currentChat.messages.removeLast() // Remove processing message
                             let photoMessage = ChatMessage(
                                 content: "Extracted text:\n\(text)\n\nUnexpected error: \(error.localizedDescription)",
                                 image: uiImage,
@@ -512,13 +601,17 @@ struct ChatView: View {
                                 isUser: false,
                                 timestamp: Date()
                             )
-                            messages.append(photoMessage)
+                            currentChat.messages.append(photoMessage)
+                            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                chats[index] = currentChat
+                            }
+                            self.currentChat = currentChat
                         }
                     }
                 } else {
                     // Handle OCR failure
                     await MainActor.run {
-                        messages.removeLast() // Remove processing message
+                        currentChat.messages.removeLast() // Remove processing message
                         let photoMessage = ChatMessage(
                             content: "Here's the image you shared\n\nFailed to extract text from the image.",
                             image: uiImage,
@@ -526,14 +619,18 @@ struct ChatView: View {
                             isUser: false,
                             timestamp: Date()
                         )
-                        messages.append(photoMessage)
+                        currentChat.messages.append(photoMessage)
+                        if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                            chats[index] = currentChat
+                        }
+                        self.currentChat = currentChat
                     }
                 }
             }
         } else if let document = currentDocument {
             // Handle document
             await MainActor.run {
-                messages.removeLast() // Remove processing message
+                currentChat.messages.removeLast() // Remove processing message
                 let documentMessage = ChatMessage(
                     content: "I've received your document: \(document.lastPathComponent)",
                     image: nil,
@@ -541,13 +638,17 @@ struct ChatView: View {
                     isUser: false,
                     timestamp: Date()
                 )
-                messages.append(documentMessage)
+                currentChat.messages.append(documentMessage)
+                if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                    chats[index] = currentChat
+                }
+                self.currentChat = currentChat
             }
         } else {
             // Simulate AI response for text-only messages
             try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             await MainActor.run {
-                messages.removeLast() // Remove processing message
+                currentChat.messages.removeLast() // Remove processing message
                 let aiResponse = ChatMessage(
                     content: "I understand you want to \(userMessage.content). I'll help you organize this content into appropriate topics and notes.",
                     image: nil,
@@ -555,7 +656,11 @@ struct ChatView: View {
                     isUser: false,
                     timestamp: Date()
                 )
-                messages.append(aiResponse)
+                currentChat.messages.append(aiResponse)
+                if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                    chats[index] = currentChat
+                }
+                self.currentChat = currentChat
             }
         }
     }
@@ -580,7 +685,7 @@ struct ChatView: View {
             to: subtopic,
             in: topic,
             title: classification.note_name,
-            content: messages.last?.content ?? "",  // Use the OCR text from the last message
+            content: currentChat?.messages.last?.content ?? "",  // Use the OCR text from the last message
             attachmentUrl: currentImageURL
         )
         
@@ -594,7 +699,7 @@ struct ChatView: View {
                 isUser: false,
                 timestamp: Date()
             )
-            messages.append(successMessage)
+            currentChat?.messages.append(successMessage)
             
             // Add a small delay before showing the note
             Task {
@@ -650,9 +755,9 @@ struct ChatMessageView: View {
                 if let document = message.document {
                     HStack {
                         Image(systemName: "doc.fill")
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                         Text(document.name)
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                     .padding(12)
                     .background(Color.appCardBackground)
@@ -662,8 +767,8 @@ struct ChatMessageView: View {
                 if !message.content.isEmpty {
                     Text(message.content)
                         .padding(12)
-                        .background(message.isUser ? Color.appAccent : Color.appCardBackground)
-                        .foregroundColor(message.isUser ? .white : .appText)
+                        .background(message.isUser ? Color.appAccent1 : Color.appCardBackground)
+                        .foregroundColor(message.isUser ? .appAccent2 : .appText)
                         .cornerRadius(16)
                 }
                 
@@ -681,7 +786,7 @@ struct ChatMessageView: View {
                 
                 Text(message.timestamp, style: .time)
                     .font(.caption2)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.appTextSecondary)
             }
             
             if !message.isUser {
@@ -694,6 +799,75 @@ struct ChatMessageView: View {
 
 struct ChatView_Previews: PreviewProvider {
     static var previews: some View {
-        ChatView()
+        ChatView(chats: .constant([Chat(title: "Welcome")]), currentChat: .constant(nil))
+    }
+}
+
+// MARK: - Chat List View
+struct ChatListView: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var chats: [Chat]
+    @Binding var currentChat: Chat
+    
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
+                    Button(action: {
+                        currentChat = chat
+                        dismiss()
+                    }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(chat.title)
+                                .font(.headline)
+                                .foregroundColor(.appText)
+                            Text(chat.updatedAt, style: .date)
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            if !chat.messages.isEmpty {
+                                Text(chat.messages.last?.content ?? "")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .onDelete { indexSet in
+                    let chatsToDelete = indexSet.map { chats.sorted(by: { $0.updatedAt > $1.updatedAt })[$0] }
+                    chats.removeAll { chat in
+                        chatsToDelete.contains { $0.id == chat.id }
+                    }
+                    if chats.isEmpty {
+                        let newChat = Chat(title: "Welcome")
+                        chats.append(newChat)
+                        currentChat = newChat
+                    } else if chatsToDelete.contains(where: { $0.id == currentChat.id }) {
+                        currentChat = chats[0]
+                    }
+                }
+            }
+            .navigationTitle("Chats")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        let newChat = Chat(title: "Chat \(chats.count + 1)")
+                        chats.append(newChat)
+                        currentChat = newChat
+                        dismiss()
+                    }) {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+        }
     }
 } 

@@ -12,39 +12,6 @@ class NoteDisplayState: ObservableObject {
     @Published var currentSubtopic: Subtopic?
 }
 
-// MARK: - Color Constants
-extension Color {
-    static let appBackground = Color(uiColor: UIColor { traitCollection in
-        return traitCollection.userInterfaceStyle == .dark ?
-            UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1.0) : // Dark mode background
-            UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)   // Light mode background
-    })
-    
-    static let appCardBackground = Color(uiColor: UIColor { traitCollection in
-        return traitCollection.userInterfaceStyle == .dark ?
-            UIColor(red: 0.15, green: 0.15, blue: 0.16, alpha: 1.0) : // Dark mode card
-            UIColor(red: 1, green: 1, blue: 1, alpha: 1.0)            // Light mode card
-    })
-    
-    static let appHeaderBackground = Color(uiColor: UIColor { traitCollection in
-        return traitCollection.userInterfaceStyle == .dark ?
-            UIColor(red: 0.18, green: 0.18, blue: 0.19, alpha: 1.0) : // Dark mode header
-            UIColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1.0)   // Light mode header
-    })
-    
-    static let appText = Color(uiColor: UIColor { traitCollection in
-        return traitCollection.userInterfaceStyle == .dark ?
-            UIColor(red: 0.9, green: 0.9, blue: 0.95, alpha: 1.0) :   // Dark mode text
-            UIColor(red: 0.2, green: 0.2, blue: 0.25, alpha: 1.0)     // Light mode text
-    })
-    
-    static let appAccent = Color(uiColor: UIColor { traitCollection in
-        return traitCollection.userInterfaceStyle == .dark ?
-            UIColor(red: 0.5, green: 0.7, blue: 1.0, alpha: 1.0) :    // Dark mode accent
-            UIColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)      // Light mode accent
-    })
-}
-
 struct SidebarView: View {
     @Binding var isShowing: Bool
     @AppStorage("isDarkMode") private var isDarkMode = false
@@ -56,6 +23,8 @@ struct SidebarView: View {
     @StateObject private var dataManager = DataManager()
     @State private var profileImage: UIImage?
     @State private var isLoadingRecentNotes = false
+    @Binding var chats: [Chat]
+    @Binding var currentChat: Chat?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -73,7 +42,7 @@ struct SidebarView: View {
                     } else {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 40))
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                     
                     VStack(alignment: .leading) {
@@ -101,7 +70,7 @@ struct SidebarView: View {
             }) {
                 HStack {
                     Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                     Text(isDarkMode ? "Dark Mode" : "Light Mode")
                         .foregroundColor(.appText)
                     Spacer()
@@ -127,7 +96,7 @@ struct SidebarView: View {
                     }) {
                         HStack {
                             Image(systemName: "doc.viewfinder")
-                                .foregroundColor(.appAccent)
+                                .foregroundColor(.appAccent1)
                             Text(tool)
                                 .foregroundColor(.appText)
                             Spacer()
@@ -159,6 +128,61 @@ struct SidebarView: View {
                 } else {
                     ForEach(recentNotes) { note in
                         recentNoteButton(note)
+                    }
+                }
+            }
+            .padding(.top, 3.0)
+            
+            // Recent Chats Section
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Recent Chats")
+                        .font(.headline)
+                        .foregroundColor(.appText)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        let newChat = Chat(title: "Chat \(chats.count + 1)")
+                        chats.append(newChat)
+                        currentChat = newChat
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.appAccent1)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                
+                if chats.isEmpty {
+                    Text("No recent chats")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
+                        Button(action: {
+                            currentChat = chat
+                        }) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(chat.title)
+                                    .font(.subheadline)
+                                    .foregroundColor(.appText)
+                                if !chat.messages.isEmpty {
+                                    Text(chat.messages.last?.content ?? "")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.appCardBackground)
+                            .cornerRadius(8)
+                            .padding(.horizontal)
+                        }
                     }
                 }
             }
@@ -252,7 +276,7 @@ struct SidebarView: View {
         }) {
             HStack {
                 Image(systemName: "note.text")
-                    .foregroundColor(.appAccent)
+                    .foregroundColor(.appAccent1)
                 VStack(alignment: .leading) {
                     Text(note.title)
                         .foregroundColor(.appText)
@@ -271,6 +295,7 @@ struct CameraView: View {
     @Binding var selectedPhoto: PhotosPickerItem?
     @Binding var isShowing: Bool
     @StateObject private var camera = CameraModel()
+    @State private var capturedImage: UIImage?
     
     var body: some View {
         ZStack {
@@ -278,34 +303,14 @@ struct CameraView: View {
                 .ignoresSafeArea()
             
             VStack {
-                Spacer()
-                
                 HStack {
                     Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            isShowing = false
-                        }
+                        dismiss()
                     }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
+                        Image(systemName: "xmark")
+                            .font(.title)
                             .foregroundColor(.white)
-                            .shadow(radius: 2)
-                    }
-                    .padding()
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        camera.takePicture()
-                    }) {
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 65, height: 65)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: 2)
-                                    .frame(width: 75, height: 75)
-                            )
+                            .padding()
                     }
                     
                     Spacer()
@@ -313,129 +318,47 @@ struct CameraView: View {
                     Button(action: {
                         camera.switchCamera()
                     }) {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
-                            .font(.system(size: 24))
+                        Image(systemName: "camera.rotate")
+                            .font(.title)
                             .foregroundColor(.white)
-                            .shadow(radius: 2)
+                            .padding()
                     }
-                    .padding()
+                }
+                
+                Spacer()
+                
+                HStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        camera.capturePhoto { image in
+                            if let image = image {
+                                capturedImage = image
+                                // Convert UIImage to PhotosPickerItem
+                                if let data = image.jpegData(compressionQuality: 0.8) {
+                                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+                                    try? data.write(to: tempURL)
+                                    selectedPhoto = PhotosPickerItem(itemIdentifier: tempURL.absoluteString)
+                                }
+                                dismiss()
+                            }
+                        }
+                    }) {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 65, height: 65)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.black.opacity(0.8), lineWidth: 2)
+                                    .frame(width: 60, height: 60)
+                            )
+                    }
+                    
+                    Spacer()
                 }
                 .padding(.bottom, 30)
             }
         }
-        .onAppear {
-            camera.checkPermissions()
-        }
-        .onChange(of: camera.photo) { oldValue, newValue in
-            if let image = newValue {
-                // Convert UIImage to PhotosPickerItem
-                if let data = image.jpegData(compressionQuality: 0.8) {
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("camera_photo.jpg")
-                    try? data.write(to: tempURL)
-                    selectedPhoto = PhotosPickerItem(itemIdentifier: tempURL.absoluteString)
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isShowing = false
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Camera Model
-class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
-    @Published var isTaken = false
-    @Published var session = AVCaptureSession()
-    @Published var alert = false
-    @Published var output = AVCapturePhotoOutput()
-    @Published var preview: AVCaptureVideoPreviewLayer!
-    @Published var photo: UIImage?
-    @Published var isCameraAuthorized = false
-    
-    func checkPermissions() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            isCameraAuthorized = true
-            setUp()
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { status in
-                if status {
-                    DispatchQueue.main.async {
-                        self.isCameraAuthorized = true
-                        self.setUp()
-                    }
-                }
-            }
-        default:
-            isCameraAuthorized = false
-            alert = true
-            return
-        }
-    }
-    
-    func setUp() {
-        do {
-            self.session.beginConfiguration()
-            
-            let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
-            let input = try AVCaptureDeviceInput(device: device!)
-            
-            if self.session.canAddInput(input) {
-                self.session.addInput(input)
-            }
-            
-            if self.session.canAddOutput(self.output) {
-                self.session.addOutput(self.output)
-            }
-            
-            self.session.commitConfiguration()
-        } catch {
-            print(error.localizedDescription)
-        }
-    }
-    
-    func takePicture() {
-        DispatchQueue.global(qos: .background).async {
-            self.output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
-            DispatchQueue.main.async {
-                withAnimation { self.isTaken.toggle() }
-            }
-        }
-    }
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if error != nil {
-            return
-        }
-        
-        guard let imageData = photo.fileDataRepresentation() else { return }
-        self.photo = UIImage(data: imageData)
-    }
-    
-    func switchCamera() {
-        session.beginConfiguration()
-        
-        // Remove existing input
-        guard let currentInput = session.inputs.first as? AVCaptureDeviceInput else { return }
-        session.removeInput(currentInput)
-        
-        // Get new camera position
-        let newPosition: AVCaptureDevice.Position = currentInput.device.position == .back ? .front : .back
-        
-        // Get new device
-        guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition) else { return }
-        
-        // Add new input
-        do {
-            let newInput = try AVCaptureDeviceInput(device: newDevice)
-            if session.canAddInput(newInput) {
-                session.addInput(newInput)
-            }
-        } catch {
-            print(error.localizedDescription)
-        }
-        
-        session.commitConfiguration()
     }
 }
 
@@ -449,11 +372,157 @@ struct CameraPreview: UIViewRepresentable {
         camera.preview.frame = view.frame
         camera.preview.videoGravity = .resizeAspectFill
         view.layer.addSublayer(camera.preview)
-        camera.session.startRunning()
+        
+        // Start session on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak camera] in
+            camera?.session.startRunning()
+        }
+        
         return view
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
+    }
+}
+
+// MARK: - Camera Model
+class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+    @Published var isTaken = false
+    @Published var session = AVCaptureSession()
+    @Published var alert = false
+    @Published var output = AVCapturePhotoOutput()
+    @Published var preview: AVCaptureVideoPreviewLayer!
+    @Published var isSessionConfigured = false
+    private var isConfiguring = false
+    
+    func check() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            setUp()
+            return
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] status in
+                if status {
+                    self?.setUp()
+                }
+            }
+        case .denied:
+            self.alert = true
+            return
+        default:
+            return
+        }
+    }
+    
+    func setUp() {
+        guard !isConfiguring else { return }
+        isConfiguring = true
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            self.session.beginConfiguration()
+            
+            // Add video input
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let input = try? AVCaptureDeviceInput(device: device) else {
+                print("Failed to get camera device")
+                self.isConfiguring = false
+                return
+            }
+            
+            if self.session.canAddInput(input) {
+                self.session.addInput(input)
+            }
+            
+            // Add photo output
+            if self.session.canAddOutput(self.output) {
+                self.session.addOutput(self.output)
+                self.output.isHighResolutionCaptureEnabled = true
+                self.output.maxPhotoQualityPrioritization = .quality
+            }
+            
+            self.session.commitConfiguration()
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.isSessionConfigured = true
+                self.isConfiguring = false
+            }
+        }
+    }
+    
+    func capturePhoto(completion: @escaping (UIImage?) -> Void) {
+        guard isSessionConfigured else {
+            print("Camera session not configured")
+            completion(nil)
+            return
+        }
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else {
+                completion(nil)
+                return
+            }
+            
+            let settings = AVCapturePhotoSettings()
+            self.output.capturePhoto(with: settings, delegate: self)
+            self.completion = completion
+        }
+    }
+    
+    private var completion: ((UIImage?) -> Void)?
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if let error = error {
+            print("Error capturing photo: \(error.localizedDescription)")
+            completion?(nil)
+            return
+        }
+        
+        guard let data = photo.fileDataRepresentation(),
+              let image = UIImage(data: data) else {
+            completion?(nil)
+            return
+        }
+        
+        completion?(image)
+    }
+    
+    func switchCamera() {
+        guard isSessionConfigured, !isConfiguring else { return }
+        isConfiguring = true
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            self.session.beginConfiguration()
+            
+            // Remove existing input
+            guard let currentInput = self.session.inputs.first as? AVCaptureDeviceInput else {
+                self.isConfiguring = false
+                return
+            }
+            self.session.removeInput(currentInput)
+            
+            // Get new camera position
+            let newPosition: AVCaptureDevice.Position = currentInput.device.position == .back ? .front : .back
+            
+            // Get new device
+            guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
+                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
+                self.isConfiguring = false
+                return
+            }
+            
+            // Add new input
+            if self.session.canAddInput(newInput) {
+                self.session.addInput(newInput)
+            }
+            
+            self.session.commitConfiguration()
+            self.isConfiguring = false
+        }
     }
 }
 
@@ -503,6 +572,13 @@ struct AttachmentMenuView: View {
         .background(Color.appHeaderBackground)
         .fullScreenCover(isPresented: $isShowingCamera) {
             CameraView(selectedPhoto: $selectedPhoto, isShowing: $isShowingCamera)
+                .onDisappear {
+                    if selectedPhoto != nil {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isShowing = false
+                        }
+                    }
+                }
         }
     }
     
@@ -510,7 +586,7 @@ struct AttachmentMenuView: View {
         HStack(spacing: 16) {
             Image(systemName: item.0)
                 .font(.system(size: 24))
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent1)
                 .frame(width: 32)
             
             VStack(alignment: .leading, spacing: 4) {
@@ -550,7 +626,7 @@ struct PhotoPickerView: View {
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
             }
             .padding()
@@ -578,7 +654,7 @@ struct PhotoPickerView: View {
                                     VStack {
                                         Image(systemName: "photo.on.rectangle.angled")
                                             .font(.system(size: 40))
-                                            .foregroundColor(.appAccent)
+                                            .foregroundColor(.appAccent1)
                                         Text("Tap to select a photo")
                                             .foregroundColor(.appText)
                                     }
@@ -629,6 +705,8 @@ struct ContentView: View {
     @State private var showNotebook: Bool = false
     @AppStorage("isDarkMode") private var isDarkMode = false
     @StateObject private var dataManager = DataManager()
+    @State private var chats: [Chat] = []
+    @State private var currentChat: Chat?
     
     var preferredColorScheme: ColorScheme? {
         isDarkMode ? .dark : .light
@@ -643,6 +721,21 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(preferredColorScheme)
+        .onAppear {
+            loadSavedChats()
+        }
+    }
+    
+    private func loadSavedChats() {
+        if let savedChats = UserDefaults.standard.data(forKey: "savedChats"),
+           let decodedChats = try? JSONDecoder().decode([Chat].self, from: savedChats) {
+            chats = decodedChats
+            currentChat = chats.first
+        } else {
+            let newChat = Chat(title: "Welcome")
+            chats = [newChat]
+            currentChat = newChat
+        }
     }
     
     private var mainView: some View {
@@ -672,7 +765,7 @@ struct ContentView: View {
                 NotebookView(isPresented: $showNotebook)
                     .environmentObject(noteDisplayState)
             } else {
-                ChatView()
+                ChatView(chats: $chats, currentChat: $currentChat)
             }
         }
     }
@@ -687,7 +780,7 @@ struct ContentView: View {
                     }
                 
                 HStack {
-                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
+                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager, chats: $chats, currentChat: $currentChat)
                         .transition(.move(edge: .leading))
                     
                     Spacer()
@@ -715,7 +808,7 @@ struct ContentView: View {
         }) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 20))
-                .foregroundColor(.appAccent)
+                .foregroundColor(.appAccent1)
         }
         .padding(.horizontal, 34)
         .padding(.vertical, 26)
@@ -732,7 +825,7 @@ struct ContentView: View {
                 }) {
                     Image(systemName: "house.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
                 .padding(.horizontal, 34)
                 .padding(.vertical, 20)
@@ -742,7 +835,7 @@ struct ContentView: View {
                 }) {
                     Image(systemName: "note.text")
                         .font(.system(size: 20))
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
                 .padding(.horizontal, 34)
                 .padding(.vertical, 20)
