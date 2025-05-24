@@ -12,7 +12,6 @@ struct NoteView: View {
     @ObservedObject var dataManager: DataManager
     
     init(note: Note?, isPresented: Binding<Bool>, dataManager: DataManager) {
-        print("NoteView initialized with note: \(String(describing: note?.id))")
         self._isPresented = isPresented
         self._editedTitle = State(initialValue: note?.title ?? "")
         self._editedContent = State(initialValue: note?.content ?? "")
@@ -35,7 +34,7 @@ struct NoteView: View {
                     if let topic = noteDisplayState.currentTopic {
                         Text(topic.title)
                             .font(.subheadline)
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                     if let subtopic = noteDisplayState.currentSubtopic {
                         Text(subtopic.title)
@@ -53,23 +52,17 @@ struct NoteView: View {
                 }) {
                     Text("Save")
                         .font(.headline)
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                 }
             }
             .padding()
             .background(Color.appHeaderBackground)
             .onAppear {
-                print("NoteView appeared with note: \(String(describing: noteDisplayState.currentNote?.id))")
-                print("Current topic: \(String(describing: noteDisplayState.currentTopic?.id))")
-                print("Current subtopic: \(String(describing: noteDisplayState.currentSubtopic?.id))")
-                
                 // Add to recent notes when view appears
                 if let note = noteDisplayState.currentNote {
-                    print("Adding note to recent notes: \(note.id)")
                     Task {
                         do {
                             try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                            print("Successfully added note to recent notes")
                         } catch {
                             print("Error adding recent note: \(error)")
                         }
@@ -118,7 +111,7 @@ struct NoteView: View {
                             Text(noteImage == nil ? "Add Image" : "Change Image")
                                 .font(.headline)
                         }
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.appCardBackground)
@@ -152,21 +145,46 @@ struct NoteView: View {
     }
     
     private func saveNote() {
-        guard let topic = noteDisplayState.currentTopic,
-              let subtopic = noteDisplayState.currentSubtopic else { return }
-        
-        // Save image if present
-        var attachmentUrl: String? = nil
-        if let image = noteImage {
-            attachmentUrl = saveImage(image)
-        }
-        
-        if isNewNote {
-            // Create new note
-            dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrl: attachmentUrl)
-        } else if let note = noteDisplayState.currentNote {
-            // Update existing note
-            dataManager.updateNote(note, in: subtopic, in: topic, newTitle: editedTitle, newContent: editedContent, newAttachmentUrl: attachmentUrl)
+        Task {
+            do {
+                guard let topic = noteDisplayState.currentTopic,
+                      let subtopic = noteDisplayState.currentSubtopic else { return }
+                
+                // Save image if present
+                var attachmentUrl: String? = nil
+                if let image = noteImage {
+                    attachmentUrl = saveImage(image)
+                }
+                
+                if isNewNote {
+                    // Create new note
+                    _ = try await dataManager.addNote(
+                        to: subtopic,
+                        in: topic,
+                        title: editedTitle,
+                        content: editedContent,
+                        attachmentUrl: attachmentUrl
+                    )
+                } else if let note = noteDisplayState.currentNote {
+                    // Update existing note
+                    try await dataManager.updateNote(
+                        note,
+                        in: subtopic,
+                        in: topic,
+                        newTitle: editedTitle,
+                        newContent: editedContent,
+                        newAttachmentUrl: attachmentUrl
+                    )
+                }
+                
+                // Dismiss the view after successful save
+                await MainActor.run {
+                    isPresented = false
+                }
+            } catch {
+                print("Error saving note: \(error)")
+                // You might want to show an error alert here
+            }
         }
     }
     

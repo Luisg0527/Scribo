@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Login View
 struct LoginView: View {
     @ObservedObject var authManager: AuthManager
-    @State private var email: String = ""
-    @State private var password: String = ""
+    @State private var email: String = "santiparedes738@gmail.com"
+    @State private var password: String = "admin"
     @State private var showSignUp = false
     @State private var showForgotPassword = false
     @State private var showError = false
@@ -437,25 +437,3 @@ struct ForgotPasswordView: View {
     }
 }
 
-// MARK: - Color Extension
-extension Color {
-    init(hex: String) {
-        var cleanHexCode = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        cleanHexCode = cleanHexCode.replacingOccurrences(of: "#", with: "")
-        
-        guard cleanHexCode.count == 6 || cleanHexCode.count == 8 else {
-            self = Color.gray
-            return
-        }
-        
-        var rgb: UInt64 = 0
-        Scanner(string: cleanHexCode).scanHexInt64(&rgb)
-        
-        let redValue = Double((rgb >> 16) & 0xFF) / 255.0
-        let greenValue = Double((rgb >> 8) & 0xFF) / 255.0
-        let blueValue = Double(rgb & 0xFF) / 255.0
-        let alphaValue = cleanHexCode.count == 8 ? Double((rgb >> 24) & 0xFF) / 255.0 : 1.0
-        
-        self.init(red: redValue, green: greenValue, blue: blueValue, opacity: alphaValue)
-    }
-} 

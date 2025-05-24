@@ -15,8 +15,7 @@ struct HighlightedText: View {
                     Text(part)
                     if index < parts.count - 1 {
                         Text(searchText)
-                            .foregroundColor(.white)
-                            .background(Color.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                 }
             }
@@ -103,31 +102,31 @@ struct TopicPreviewView: View {
     
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
         NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "folder.fill.badge.person.crop")
-                    .font(.system(size: 24))
-                    .foregroundColor(.appAccent)
-                
-                Text(subtopic.title)
-                    .font(.headline)
-                    .foregroundColor(.appText)
-                    .lineLimit(2)
-                
-                Text("\(subtopic.notes.count) notes")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(Color.appCardBackground)
-            .cornerRadius(12)
-        }
-        .contextMenu {
-            Button(action: {
-                // Add note action
-            }) {
-                Label("Add Note", systemImage: "note.text.badge.plus")
-            }
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(systemName: "folder.fill.badge.person.crop")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.appAccent2)
+                                
+                                Text(subtopic.title)
+                                    .font(.headline)
+                                    .foregroundColor(.appText)
+                                    .lineLimit(2)
+                                
+                                Text("\(subtopic.notes.count) notes")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color.appCardBackground)
+                            .cornerRadius(12)
+                        }
+                        .contextMenu {
+                            Button(action: {
+                                // Add note action
+                            }) {
+                                Label("Add Note", systemImage: "note.text.badge.plus")
+                            }
             
             Button(action: {
                 selectedSubtopic = subtopic
@@ -135,21 +134,21 @@ struct TopicPreviewView: View {
             }) {
                 Label("Edit Subtopic", systemImage: "pencil")
             }
-            
-            Button(role: .destructive, action: {
-                subtopicToDelete = (topic, subtopic)
-            }) {
-                Label("Delete Subtopic", systemImage: "trash")
-            }
-        }
-    }
+                            
+                            Button(role: .destructive, action: {
+                                subtopicToDelete = (topic, subtopic)
+                            }) {
+                                Label("Delete Subtopic", systemImage: "trash")
+                            }
+                        }
+                    }
     
     private var addSubtopicButton: some View {
                 Button(action: {
                     isShowingNewSubtopicSheet = true
                 }) {
                     Image(systemName: "plus")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
         }
     }
 }
@@ -206,7 +205,7 @@ struct SubtopicPreviewView: View {
                     VStack(alignment: .leading) {
                         Text(topic.title)
                             .font(.subheadline)
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                         Text(subtopic.title)
                             .font(.title2)
                             .fontWeight(.bold)
@@ -230,14 +229,14 @@ struct SubtopicPreviewView: View {
     }
     
     private func noteCard(_ note: Note) -> some View {
-        Button(action: {
-            noteDisplayState.currentNote = note
-            noteDisplayState.currentTopic = topic
-            noteDisplayState.currentSubtopic = subtopic
-            noteDisplayState.isShowingNote = true
-            isPresented = false
-        }) {
-            VStack(alignment: .leading, spacing: 8) {
+                        Button(action: {
+                            noteDisplayState.currentNote = note
+                            noteDisplayState.currentTopic = topic
+                            noteDisplayState.currentSubtopic = subtopic
+                            noteDisplayState.isShowingNote = true
+                            isPresented = false
+                        }) {
+                            VStack(alignment: .leading, spacing: 8) {
                 noteImage(note)
                 noteTitle(note)
             }
@@ -261,49 +260,49 @@ struct SubtopicPreviewView: View {
                 let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
                 if let image = UIImage(contentsOfFile: fileURL.path) {
                     Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 120)
-                        .clipped()
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(height: 120)
+                                            .clipped()
                         .cornerRadius(8)
                 } else {
                     Image(systemName: "note.text")
                         .font(.system(size: 24))
                         .foregroundColor(.gray)
-                        .frame(height: 120)
+                                            .frame(height: 120)
                         .frame(maxWidth: .infinity)
                         .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                                    .cornerRadius(8)
                 }
-            } else {
-                Image(systemName: "note.text")
-                    .font(.system(size: 24))
+                                } else {
+                                    Image(systemName: "note.text")
+                                        .font(.system(size: 24))
                     .foregroundColor(.gray)
-                    .frame(height: 120)
+                                        .frame(height: 120)
                     .frame(maxWidth: .infinity)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(8)
             }
         }
-    }
-    
+                                }
+                                
     private func getDocumentsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
     private func noteTitle(_ note: Note) -> some View {
-        Text(note.title)
-            .font(.headline)
-            .foregroundColor(.appText)
-            .lineLimit(2)
-    }
+                                Text(note.title)
+                                    .font(.headline)
+                                    .foregroundColor(.appText)
+                                    .lineLimit(2)
+                            }
     
     private var addNoteButton: some View {
                 Button(action: {
                     isShowingNewNoteSheet = true
                 }) {
                     Image(systemName: "plus")
-                        .foregroundColor(.appAccent)
+                        .foregroundColor(.appAccent1)
         }
     }
 }
@@ -325,42 +324,45 @@ struct NotebookView: View {
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingEditTopicSheet = false
     @State private var isShowingEditSubtopicSheet = false
-    
+    @State private var expandedTopics: Set<UUID> = []
+    @State private var expandedSubtopics: Set<UUID> = []
+
     var filteredTopics: [Topic] {
         if searchState.searchText.isEmpty {
             return dataManager.topics
         }
-        
         return dataManager.topics.compactMap { topic in
             let matchingSubtopics = topic.subtopics.compactMap { subtopic -> Subtopic? in
                 let matchingNotes = subtopic.notes.filter { note in
                     note.title.localizedCaseInsensitiveContains(searchState.searchText) ||
                     note.content.localizedCaseInsensitiveContains(searchState.searchText)
                 }
-                
                 if !matchingNotes.isEmpty || subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) {
                     return Subtopic(
                         id: subtopic.id,
                         topic_id: subtopic.topic_id,
                         title: subtopic.title,
-                        notes: matchingNotes
+                        notes: matchingNotes,
+                        created_at: subtopic.created_at,
+                        updated_at: subtopic.updated_at
                     )
                 }
                 return nil
             }
-            
             if !matchingSubtopics.isEmpty || topic.title.localizedCaseInsensitiveContains(searchState.searchText) {
                 return Topic(
                     id: topic.id,
                     user_id: topic.user_id,
                     title: topic.title,
-                    subtopics: matchingSubtopics
+                    subtopics: matchingSubtopics,
+                    created_at: topic.created_at,
+                    updated_at: topic.updated_at
                 )
             }
             return nil
         }
     }
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -368,10 +370,8 @@ struct NotebookView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
-                    
                     TextField("Search notes...", text: $searchState.searchText)
                         .textFieldStyle(PlainTextFieldStyle())
-                    
                     if !searchState.searchText.isEmpty {
                         Button(action: {
                             searchState.searchText = ""
@@ -387,46 +387,35 @@ struct NotebookView: View {
                 .cornerRadius(10)
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                
-                // List of Topics
+
+                // Hierarchical Tree
                 List {
                     ForEach(filteredTopics) { topic in
-                        NavigationLink(destination: TopicPreviewView(topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-                            TopicRow(topic: topic, 
-                                   selectedTopic: $selectedTopic, 
-                                   selectedSubtopic: $selectedSubtopic, 
-                                   selectedNote: $selectedNote, 
-                                   isPresented: $isPresented,
-                                   dataManager: dataManager)
-                        }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    topicToDelete = topic
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                        TopicRow(
+                            topic: topic,
+                            selectedTopic: $selectedTopic,
+                            selectedSubtopic: $selectedSubtopic,
+                            selectedNote: $selectedNote,
+                            isPresented: $isPresented,
+                            dataManager: dataManager,
+                            subtopicToDelete: $subtopicToDelete,
+                            noteToDelete: $noteToDelete,
+                            isExpanded: expandedTopics.contains(topic.id),
+                            onExpandChange: { expanded, topicId in
+                                if expanded {
+                                    expandedTopics.insert(topicId)
+                                } else {
+                                    expandedTopics.remove(topicId)
                                 }
-                            }
-                            .contextMenu {
-                                Button(action: {
-                                    selectedTopic = topic
-                                    isShowingNewSubtopicSheet = true
-                                }) {
-                                    Label("Add Subtopic", systemImage: "folder.badge.plus")
-                                }
-                                
-                                Button(action: {
-                                    selectedTopic = topic
-                                    isShowingEditTopicSheet = true
-                                }) {
-                                    Label("Edit Topic", systemImage: "pencil")
-                                }
-                                
-                                Button(role: .destructive, action: {
-                                    topicToDelete = topic
-                                }) {
-                                    Label("Delete Topic", systemImage: "trash")
-                                }
-                            }
+                            },
+                            expandedSubtopics: $expandedSubtopics,
+                            searchText: searchState.searchText,
+                            isShowingNewTopicSheet: $isShowingNewTopicSheet,
+                            isShowingEditTopicSheet: $isShowingEditTopicSheet,
+                            topicToDelete: $topicToDelete,
+                            isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
+                            isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
+                        )
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -439,7 +428,7 @@ struct NotebookView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.appAccent)
+                            .foregroundColor(.appAccent1)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -455,7 +444,7 @@ struct NotebookView: View {
             }
             .sheet(isPresented: $isShowingNewSubtopicSheet) {
                 if let topic = selectedTopic {
-                    NewSubtopicView(topic: topic, dataManager: DataManager())
+                    NewSubtopicView(topic: topic, dataManager: dataManager)
                 }
             }
             .sheet(isPresented: $isShowingNewNoteSheet) {
@@ -527,6 +516,36 @@ struct NotebookView: View {
             Color.clear.frame(height: 120)
         }
         .environmentObject(searchState)
+        .onChange(of: searchState.searchText) { newValue in
+            if newValue.isEmpty {
+                expandedTopics.removeAll()
+                expandedSubtopics.removeAll()
+            } else {
+                // Expand all topics and subtopics that match the search
+                var newExpandedTopics: Set<UUID> = []
+                var newExpandedSubtopics: Set<UUID> = []
+                for topic in filteredTopics {
+                    let topicMatches = topic.title.localizedCaseInsensitiveContains(newValue)
+                    var topicShouldExpand = topicMatches
+                    for subtopic in topic.subtopics {
+                        let subtopicMatches = subtopic.title.localizedCaseInsensitiveContains(newValue)
+                        let noteMatches = subtopic.notes.contains { note in
+                            note.title.localizedCaseInsensitiveContains(newValue) ||
+                            note.content.localizedCaseInsensitiveContains(newValue)
+                        }
+                        if subtopicMatches || noteMatches {
+                            topicShouldExpand = true
+                            newExpandedSubtopics.insert(subtopic.id)
+                        }
+                    }
+                    if topicShouldExpand {
+                        newExpandedTopics.insert(topic.id)
+                    }
+                }
+                expandedTopics = newExpandedTopics
+                expandedSubtopics = newExpandedSubtopics
+            }
+        }
     }
 }
 
@@ -535,76 +554,82 @@ struct TopicRow: View {
     @Binding var selectedTopic: Topic?
     @Binding var selectedSubtopic: Subtopic?
     @Binding var selectedNote: Note?
-    @State private var isExpanded: Bool = false
-    @EnvironmentObject var searchState: SearchState
     @Binding var isPresented: Bool
-    @State private var isShowingNewSubtopicSheet = false
-    @State private var isShowingNewNoteSheet = false
-    @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
-    @State private var isShowingEditTopicSheet = false
-    @State private var topicToDelete: Topic?
-    
+    @Binding var subtopicToDelete: (Topic, Subtopic)?
+    @Binding var noteToDelete: (Topic, Subtopic, Note)?
+    var isExpanded: Bool
+    var onExpandChange: (Bool, UUID) -> Void
+    @Binding var expandedSubtopics: Set<UUID>
+    var searchText: String
+    @Binding var isShowingNewTopicSheet: Bool
+    @Binding var isShowingEditTopicSheet: Bool
+    @Binding var topicToDelete: Topic?
+    @Binding var isShowingEditSubtopicSheet: Bool
+    @Binding var isShowingNewSubtopicSheet: Bool
+    @EnvironmentObject var searchState: SearchState
+    @State private var localIsExpanded: Bool = false
+
     var body: some View {
-        DisclosureGroup(
-            isExpanded: $isExpanded
-        ) {
+        DisclosureGroup(isExpanded: Binding(
+            get: { isExpanded },
+            set: { newValue in
+                localIsExpanded = newValue
+                onExpandChange(newValue, topic.id)
+            }
+        )) {
             ForEach(topic.subtopics) { subtopic in
-                DisclosureGroup {
-                    ForEach(subtopic.notes) { note in
-                        NoteRow(note: note, selectedNote: $selectedNote, isPresented: $isPresented, topic: topic, subtopic: subtopic)
-                    }
-                } label: {
-                    NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-                        HStack {
-                            Image(systemName: "folder.fill.badge.person.crop")
-                                .foregroundColor(.appAccent)
-                            HighlightedText(text: subtopic.title, searchText: searchState.searchText)
-                                .font(.subheadline)
-                            Spacer()
+                SubtopicRow(
+                    subtopic: subtopic,
+                    topic: topic,
+                    selectedSubtopic: $selectedSubtopic,
+                    selectedNote: $selectedNote,
+                    isPresented: $isPresented,
+                    dataManager: dataManager,
+                    subtopicToDelete: $subtopicToDelete,
+                    noteToDelete: $noteToDelete,
+                    isExpanded: expandedSubtopics.contains(subtopic.id),
+                    onExpandChange: { expanded, subtopicId in
+                        if expanded {
+                            expandedSubtopics.insert(subtopicId)
+                        } else {
+                            expandedSubtopics.remove(subtopicId)
                         }
-                    }
-                }
-                .padding(.leading)
+                    },
+                    searchText: searchText,
+                    isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
+                    isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet,
+                    selectedTopic: $selectedTopic
+                )
+                .padding(.leading, 16)
             }
         } label: {
             HStack {
                 Image(systemName: "folder.fill")
-                    .foregroundColor(.appAccent)
-                HighlightedText(text: topic.title, searchText: searchState.searchText)
+                    .foregroundColor(.appAccent2)
+                HighlightedText(text: topic.title, searchText: searchText)
                     .font(.headline)
                 Spacer()
             }
-        }
-        .contextMenu {
-            Button(action: {
-                selectedTopic = topic
-                isShowingNewSubtopicSheet = true
-            }) {
-                Label("Add Subtopic", systemImage: "folder.badge.plus")
-            }
-            
-            Button(action: {
-                selectedTopic = topic
-                isShowingEditTopicSheet = true
-            }) {
-                Label("Edit Topic", systemImage: "pencil")
-            }
-            
-            Button(role: .destructive, action: {
-                topicToDelete = topic
-            }) {
-                Label("Delete Topic", systemImage: "trash")
-            }
-        }
-        .onAppear {
-            if !searchState.searchText.isEmpty {
-                isExpanded = topic.subtopics.contains { subtopic in
-                    subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                    subtopic.notes.contains { note in
-                        note.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                        note.content.localizedCaseInsensitiveContains(searchState.searchText)
-                    }
+            .padding(.vertical, 6)
+            .contextMenu {
+                Button(action: {
+                    selectedTopic = topic
+                    isShowingNewSubtopicSheet = true
+                }) {
+                    Label("Add Subtopic", systemImage: "folder.badge.plus")
+                }
+                Button(action: {
+                    selectedTopic = topic
+                    isShowingEditTopicSheet = true
+                }) {
+                    Label("Edit Topic", systemImage: "pencil")
+                }
+                Button(role: .destructive, action: {
+                    selectedTopic = topic
+                    topicToDelete = topic
+                }) {
+                    Label("Delete Topic", systemImage: "trash")
                 }
             }
         }
@@ -613,79 +638,77 @@ struct TopicRow: View {
 
 struct SubtopicRow: View {
     let subtopic: Subtopic
+    let topic: Topic
     @Binding var selectedSubtopic: Subtopic?
     @Binding var selectedNote: Note?
-    @State private var isExpanded: Bool = false
-    @EnvironmentObject var searchState: SearchState
     @Binding var isPresented: Bool
-    let topic: Topic
-    @State private var isShowingNewNoteSheet = false
+    @ObservedObject var dataManager: DataManager
     @Binding var subtopicToDelete: (Topic, Subtopic)?
     @Binding var noteToDelete: (Topic, Subtopic, Note)?
-    @State private var isShowingEditSubtopicSheet = false
-    
+    var isExpanded: Bool
+    var onExpandChange: (Bool, UUID) -> Void
+    var searchText: String
+    @Binding var isShowingEditSubtopicSheet: Bool
+    @Binding var isShowingNewSubtopicSheet: Bool
+    @Binding var selectedTopic: Topic?
+    @EnvironmentObject var searchState: SearchState
+    @State private var localIsExpanded: Bool = false
+    @State private var isActive = false
+
     var body: some View {
-        DisclosureGroup(
-            isExpanded: Binding(
-                get: { selectedSubtopic?.id == subtopic.id || isExpanded },
-                set: { if $0 { selectedSubtopic = subtopic } else { selectedSubtopic = nil } }
-            )
-        ) {
+        DisclosureGroup(isExpanded: Binding(
+            get: { isExpanded },
+            set: { newValue in
+                localIsExpanded = newValue
+                onExpandChange(newValue, subtopic.id)
+            }
+        )) {
             ForEach(subtopic.notes) { note in
-                NoteRow(note: note, selectedNote: $selectedNote, isPresented: $isPresented, topic: topic, subtopic: subtopic)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            noteToDelete = (topic, subtopic, note)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                NoteRow(
+                    note: note,
+                    topic: topic,
+                    subtopic: subtopic,
+                    selectedNote: $selectedNote,
+                    isPresented: $isPresented,
+                    dataManager: dataManager,
+                    noteToDelete: $noteToDelete
+                )
+                .padding(.leading, 16)
             }
         } label: {
-            HStack {
-                Image(systemName: "folder.fill.badge.person.crop")
-                    .foregroundColor(.appAccent)
-                HighlightedText(text: subtopic.title, searchText: searchState.searchText)
-                    .font(.subheadline)
-                Spacer()
+            NavigationLink(
+                destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager),
+                isActive: $isActive
+            ) {
+                HStack {
+                    Image(systemName: "folder.fill.badge.person.crop")
+                        .foregroundColor(.appAccent2)
+                    HighlightedText(text: subtopic.title, searchText: searchText)
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedSubtopic = subtopic
+                    selectedTopic = topic
+                    isActive = true
+                }
             }
-        }
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                subtopicToDelete = (topic, subtopic)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .contextMenu {
-            Button(action: {
-                selectedSubtopic = subtopic
-                isShowingNewNoteSheet = true
-            }) {
-                Label("Add Note", systemImage: "note.text.badge.plus")
-            }
-            
-            Button(action: {
-                selectedSubtopic = subtopic
-                isShowingEditSubtopicSheet = true
-            }) {
-                Label("Edit Subtopic", systemImage: "pencil")
-            }
-            
-            Button(role: .destructive, action: {
-                subtopicToDelete = (topic, subtopic)
-            }) {
-                Label("Delete Subtopic", systemImage: "trash")
-            }
-        }
-        .padding(.leading)
-        .onAppear {
-            if !searchState.searchText.isEmpty {
-                isExpanded = subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                    subtopic.notes.contains { note in
-                        note.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                        note.content.localizedCaseInsensitiveContains(searchState.searchText)
-                    }
+            .buttonStyle(PlainButtonStyle())
+            .contextMenu {
+                Button(action: {
+                    selectedSubtopic = subtopic
+                    selectedTopic = topic
+                    isShowingEditSubtopicSheet = true
+                }) {
+                    Label("Edit Subtopic", systemImage: "pencil")
+                }
+                Button(role: .destructive, action: {
+                    subtopicToDelete = (topic, subtopic)
+                }) {
+                    Label("Delete Subtopic", systemImage: "trash")
+                }
             }
         }
     }
@@ -693,30 +716,39 @@ struct SubtopicRow: View {
 
 struct NoteRow: View {
     let note: Note
-    @Binding var selectedNote: Note?
-    @EnvironmentObject var searchState: SearchState
-    @EnvironmentObject var noteDisplayState: NoteDisplayState
-    @Binding var isPresented: Bool
     let topic: Topic
     let subtopic: Subtopic
-    
+    @Binding var selectedNote: Note?
+    @Binding var isPresented: Bool
+    @ObservedObject var dataManager: DataManager
+    @Binding var noteToDelete: (Topic, Subtopic, Note)?
+    @EnvironmentObject var searchState: SearchState
+    @EnvironmentObject var noteDisplayState: NoteDisplayState
+
     var body: some View {
-        Button(action: {
+        HStack {
+            Image(systemName: "note.text")
+                .foregroundColor(.appAccent2)
+            HighlightedText(text: note.title, searchText: searchState.searchText)
+                .font(.subheadline)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
             noteDisplayState.currentNote = note
             noteDisplayState.currentTopic = topic
             noteDisplayState.currentSubtopic = subtopic
             noteDisplayState.isShowingNote = true
             isPresented = false
-        }) {
-            HStack {
-                Image(systemName: "note.text")
-                    .foregroundColor(.appAccent)
-                HighlightedText(text: note.title, searchText: searchState.searchText)
-                    .font(.subheadline)
-                Spacer()
+        }
+        .contextMenu {
+            Button(role: .destructive, action: {
+                noteToDelete = (topic, subtopic, note)
+            }) {
+                Label("Delete Note", systemImage: "trash")
             }
         }
-        .padding(.leading, 32)
     }
 }
 
@@ -733,8 +765,8 @@ struct NoteDetailView: View {
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .cornerRadius(12)
+                    .frame(maxWidth: .infinity)
+                    .cornerRadius(12)
                     }
                 }
                 
@@ -759,6 +791,8 @@ struct NewTopicView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -771,12 +805,36 @@ struct NewTopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addTopic(title: title)
-                    dismiss()
+                    Task {
+                        await saveTopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveTopic() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addTopic(title: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -785,6 +843,8 @@ struct NewSubtopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -797,12 +857,36 @@ struct NewSubtopicView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addSubtopic(to: topic, title: title)
-                    dismiss()
+                    Task {
+                        await saveSubtopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveSubtopic() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addSubtopic(to: topic, title: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -813,6 +897,8 @@ struct NewNoteView: View {
     @ObservedObject var dataManager: DataManager
     @State private var title = ""
     @State private var content = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     var body: some View {
         NavigationView {
@@ -827,12 +913,36 @@ struct NewNoteView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
-                    dismiss()
+                    Task {
+                        await saveNote()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveNote() async {
+        isSaving = true
+        do {
+            _ = try await dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -841,6 +951,8 @@ struct EditTopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     init(topic: Topic, dataManager: DataManager) {
         self.topic = topic
@@ -859,12 +971,36 @@ struct EditTopicView: View {
                     dismiss()
                 },
                 trailing: Button("Save") {
-                    dataManager.updateTopic(topic, newTitle: title)
-                    dismiss()
+                    Task {
+                        await saveTopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveTopic() async {
+        isSaving = true
+        do {
+            try await dataManager.updateTopic(topic, newTitle: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
@@ -874,6 +1010,8 @@ struct EditSubtopicView: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @State private var title: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
     
     init(subtopic: Subtopic, topic: Topic, dataManager: DataManager) {
         self.subtopic = subtopic
@@ -893,12 +1031,36 @@ struct EditSubtopicView: View {
                     dismiss()
                 },
                 trailing: Button("Save") {
-                    dataManager.updateSubtopic(subtopic, in: topic, newTitle: title)
-                    dismiss()
+                    Task {
+                        await saveSubtopic()
+                    }
                 }
-                .disabled(title.isEmpty)
+                .disabled(title.isEmpty || isSaving)
             )
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
+    }
+    
+    private func saveSubtopic() async {
+        isSaving = true
+        do {
+            try await dataManager.updateSubtopic(subtopic, in: topic, newTitle: title)
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isSaving = false
     }
 }
 
