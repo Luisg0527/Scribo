@@ -7,9 +7,9 @@ class SupabaseConfig {
     let client: SupabaseClient
     
     private init() {
-        // Replace these with your actual Supabase project URL and anon key
-        let supabaseURL = URL(string: "Placeholder")!
-        let supabaseKey = "Placeholder"
+        // Get configuration from environment variables
+        let supabaseURL = URL(string: ProcessInfo.processInfo.environment["SUPABASE_URL"] ?? "Placeholder")!
+        let supabaseKey = ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? "Placeholder"
         
         // Initialize with default options
         let options = SupabaseClientOptions()

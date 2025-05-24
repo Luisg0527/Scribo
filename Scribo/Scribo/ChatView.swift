@@ -129,8 +129,8 @@ struct ChatView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
     @State private var classificationService = TextClassificationService(
-        serverURL: "Placeholder",
-        apiKey: "Placeholder"
+        serverURL: ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder",
+        apiKey: ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
     )
     
     let welcomeMessage = "Hello! What can I help you with?"

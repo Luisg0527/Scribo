@@ -22,8 +22,8 @@ enum ClassificationError: Error {
 
 class TextClassificationService {
     // Configuration
-    static let serverURL = "Placeholder"  // Using computer's IP address
-    static let apiKey = "Placeholder"  // Change this to your API key
+    static let serverURL = ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder"
+    static let apiKey = ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
     
     private let serverURL: String
     private let apiKey: String
