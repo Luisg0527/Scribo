@@ -30,7 +30,7 @@ struct SidebarView: View {
     @State private var isLoadingChats = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             // Profile Section
             Button(action: {
                 showProfile = true
@@ -67,221 +67,229 @@ struct SidebarView: View {
                 .background(Color.appHeaderBackground)
             }
             
-            // Dark Mode Toggle
-            Button(action: {
-                isDarkMode.toggle()
-            }) {
-                HStack {
-                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
-                        .foregroundColor(.appAccent1)
-                    Text(isDarkMode ? "Dark Mode" : "Light Mode")
-                        .foregroundColor(.appText)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundColor(.gray)
-                        .font(.system(size: 14))
-                }
-                .padding()
-                .background(Color.appCardBackground)
-            }
-            
-            // Other Tools Section
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Other Tools")
-                    .font(.headline)
-                    .foregroundColor(.appText)
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                
-                ForEach(["Coming soon..."], id: \.self) { tool in
-                    Button(action: {
-                        // Tool action
-                    }) {
-                        HStack {
-                            Image(systemName: "doc.viewfinder")
-                                .foregroundColor(.appAccent1)
-                            Text(tool)
-                                .foregroundColor(.appText)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                    }
-                }
-            }
-            .background(Color.appCardBackground)
-            
-            // Recent Notes Section
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Recent Notes")
-                    .font(.headline)
-                    .foregroundColor(.appText)
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                
-                if showGhostBlocks {
-                    ForEach(0..<3) { _ in
-                        HStack {
-                            Image(systemName: "note.text")
-                                .foregroundColor(.appAccent1.opacity(0.3))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 120, height: 16)
-                                    .cornerRadius(4)
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 80, height: 12)
-                                    .cornerRadius(4)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                    }
-                } else if !recentNotes.isEmpty {
-                    ForEach(recentNotes) { note in
-                        recentNoteButton(note)
-                    }
-                } else {
-                    Text("No recent notes")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                }
-            }
-            .padding(.top, 3.0)
-            
-            // Recent Chats Section
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Recent Chats")
-                        .font(.headline)
-                        .foregroundColor(.appText)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        Task {
-                            do {
-                                // Create a new chat with a timestamp-based title
-                                let dateFormatter = DateFormatter()
-                                dateFormatter.dateFormat = "MMM d, h:mm a"
-                                let timestamp = dateFormatter.string(from: Date())
-                                let newChat = try await chatManager.createChat(title: "Chat \(timestamp)")
-                                await MainActor.run {
-                                    chats.append(newChat)
-                                    currentChat = newChat
-                                }
-                            } catch {
-                                print("❌ Failed to create new chat: \(error.localizedDescription)")
-                            }
-                        }
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.appAccent1)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
-                
-                if isLoadingChats {
-                    ForEach(0..<3) { _ in
-                        HStack {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .foregroundColor(.appAccent1.opacity(0.3))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 120, height: 16)
-                                    .cornerRadius(4)
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 80, height: 12)
-                                    .cornerRadius(4)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                    }
-                } else if chats.isEmpty {
-                    Text("No recent chats")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                } else {
-                    ForEach(chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
-                        Button(action: {
-                            currentChat = chat
-                        }) {
-                            HStack {
-                                Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .foregroundColor(.appAccent1)
-                                VStack(alignment: .leading) {
-                                    Text(chat.title)
-                                        .foregroundColor(.appText)
-                                    if !chat.messages.isEmpty {
-                                        Text(chat.messages.last?.content ?? "")
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                            }
+            // Scrollable Content
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Other Tools Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Other Tools")
+                            .font(.headline)
+                            .foregroundColor(.appText)
                             .padding(.horizontal)
                             .padding(.vertical, 12)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task {
-                                    do {
-                                        try await chatManager.deleteChat(chat.id)
-                                        await MainActor.run {
-                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
-                                                chats.remove(at: index)
-                                            }
-                                            if currentChat?.id == chat.id {
-                                                currentChat = chats.first
-                                            }
-                                        }
-                                    } catch {
-                                        print("❌ Failed to delete chat: \(error.localizedDescription)")
-                                    }
+                        
+                        ForEach(["Coming soon..."], id: \.self) { tool in
+                            Button(action: {
+                                // Tool action
+                            }) {
+                                HStack {
+                                    Image(systemName: "doc.viewfinder")
+                                        .foregroundColor(.appAccent1)
+                                    Text(tool)
+                                        .foregroundColor(.appText)
+                                    Spacer()
                                 }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
                             }
                         }
                     }
+                    .background(Color.appCardBackground)
+                    
+                    // Recent Notes Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Recent Notes")
+                            .font(.headline)
+                            .foregroundColor(.appText)
+                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                        
+                        if showGhostBlocks {
+                            ForEach(0..<3) { _ in
+                                HStack {
+                                    Image(systemName: "note.text")
+                                        .foregroundColor(.appAccent1.opacity(0.3))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Rectangle()
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(width: 120, height: 16)
+                                            .cornerRadius(4)
+                                        Rectangle()
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(width: 80, height: 12)
+                                            .cornerRadius(4)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
+                            }
+                        } else if !recentNotes.isEmpty {
+                            ForEach(recentNotes) { note in
+                                recentNoteButton(note)
+                            }
+                        } else {
+                            Text("No recent notes")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
+                        }
+                    }
+                    .padding(.top, 3.0)
+                    
+                    // Recent Chats Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text("Recent Chats")
+                                .font(.headline)
+                                .foregroundColor(.appText)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                Task {
+                                    do {
+                                        // Create a new chat with a timestamp-based title
+                                        let dateFormatter = DateFormatter()
+                                        dateFormatter.dateFormat = "MMM d, h:mm a"
+                                        let timestamp = dateFormatter.string(from: Date())
+                                        let newChat = try await chatManager.createChat(title: "Chat \(timestamp)")
+                                        await MainActor.run {
+                                            chats.append(newChat)
+                                            currentChat = newChat
+                                        }
+                                    } catch {
+                                        print("❌ Failed to create new chat: \(error.localizedDescription)")
+                                    }
+                                }
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(.appAccent1)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        
+                        if isLoadingChats {
+                            ForEach(0..<3) { _ in
+                                HStack {
+                                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                                        .foregroundColor(.appAccent1.opacity(0.3))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Rectangle()
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(width: 120, height: 16)
+                                            .cornerRadius(4)
+                                        Rectangle()
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(width: 80, height: 12)
+                                            .cornerRadius(4)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
+                            }
+                        } else if chats.isEmpty {
+                            Text("No recent chats")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .padding(.horizontal)
+                                .padding(.vertical, 12)
+                        } else {
+                            ForEach(chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
+                                Button(action: {
+                                    currentChat = chat
+                                }) {
+                                    HStack {
+                                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                                            .foregroundColor(.appAccent1)
+                                        VStack(alignment: .leading) {
+                                            Text(chat.title)
+                                                .foregroundColor(.appText)
+                                            if !chat.messages.isEmpty {
+                                                Text(chat.messages.last?.content ?? "")
+                                                    .font(.caption)
+                                                    .foregroundColor(.gray)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 12)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        Task {
+                                            do {
+                                                try await chatManager.deleteChat(chat.id)
+                                                await MainActor.run {
+                                                    if let index = chats.firstIndex(where: { $0.id == chat.id }) {
+                                                        chats.remove(at: index)
+                                                    }
+                                                    if currentChat?.id == chat.id {
+                                                        currentChat = chats.first
+                                                    }
+                                                }
+                                            } catch {
+                                                print("❌ Failed to delete chat: \(error.localizedDescription)")
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 3.0)
                 }
             }
-            .padding(.top, 3.0)
             
-            Spacer()
-            
-            // Sign Out Button
-            Button(action: {
-                Task {
-                    await authManager.signOut()
+            // Bottom Buttons
+            HStack(spacing: 0) {
+                // Sign Out Button
+                Button(action: {
+                    Task {
+                        await authManager.signOut()
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .foregroundColor(.red)
+                        Text("Sign Out")
+                            .foregroundColor(.red)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.appCardBackground)
                 }
-            }) {
-                HStack {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .foregroundColor(.red)
-                    Text("Sign Out")
-                        .foregroundColor(.red)
-                    Spacer()
+                
+                // Dark Mode Toggle
+                Button(action: {
+                    withAnimation {
+                        isDarkMode.toggle()
+                        // Force UI update
+                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                            windowScene.windows.forEach { window in
+                                window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                            }
+                        }
+                    }
+                }) {
+                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.appAccent1)
+                        .frame(width: 44, height: 44)
+                        .background(Color.appCardBackground)
                 }
-                .padding()
-                .background(Color.appCardBackground)
             }
         }
         .frame(width: 280)
         .background(Color.appCardBackground)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .fullScreenCover(isPresented: $showProfile) {
             NavigationView {
                 ProfileView()
@@ -292,6 +300,12 @@ struct SidebarView: View {
                 await loadProfileImage()
                 await loadRecentNotes()
                 await loadChats()
+            }
+            // Set initial color scheme
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.windows.forEach { window in
+                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                }
             }
         }
         .onChange(of: isShowing) { oldValue, newValue in
@@ -383,6 +397,7 @@ struct SidebarView: View {
                     for topic in dataManager.topics {
                         for subtopic in topic.subtopics {
                             if subtopic.notes.contains(where: { $0.id == note.id }) {
+                                try await dataManager.addRecentNote(noteId: note.id.uuidString)
                                 await MainActor.run {
                                     noteDisplayState.currentTopic = topic
                                     noteDisplayState.currentSubtopic = subtopic
@@ -394,6 +409,8 @@ struct SidebarView: View {
                             }
                         }
                     }
+                } catch {
+                    print("Error updating recent notes: \(error)")
                 }
             }
         }) {
@@ -955,16 +972,12 @@ struct ContentView: View {
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var isSidebarShowing: Bool = false
     @State private var showNotebook: Bool = false
-    @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("isDarkMode") private var isDarkMode = true
     @StateObject private var dataManager = DataManager()
     @State private var chats: [Chat] = []
     @State private var currentChat: Chat?
     @StateObject private var chatManager = ChatManager()
     @State private var isLoadingChats = false
-    
-    var preferredColorScheme: ColorScheme? {
-        isDarkMode ? .dark : .light
-    }
     
     var body: some View {
         Group {
@@ -981,7 +994,22 @@ struct ContentView: View {
                 LoginMethodView(authManager: authManager)
             }
         }
-        .preferredColorScheme(preferredColorScheme)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onChange(of: isDarkMode) { oldValue, newValue in
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.windows.forEach { window in
+                    window.overrideUserInterfaceStyle = newValue ? .dark : .light
+                }
+            }
+        }
+        .onAppear {
+            // Set initial color scheme
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.windows.forEach { window in
+                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                }
+            }
+        }
         .onOpenURL { url in
             // Handle deep link for password reset
             print("🔗 Received deep link: \(url)")
@@ -1021,6 +1049,7 @@ struct ContentView: View {
                 
                 sidebarOverlay
             }
+            .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
     

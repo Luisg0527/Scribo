@@ -258,6 +258,9 @@ class DataManager: ObservableObject {
             }
         }
         
+        // Add to recent notes
+        try await addRecentNote(noteId: note.id.uuidString)
+        
         return note
     }
     
@@ -306,6 +309,9 @@ class DataManager: ObservableObject {
                 topics[topicIndex].subtopics[subtopicIndex].notes[noteIndex] = updatedNote
             }
         }
+        
+        // Add to recent notes
+        try await addRecentNote(noteId: note.id.uuidString)
         
         return updatedNote
     }

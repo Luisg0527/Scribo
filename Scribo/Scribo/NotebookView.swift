@@ -201,9 +201,18 @@ struct SubtopicPreviewView: View {
                     ForEach(filteredNotes) { note in
                         NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
                             .onAppear {
-                                noteDisplayState.currentNote = note
-                                noteDisplayState.currentTopic = topic
-                                noteDisplayState.currentSubtopic = subtopic
+                                Task {
+                                    do {
+                                        try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                                        await MainActor.run {
+                                            noteDisplayState.currentNote = note
+                                            noteDisplayState.currentTopic = topic
+                                            noteDisplayState.currentSubtopic = subtopic
+                                        }
+                                    } catch {
+                                        print("Error updating recent notes: \(error)")
+                                    }
+                                }
                             }
                         ) {
                             NoteCardView(note: note)
@@ -716,11 +725,20 @@ struct NoteRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture {
-            noteDisplayState.currentNote = note
-            noteDisplayState.currentTopic = topic
-            noteDisplayState.currentSubtopic = subtopic
-            noteDisplayState.isShowingNote = true
-            isPresented = false
+            Task {
+                do {
+                    try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                    await MainActor.run {
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.currentTopic = topic
+                        noteDisplayState.currentSubtopic = subtopic
+                        noteDisplayState.isShowingNote = true
+                        isPresented = false
+                    }
+                } catch {
+                    print("Error updating recent notes: \(error)")
+                }
+            }
         }
         .contextMenu {
             Button(role: .destructive, action: {

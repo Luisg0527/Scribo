@@ -8,8 +8,8 @@ class SupabaseConfig {
     
     private init() {
         // Get configuration from environment variables
-        let supabaseURL = URL(string: ProcessInfo.processInfo.environment["SUPABASE_URL"] ?? "Placeholder")!
-        let supabaseKey = ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? "Placeholder"
+        let supabaseURL = URL(string: ProcessInfo.processInfo.environment["SUPABASE_URL"] ?? "https://kyklpwptsuubycuaaeoq.supabase.co")!
+        let supabaseKey = ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt5a2xwd3B0c3V1YnljdWFhZW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2Nzc2NTgsImV4cCI6MjA2MzI1MzY1OH0.cN3FibUJMTITKa45kTqGZ1tmoLsgeEQ-H5VpO0rsPMU"
         
         // Initialize with default options
         let options = SupabaseClientOptions()

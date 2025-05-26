@@ -1,13 +1,63 @@
 import SwiftUI
 
+struct AppColors {
+    static func background(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(hex: "20212A") : Color(hex: "F5F5F7")
+    }
+    
+    static func cardBackground(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(hex: "2D2F3C") : Color(hex: "FFFFFF")
+    }
+    
+    static func headerBackground(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(hex: "373A4A") : Color(hex: "F0F0F0")
+    }
+    
+    static func accent1(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white : Color(hex: "007AFF")
+    }
+    
+    static func accent2(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(hex: "303240") : Color(hex: "E5E5EA")
+    }
+    
+    static func text(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white : Color.black
+    }
+    
+    static func textSecondary(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.7) : Color.black.opacity(0.7)
+    }
+}
+
 extension Color {
-    static let appBackground = Color(hex: "20212A")      // Darkest background
-    static let appCardBackground = Color(hex: "2D2F3C")  // Card background
-    static let appHeaderBackground = Color(hex: "373A4A") // Header background
-    static let appAccent1 = Color.white                   // Primary accent (white)
-    static let appAccent2 = Color(hex: "303240")         // Secondary accent (original)
-    static let appText = Color.white                      // Text color
-    static let appTextSecondary = Color.white.opacity(0.7) // Secondary text
+    static var appBackground: Color {
+        AppColors.background(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appCardBackground: Color {
+        AppColors.cardBackground(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appHeaderBackground: Color {
+        AppColors.headerBackground(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appAccent1: Color {
+        AppColors.accent1(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appAccent2: Color {
+        AppColors.accent2(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appText: Color {
+        AppColors.text(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appTextSecondary: Color {
+        AppColors.textSecondary(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
 }
 
 extension Color {

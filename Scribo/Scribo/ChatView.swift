@@ -83,6 +83,8 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     var chatId: UUID?
     var imageUrl: String?
     var documentUrl: String?
+    var documentName: String?
+    var documentType: String?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -112,12 +114,23 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         id = try container.decode(UUID.self, forKey: .id)
         content = try container.decode(String.self, forKey: .content)
         isUser = try container.decode(Bool.self, forKey: .isUser)
-        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        
+        // Decode timestamp from ISO8601 string
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestampString = try container.decode(String.self, forKey: .timestamp)
+        guard let timestamp = dateFormatter.date(from: timestampString) else {
+            throw DecodingError.dataCorruptedError(forKey: .timestamp, in: container, debugDescription: "Date string does not match format")
+        }
+        self.timestamp = timestamp
+        
         isProcessing = try container.decodeIfPresent(Bool.self, forKey: .isProcessing) ?? false
         error = try container.decodeIfPresent(String.self, forKey: .error)
         chatId = try container.decodeIfPresent(UUID.self, forKey: .chatId)
         imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
         documentUrl = try container.decodeIfPresent(String.self, forKey: .documentUrl)
+        documentName = try container.decodeIfPresent(String.self, forKey: .documentName)
+        documentType = try container.decodeIfPresent(String.self, forKey: .documentType)
         
         // Load image if URL exists
         if let imageUrl = imageUrl {
@@ -135,8 +148,8 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         // Create document message if URL exists
         if let documentUrl = documentUrl,
            let url = URL(string: documentUrl),
-           let documentName = try container.decodeIfPresent(String.self, forKey: .documentName),
-           let documentType = try container.decodeIfPresent(String.self, forKey: .documentType) {
+           let documentName = documentName,
+           let documentType = documentType {
             document = DocumentMessage(url: url, name: documentName, type: documentType)
         } else {
             document = nil
@@ -148,14 +161,19 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         try container.encode(id, forKey: .id)
         try container.encode(content, forKey: .content)
         try container.encode(isUser, forKey: .isUser)
-        try container.encode(timestamp, forKey: .timestamp)
+        
+        // Encode timestamp as ISO8601 string
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        try container.encode(dateFormatter.string(from: timestamp), forKey: .timestamp)
+        
         try container.encode(isProcessing, forKey: .isProcessing)
         try container.encodeIfPresent(error, forKey: .error)
         try container.encodeIfPresent(chatId, forKey: .chatId)
         try container.encodeIfPresent(imageUrl, forKey: .imageUrl)
         try container.encodeIfPresent(documentUrl, forKey: .documentUrl)
-        try container.encodeIfPresent(document?.name, forKey: .documentName)
-        try container.encodeIfPresent(document?.type, forKey: .documentType)
+        try container.encodeIfPresent(documentName, forKey: .documentName)
+        try container.encodeIfPresent(documentType, forKey: .documentType)
     }
     
     init(content: String, image: UIImage? = nil, document: DocumentMessage? = nil, isUser: Bool, timestamp: Date, isProcessing: Bool = false, error: String? = nil, chatId: UUID? = nil) {
@@ -168,6 +186,8 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         self.isProcessing = isProcessing
         self.error = error
         self.chatId = chatId
+        self.documentName = document?.name
+        self.documentType = document?.type
         
         // Save image if provided
         if let image = image {
@@ -215,9 +235,13 @@ struct ChatView: View {
     @State private var isProcessingOCR: Bool = false
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    @Environment(\.colorScheme) var colorScheme
     @State private var classificationService = TextClassificationService(
-        serverURL: ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder",
-        apiKey: ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
+        //serverURL: ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder",
+        //apiKey: ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
+        serverURL: "http://10.22.149.108:8000/classify",
+        apiKey: "dev-secret-12345"
     )
     @State private var showPhotoLibraryPermissionAlert = false
     @State private var photoLibraryPermissionDenied = false
@@ -240,6 +264,14 @@ struct ChatView: View {
         .animation(.easeInOut(duration: 0.3), value: isAttachmentMenuShowing)
         .onTapGesture {
             isFocused = false
+        }
+        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onChange(of: isDarkMode) { oldValue, newValue in
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.windows.forEach { window in
+                    window.overrideUserInterfaceStyle = newValue ? .dark : .light
+                }
+            }
         }
         .onChange(of: selectedPhoto) { oldValue, newValue in
             print("📱 ChatView: selectedPhoto changed")
@@ -733,8 +765,7 @@ struct ChatView: View {
                                 // Add the photo message with OCR results and classification
                                 let photoMessage = ChatMessage(
                                     content: """
-                                    Extracted Text:
-                                    \(text)
+                                    I've extracted the text from your image and created a note for you. Redirecting you to the note...
                                     """,
                                     image: uiImage,
                                     document: nil,
@@ -771,8 +802,7 @@ struct ChatView: View {
                                     Extracted text:
                                     \(text)
                                     
-                                    Error during classification:
-                                    \(error.localizedDescription)
+                                    Note: The text was extracted but couldn't be automatically categorized. You can manually organize it later.
                                     """,
                                     image: uiImage,
                                     document: nil,
@@ -799,6 +829,15 @@ struct ChatView: View {
                                 } catch {
                                     print("❌ Failed to save photo message: \(error.localizedDescription)")
                                 }
+                                
+                                // Create a default note even if classification fails
+                                let defaultClassification = TextClassificationResponse(
+                                    topic: "Uncategorized",
+                                    subtopic: "General",
+                                    note_name: "Note from \(Date())",
+                                    raw_scores: [:]
+                                )
+                                try? await createNoteFromClassification(defaultClassification)
                             }
                         } else {
                             print("❌ ChatView: OCR failed to extract text")
@@ -1057,11 +1096,12 @@ struct ChatMessageView: View {
             
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 8) {
                 if let image = message.image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 250)
-                        .cornerRadius(12)
+                    ScrollableImageView(
+                        image: Image(uiImage: image),
+                        containerHeight: 200
+                    )
+                    .cornerRadius(12)
+                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                 }
                 
                 if let document = message.document {

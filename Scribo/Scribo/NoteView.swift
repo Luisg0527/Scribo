@@ -1,6 +1,25 @@
 import SwiftUI
 import PhotosUI
 
+struct ScrollViewGestureModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { _ in
+                        // This will prevent the parent ScrollView from scrolling
+                        // when dragging the image
+                    }
+            )
+    }
+}
+
+extension View {
+    func preventParentScroll() -> some View {
+        modifier(ScrollViewGestureModifier())
+    }
+}
+
 struct NoteView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @Binding var isPresented: Bool
@@ -30,7 +49,7 @@ struct NoteView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // Topic and Subtopic Header (optional, below nav bar)
+                // Topic and Subtopic Header
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         if let topic = noteDisplayState.currentTopic {
@@ -45,7 +64,6 @@ struct NoteView: View {
                         }
                     }
                     Spacer()
-                    // Minimal add/change image button (icon only) using PhotosPicker
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 16))
@@ -56,43 +74,45 @@ struct NoteView: View {
                 .padding(.horizontal)
                 .padding(.top, 20)
                 .background(Color(.systemBackground))
+
                 // Title Field
                 TextField("Title", text: $editedTitle)
                     .font(.largeTitle.bold())
                     .foregroundColor(.primary)
                     .padding(.horizontal)
                     .padding(.top, 24)
+
                 // Image Section
                 if let noteImage = noteImage {
-                    Image(uiImage: noteImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 260)
-                        .cornerRadius(16)
-                        .padding(.horizontal)
-                        .overlay(
-                            Button(action: {
-                                self.noteImage = nil
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.white)
-                                    .shadow(radius: 2)
-                            }
-                            .padding(12),
-                            alignment: .topTrailing
-                        )
+                    ScrollableImageView(
+                        image: Image(uiImage: noteImage),
+                        containerHeight: 300
+                    )
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .padding(.horizontal)
+                    .overlay(
+                        Button(action: {
+                            self.noteImage = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white)
+                                .shadow(radius: 2)
+                        }
+                        .padding(12),
+                        alignment: .topTrailing
+                    )
                 }
+
                 // Content Field
                 ZStack(alignment: .topLeading) {
-                    // Placeholder
                     if editedContent.isEmpty {
                         Text("Note")
                             .foregroundColor(.gray)
                             .padding(.top, 12)
                             .padding(.horizontal, 18)
                     }
-                    // TextEditor
                     TextEditor(text: $editedContent)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
