@@ -21,10 +21,13 @@ struct SidebarView: View {
     @State private var recentNotes: [Note] = []
     @ObservedObject var authManager: AuthManager
     @StateObject private var dataManager = DataManager()
+    @StateObject private var chatManager = ChatManager()
     @State private var profileImage: UIImage?
     @State private var isLoadingRecentNotes = false
+    @State private var showGhostBlocks = true
     @Binding var chats: [Chat]
     @Binding var currentChat: Chat?
+    @State private var isLoadingChats = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -116,19 +119,36 @@ struct SidebarView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                 
-                if isLoadingRecentNotes {
-                    ProgressView()
-                        .padding()
-                } else if recentNotes.isEmpty {
+                if showGhostBlocks {
+                    ForEach(0..<3) { _ in
+                        HStack {
+                            Image(systemName: "note.text")
+                                .foregroundColor(.appAccent1.opacity(0.3))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 120, height: 16)
+                                    .cornerRadius(4)
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 80, height: 12)
+                                    .cornerRadius(4)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                    }
+                } else if !recentNotes.isEmpty {
+                    ForEach(recentNotes) { note in
+                        recentNoteButton(note)
+                    }
+                } else {
                     Text("No recent notes")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                         .padding(.horizontal)
                         .padding(.vertical, 12)
-                } else {
-                    ForEach(recentNotes) { note in
-                        recentNoteButton(note)
-                    }
                 }
             }
             .padding(.top, 3.0)
@@ -143,9 +163,21 @@ struct SidebarView: View {
                     Spacer()
                     
                     Button(action: {
-                        let newChat = Chat(title: "Chat \(chats.count + 1)")
-                        chats.append(newChat)
-                        currentChat = newChat
+                        Task {
+                            do {
+                                // Create a new chat with a timestamp-based title
+                                let dateFormatter = DateFormatter()
+                                dateFormatter.dateFormat = "MMM d, h:mm a"
+                                let timestamp = dateFormatter.string(from: Date())
+                                let newChat = try await chatManager.createChat(title: "Chat \(timestamp)")
+                                await MainActor.run {
+                                    chats.append(newChat)
+                                    currentChat = newChat
+                                }
+                            } catch {
+                                print("❌ Failed to create new chat: \(error.localizedDescription)")
+                            }
+                        }
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .foregroundColor(.appAccent1)
@@ -154,7 +186,27 @@ struct SidebarView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 12)
                 
-                if chats.isEmpty {
+                if isLoadingChats {
+                    ForEach(0..<3) { _ in
+                        HStack {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundColor(.appAccent1.opacity(0.3))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 120, height: 16)
+                                    .cornerRadius(4)
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 80, height: 12)
+                                    .cornerRadius(4)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                    }
+                } else if chats.isEmpty {
                     Text("No recent chats")
                         .font(.subheadline)
                         .foregroundColor(.gray)
@@ -165,23 +217,44 @@ struct SidebarView: View {
                         Button(action: {
                             currentChat = chat
                         }) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(chat.title)
-                                    .font(.subheadline)
-                                    .foregroundColor(.appText)
-                                if !chat.messages.isEmpty {
-                                    Text(chat.messages.last?.content ?? "")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                        .lineLimit(1)
+                            HStack {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .foregroundColor(.appAccent1)
+                                VStack(alignment: .leading) {
+                                    Text(chat.title)
+                                        .foregroundColor(.appText)
+                                    if !chat.messages.isEmpty {
+                                        Text(chat.messages.last?.content ?? "")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                            .lineLimit(1)
+                                    }
                                 }
+                                Spacer()
                             }
                             .padding(.horizontal)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.appCardBackground)
-                            .cornerRadius(8)
-                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task {
+                                    do {
+                                        try await chatManager.deleteChat(chat.id)
+                                        await MainActor.run {
+                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
+                                                chats.remove(at: index)
+                                            }
+                                            if currentChat?.id == chat.id {
+                                                currentChat = chats.first
+                                            }
+                                        }
+                                    } catch {
+                                        print("❌ Failed to delete chat: \(error.localizedDescription)")
+                                    }
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -214,28 +287,18 @@ struct SidebarView: View {
                 ProfileView()
             }
         }
-        .onChange(of: noteDisplayState.currentNote) { oldValue, newValue in
-            if let note = newValue {
-                Task {
-                    do {
-                        try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                        await loadRecentNotes()
-                    } catch {
-                        print("Error adding recent note: \(error)")
-                    }
-                }
-            }
-        }
         .onAppear {
             Task {
                 await loadProfileImage()
                 await loadRecentNotes()
+                await loadChats()
             }
         }
         .onChange(of: isShowing) { oldValue, newValue in
             if newValue {
                 Task {
                     await loadRecentNotes()
+                    await loadChats()
                 }
             }
         }
@@ -243,12 +306,19 @@ struct SidebarView: View {
     
     private func loadRecentNotes() async {
         isLoadingRecentNotes = true
+        showGhostBlocks = true
+        
+        // Ensure ghost blocks show for at least 1 second
+        try? await Task.sleep(nanoseconds: 0_500_000_000)
+        
         do {
             recentNotes = try await dataManager.getRecentNotes()
         } catch {
             print("Failed to load recent notes: \(error.localizedDescription)")
         }
+        
         isLoadingRecentNotes = false
+        showGhostBlocks = false
     }
     
     private func loadProfileImage() async {
@@ -268,11 +338,64 @@ struct SidebarView: View {
         }
     }
     
+    private func loadChats() async {
+        print("📱 Starting to load chats...")
+        isLoadingChats = true
+        do {
+            let loadedChats = try await chatManager.getChats()
+            print("📱 Loaded \(loadedChats.count) chats from database")
+            
+            if loadedChats.isEmpty {
+                print("📱 No chats found, creating welcome chat...")
+                do {
+                    let welcomeChat = try await chatManager.createChat(title: "Welcome")
+                    print("📱 Successfully created welcome chat")
+                    await MainActor.run {
+                        chats = [welcomeChat]
+                        currentChat = welcomeChat
+                        print("📱 Updated UI with welcome chat")
+                    }
+                } catch {
+                    print("❌ Failed to create welcome chat: \(error.localizedDescription)")
+                }
+            } else {
+                print("📱 Using existing chats")
+                await MainActor.run {
+                    chats = loadedChats
+                    if currentChat == nil {
+                        currentChat = chats.first
+                    }
+                    print("📱 Updated UI with \(chats.count) chats")
+                }
+            }
+        } catch {
+            print("❌ Failed to load chats: \(error.localizedDescription)")
+        }
+        isLoadingChats = false
+        print("📱 Finished loading chats")
+    }
+    
     private func recentNoteButton(_ note: Note) -> some View {
         Button(action: {
-            noteDisplayState.currentNote = note
-            noteDisplayState.isShowingNote = true
-            isShowing = false
+            Task {
+                do {
+                    // Find the topic and subtopic for this note
+                    for topic in dataManager.topics {
+                        for subtopic in topic.subtopics {
+                            if subtopic.notes.contains(where: { $0.id == note.id }) {
+                                await MainActor.run {
+                                    noteDisplayState.currentTopic = topic
+                                    noteDisplayState.currentSubtopic = subtopic
+                                    noteDisplayState.currentNote = note
+                                    noteDisplayState.isShowingNote = true
+                                    isShowing = false
+                                }
+                                return
+                            }
+                        }
+                    }
+                }
+            }
         }) {
             HStack {
                 Image(systemName: "note.text")
@@ -296,68 +419,147 @@ struct CameraView: View {
     @Binding var isShowing: Bool
     @StateObject private var camera = CameraModel()
     @State private var capturedImage: UIImage?
+    @State private var showAlert = false
+    @State private var flashMode: AVCaptureDevice.FlashMode = .off
     
     var body: some View {
         ZStack {
-            CameraPreview(camera: camera)
-                .ignoresSafeArea()
-            
-            VStack {
-                HStack {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding()
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        camera.switchCamera()
-                    }) {
-                        Image(systemName: "camera.rotate")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding()
-                    }
-                }
+            if camera.isSessionConfigured {
+                CameraPreview(camera: camera)
+                    .ignoresSafeArea()
                 
-                Spacer()
-                
-                HStack {
-                    Spacer()
-                    
-                    Button(action: {
-                        camera.capturePhoto { image in
-                            if let image = image {
-                                capturedImage = image
-                                // Convert UIImage to PhotosPickerItem
-                                if let data = image.jpegData(compressionQuality: 0.8) {
-                                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
-                                    try? data.write(to: tempURL)
-                                    selectedPhoto = PhotosPickerItem(itemIdentifier: tempURL.absoluteString)
-                                }
-                                dismiss()
-                            }
+                VStack {
+                    // Top Controls
+                    HStack {
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
                         }
-                    }) {
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 65, height: 65)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.black.opacity(0.8), lineWidth: 2)
-                                    .frame(width: 60, height: 60)
-                            )
+                        
+                        Spacer()
+                        
+                        // Flash Control
+                        Button(action: {
+                            switch flashMode {
+                            case .off:
+                                flashMode = .on
+                            case .on:
+                                flashMode = .auto
+                            case .auto:
+                                flashMode = .off
+                            @unknown default:
+                                flashMode = .off
+                            }
+                            camera.setFlashMode(flashMode)
+                        }) {
+                            Image(systemName: flashMode == .off ? "bolt.slash" : 
+                                  flashMode == .on ? "bolt.fill" : "bolt.badge.a")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
+                        
+                        Button(action: {
+                            camera.switchCamera()
+                        }) {
+                            Image(systemName: "camera.rotate")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.black.opacity(0.5))
+                                .clipShape(Circle())
+                        }
                     }
+                    .padding()
                     
                     Spacer()
+                    
+                    // Bottom Controls
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            camera.capturePhoto { image in
+                                if let image = image {
+                                    print("📸 Camera: Photo captured successfully")
+                                    capturedImage = image
+                                            
+                                            // Save to photo library and create PhotosPickerItem
+                                            PHPhotoLibrary.requestAuthorization { status in
+                                                if status == .authorized {
+                                                    PHPhotoLibrary.shared().performChanges({
+                                                        let request = PHAssetCreationRequest.forAsset()
+                                                if let data = image.jpegData(compressionQuality: 0.8) {
+                                                    request.addResource(with: .photo, data: data, options: nil)
+                                                }
+                                                    }) { success, error in
+                                                        if success {
+                                                            print("📸 Camera: Image saved to photo library")
+                                                            // Fetch the created asset
+                                                            let fetchOptions = PHFetchOptions()
+                                                            fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                                                            let fetchResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+                                                            if let asset = fetchResult.firstObject {
+                                                                DispatchQueue.main.async {
+                                                                    selectedPhoto = PhotosPickerItem(itemIdentifier: asset.localIdentifier)
+                                                                    print("📸 Camera: PhotosPickerItem created with identifier: \(asset.localIdentifier)")
+                                                            dismiss()
+                                                                }
+                                                            }
+                                                        } else {
+                                                            print("❌ Camera: Failed to save to photo library: \(error?.localizedDescription ?? "Unknown error")")
+                                                        }
+                                                    }
+                                                } else {
+                                                    print("❌ Camera: Photo library access denied")
+                                                }
+                                        }
+                                } else {
+                                    print("❌ Camera: Failed to capture photo")
+                                }
+                            }
+                        }) {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 75, height: 75)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 3)
+                                        .frame(width: 65, height: 65)
+                                )
+                                .shadow(color: .black.opacity(0.3), radius: 5)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.bottom, 30)
                 }
-                .padding(.bottom, 30)
+            } else {
+                Color.black
+                    .ignoresSafeArea()
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
             }
+        }
+        .alert("Camera Access Required", isPresented: $camera.alert) {
+            Button("Settings", role: .none) {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text("Please allow camera access in Settings to use this feature.")
         }
     }
 }
@@ -373,15 +575,17 @@ struct CameraPreview: UIViewRepresentable {
         camera.preview.videoGravity = .resizeAspectFill
         view.layer.addSublayer(camera.preview)
         
-        // Start session on background thread
-        DispatchQueue.global(qos: .userInitiated).async { [weak camera] in
-            camera?.session.startRunning()
-        }
+        // Ensure the preview layer updates when the view's bounds change
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         
         return view
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
+        // Update the preview layer frame when the view size changes
+        DispatchQueue.main.async {
+            self.camera.preview.frame = uiView.bounds
+        }
     }
 }
 
@@ -394,6 +598,12 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     @Published var preview: AVCaptureVideoPreviewLayer!
     @Published var isSessionConfigured = false
     private var isConfiguring = false
+    private var flashMode: AVCaptureDevice.FlashMode = .off
+    
+    override init() {
+        super.init()
+        check()
+    }
     
     func check() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -403,11 +613,15 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] status in
                 if status {
-                    self?.setUp()
+                    DispatchQueue.main.async {
+                        self?.setUp()
+                    }
                 }
             }
         case .denied:
-            self.alert = true
+            DispatchQueue.main.async {
+                self.alert = true
+            }
             return
         default:
             return
@@ -418,16 +632,28 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         guard !isConfiguring else { return }
         isConfiguring = true
         
+        // Stop any existing session
+        if session.isRunning {
+            session.stopRunning()
+        }
+        
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
             self.session.beginConfiguration()
             
+            // Remove any existing inputs
+            for input in self.session.inputs {
+                self.session.removeInput(input)
+            }
+            
             // Add video input
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device) else {
                 print("Failed to get camera device")
-                self.isConfiguring = false
+                DispatchQueue.main.async {
+                    self.isConfiguring = false
+                }
                 return
             }
             
@@ -444,12 +670,20 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             
             self.session.commitConfiguration()
             
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
+            DispatchQueue.main.async {
                 self.isSessionConfigured = true
                 self.isConfiguring = false
+                
+                // Start the session on a background thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    self.session.startRunning()
+                }
             }
         }
+    }
+    
+    func setFlashMode(_ mode: AVCaptureDevice.FlashMode) {
+        flashMode = mode
     }
     
     func capturePhoto(completion: @escaping (UIImage?) -> Void) {
@@ -466,6 +700,10 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             }
             
             let settings = AVCapturePhotoSettings()
+            settings.flashMode = self.flashMode
+            settings.isHighResolutionPhotoEnabled = true
+            settings.photoQualityPrioritization = .quality
+            
             self.output.capturePhoto(with: settings, delegate: self)
             self.completion = completion
         }
@@ -500,7 +738,9 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             
             // Remove existing input
             guard let currentInput = self.session.inputs.first as? AVCaptureDeviceInput else {
-                self.isConfiguring = false
+                DispatchQueue.main.async {
+                    self.isConfiguring = false
+                }
                 return
             }
             self.session.removeInput(currentInput)
@@ -511,7 +751,9 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             // Get new device
             guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
                   let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
-                self.isConfiguring = false
+                DispatchQueue.main.async {
+                    self.isConfiguring = false
+                }
                 return
             }
             
@@ -521,7 +763,16 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             }
             
             self.session.commitConfiguration()
-            self.isConfiguring = false
+            
+            DispatchQueue.main.async {
+                self.isConfiguring = false
+            }
+        }
+    }
+    
+    deinit {
+        if session.isRunning {
+            session.stopRunning()
         }
     }
 }
@@ -700,6 +951,7 @@ struct RoundedCorner: Shape {
 // MARK: - Main Content View
 struct ContentView: View {
     @StateObject private var authManager = AuthManager()
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var isSidebarShowing: Bool = false
     @State private var showNotebook: Bool = false
@@ -707,6 +959,8 @@ struct ContentView: View {
     @StateObject private var dataManager = DataManager()
     @State private var chats: [Chat] = []
     @State private var currentChat: Chat?
+    @StateObject private var chatManager = ChatManager()
+    @State private var isLoadingChats = false
     
     var preferredColorScheme: ColorScheme? {
         isDarkMode ? .dark : .light
@@ -716,25 +970,38 @@ struct ContentView: View {
         Group {
             if authManager.isAuthenticated {
                 mainView
+                    .onAppear {
+                        Task {
+                            await loadChats()
+                        }
+                    }
+            } else if authManager.isResettingPassword {
+                NewPasswordView(authManager: authManager)
             } else {
-                LoginView(authManager: authManager)
+                LoginMethodView(authManager: authManager)
             }
         }
         .preferredColorScheme(preferredColorScheme)
-        .onAppear {
-            loadSavedChats()
-        }
-    }
-    
-    private func loadSavedChats() {
-        if let savedChats = UserDefaults.standard.data(forKey: "savedChats"),
-           let decodedChats = try? JSONDecoder().decode([Chat].self, from: savedChats) {
-            chats = decodedChats
-            currentChat = chats.first
-        } else {
-            let newChat = Chat(title: "Welcome")
-            chats = [newChat]
-            currentChat = newChat
+        .onOpenURL { url in
+            // Handle deep link for password reset
+            print("🔗 Received deep link: \(url)")
+            if url.scheme == "scribo" {
+                if url.host == "reset-password" {
+                    print("✅ Valid reset password URL detected")
+                    Task {
+                        await authManager.handlePasswordReset(url: url)
+                    }
+                } else if url.host == "auth-callback" {
+                    print("✅ Valid OAuth callback URL detected")
+                    Task {
+                        await authManager.checkSession()
+                    }
+                } else {
+                    print("❌ Invalid URL host: \(url.host ?? "nil")")
+                }
+            } else {
+                print("❌ Invalid URL scheme: \(url.scheme ?? "nil")")
+            }
         }
     }
     
@@ -745,7 +1012,7 @@ struct ContentView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    if !showNotebook {
+                    if !showNotebook && !(noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil) {
                         topBarView
                     }
                     
@@ -759,11 +1026,22 @@ struct ContentView: View {
     
     private var mainContentView: some View {
         Group {
-            if noteDisplayState.isShowingNote, let note = noteDisplayState.currentNote {
-                NoteView(note: note, isPresented: $noteDisplayState.isShowingNote, dataManager: dataManager)
-            } else if showNotebook {
+            if showNotebook {
                 NotebookView(isPresented: $showNotebook)
                     .environmentObject(noteDisplayState)
+            } else if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
+                NavigationView {
+                    NoteView(note: noteDisplayState.currentNote, isPresented: $showNotebook, dataManager: dataManager)
+                        .navigationBarItems(leading: Button(action: {
+                            noteDisplayState.isShowingNote = false
+                            noteDisplayState.currentNote = nil
+                            noteDisplayState.currentTopic = nil
+                            noteDisplayState.currentSubtopic = nil
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .foregroundColor(.blue)
+                        })
+                }
             } else {
                 ChatView(chats: $chats, currentChat: $currentChat)
             }
@@ -841,6 +1119,35 @@ struct ContentView: View {
                 .padding(.vertical, 20)
             }
         }
+    }
+    
+    private func loadChats() async {
+        isLoadingChats = true
+        do {
+            let loadedChats = try await chatManager.getChats()
+            if loadedChats.isEmpty {
+                // Create a Welcome chat in the database if no chats exist
+                do {
+                    let welcomeChat = try await chatManager.createChat(title: "Welcome")
+                    await MainActor.run {
+                        chats = [welcomeChat]
+                        currentChat = welcomeChat
+                    }
+                } catch {
+                    print("❌ Failed to create welcome chat: \(error.localizedDescription)")
+                }
+            } else {
+                await MainActor.run {
+                    chats = loadedChats
+                    if currentChat == nil {
+                        currentChat = chats.first
+                    }
+                }
+            }
+        } catch {
+            print("Failed to load chats: \(error.localizedDescription)")
+        }
+        isLoadingChats = false
     }
 }
 

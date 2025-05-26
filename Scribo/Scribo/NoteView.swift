@@ -10,6 +10,7 @@ struct NoteView: View {
     @State private var noteImage: UIImage?
     let isNewNote: Bool
     @ObservedObject var dataManager: DataManager
+    @Environment(\.dismiss) var dismiss
     
     init(note: Note?, isPresented: Binding<Bool>, dataManager: DataManager) {
         self._isPresented = isPresented
@@ -27,111 +28,101 @@ struct NoteView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                VStack(alignment: .leading) {
-                    if let topic = noteDisplayState.currentTopic {
-                        Text(topic.title)
-                            .font(.subheadline)
-                            .foregroundColor(.appAccent1)
-                    }
-                    if let subtopic = noteDisplayState.currentSubtopic {
-                        Text(subtopic.title)
-                            .font(.headline)
-                            .foregroundColor(.appText)
-                    }
-                }
-                
-                Spacer()
-                
-                // Save button
-                Button(action: {
-                    saveNote()
-                    isPresented = false
-                }) {
-                    Text("Save")
-                        .font(.headline)
-                        .foregroundColor(.appAccent1)
-                }
-            }
-            .padding()
-            .background(Color.appHeaderBackground)
-            .onAppear {
-                // Add to recent notes when view appears
-                if let note = noteDisplayState.currentNote {
-                    Task {
-                        do {
-                            try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                        } catch {
-                            print("Error adding recent note: \(error)")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Topic and Subtopic Header (optional, below nav bar)
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let topic = noteDisplayState.currentTopic {
+                            Text(topic.title)
+                                .font(.title2.bold())
+                                .foregroundColor(.primary)
+                        }
+                        if let subtopic = noteDisplayState.currentSubtopic {
+                            Text(subtopic.title)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                         }
                     }
-                }
-            }
-            
-            // Note Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Title Field
-                    TextField("Title", text: $editedTitle)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.appText)
-                        .padding()
-                        .background(Color.appCardBackground)
-                        .cornerRadius(12)
-                    
-                    // Image Section
-                    if let noteImage = noteImage {
-                        Image(uiImage: noteImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 300)
-                            .cornerRadius(12)
-                            .overlay(
-                                Button(action: {
-                                    self.noteImage = nil
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(.white)
-                                        .shadow(radius: 2)
-                                }
-                                .padding(8),
-                                alignment: .topTrailing
-                            )
-                    }
-                    
-                    // Add Image Button
+                    Spacer()
+                    // Minimal add/change image button (icon only) using PhotosPicker
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        HStack {
-                            Image(systemName: "photo.fill")
-                                .font(.system(size: 20))
-                            Text(noteImage == nil ? "Add Image" : "Change Image")
-                                .font(.headline)
-                        }
-                        .foregroundColor(.appAccent1)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.appCardBackground)
-                        .cornerRadius(12)
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 16))
+                            .foregroundColor(.appAccent1)
+                            .padding(.horizontal)
                     }
-                    
-                    // Content Field
+                }
+                .padding(.horizontal)
+                .padding(.top, 20)
+                .background(Color(.systemBackground))
+                // Title Field
+                TextField("Title", text: $editedTitle)
+                    .font(.largeTitle.bold())
+                    .foregroundColor(.primary)
+                    .padding(.horizontal)
+                    .padding(.top, 24)
+                // Image Section
+                if let noteImage = noteImage {
+                    Image(uiImage: noteImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 260)
+                        .cornerRadius(16)
+                        .padding(.horizontal)
+                        .overlay(
+                            Button(action: {
+                                self.noteImage = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .shadow(radius: 2)
+                            }
+                            .padding(12),
+                            alignment: .topTrailing
+                        )
+                }
+                // Content Field
+                ZStack(alignment: .topLeading) {
+                    // Placeholder
+                    if editedContent.isEmpty {
+                        Text("Note")
+                            .foregroundColor(.gray)
+                            .padding(.top, 12)
+                            .padding(.horizontal, 18)
+                    }
+                    // TextEditor
                     TextEditor(text: $editedContent)
-                        .font(.body)
-                        .foregroundColor(.appText)
-                        .frame(minHeight: 200)
-                        .padding()
-                        .background(Color.appCardBackground)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(UIColor.clear))
                         .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
+                        .frame(minHeight: 200)
                 }
                 .padding()
             }
-            .background(Color.appBackground)
+            .padding(.bottom, 32)
         }
+        .background(Color(.systemBackground).ignoresSafeArea())
+        .navigationBarBackButtonHidden(false)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    saveNote()
+                    dismiss()
+                }) {
+                    Text("Save")
+                        .font(.headline)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
         .onChange(of: selectedPhoto) { oldValue, newValue in
             if let newValue {
                 Task {
@@ -176,11 +167,6 @@ struct NoteView: View {
                         newAttachmentUrl: attachmentUrl
                     )
                 }
-                
-                // Dismiss the view after successful save
-                await MainActor.run {
-                    isPresented = false
-                }
             } catch {
                 print("Error saving note: \(error)")
                 // You might want to show an error alert here
@@ -203,13 +189,13 @@ struct NoteView: View {
         }
     }
     
-    private func loadImage(from fileName: String) -> UIImage? {
-        let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return UIImage(data: data)
-    }
-    
     private func getDocumentsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
+    
+    private func loadImage(from fileName: String) -> UIImage? {
+        let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
+        return UIImage(contentsOfFile: fileURL.path)
+    }
 } 
+

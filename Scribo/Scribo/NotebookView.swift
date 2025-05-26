@@ -163,147 +163,127 @@ struct SubtopicPreviewView: View {
     @ObservedObject var dataManager: DataManager
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewNoteSheet = false
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                headerView
-                notesGridView
-            }
-            .padding(.vertical)
+    @State private var searchText = ""
+
+    var filteredNotes: [Note] {
+        if searchText.isEmpty {
+            return subtopic.notes
         }
-        .background(Color.appBackground)
-        .navigationBarTitleDisplayMode(.inline)
+        return subtopic.notes.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.content.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                TextField("Search notes...", text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+            .padding([.horizontal, .top])
+
+            // Grid of Notes
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                    ForEach(filteredNotes) { note in
+                        NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
+                            .onAppear {
+                                noteDisplayState.currentNote = note
+                                noteDisplayState.currentTopic = topic
+                                noteDisplayState.currentSubtopic = subtopic
+                            }
+                        ) {
+                            NoteCardView(note: note)
+                        }
+                    }
+                }
+                .padding()
+            }
+        }
+        .navigationTitle(subtopic.title)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                addNoteButton
+                Button(action: { isShowingNewNoteSheet = true }) {
+                    Image(systemName: "plus")
+                }
             }
         }
         .sheet(isPresented: $isShowingNewNoteSheet) {
             NewNoteView(topic: topic, subtopic: subtopic, dataManager: dataManager)
         }
-        .alert("Delete Note", isPresented: .init(
-            get: { noteToDelete != nil },
-            set: { if !$0 { noteToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) {
-                noteToDelete = nil
-            }
-            Button("Delete", role: .destructive) {
-                if let (topic, subtopic, note) = noteToDelete {
-                    dataManager.deleteNote(note, from: subtopic, from: topic)
-                }
-                noteToDelete = nil
-            }
-        } message: {
-            Text("Are you sure you want to delete this note?")
-        }
     }
-    
-    private var headerView: some View {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(topic.title)
-                            .font(.subheadline)
-                            .foregroundColor(.appAccent1)
-                        Text(subtopic.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.appText)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal)
-    }
-                
-    private var notesGridView: some View {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 16),
-                    GridItem(.flexible(), spacing: 16)
-                ], spacing: 16) {
-                    ForEach(subtopic.notes) { note in
-                noteCard(note)
-            }
-        }
-        .padding(.horizontal)
-    }
-    
-    private func noteCard(_ note: Note) -> some View {
-                        Button(action: {
-                            noteDisplayState.currentNote = note
-                            noteDisplayState.currentTopic = topic
-                            noteDisplayState.currentSubtopic = subtopic
-                            noteDisplayState.isShowingNote = true
-                            isPresented = false
-                        }) {
-                            VStack(alignment: .leading, spacing: 8) {
-                noteImage(note)
-                noteTitle(note)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(Color.appCardBackground)
-            .cornerRadius(12)
-        }
-        .contextMenu {
-            Button(role: .destructive, action: {
-                noteToDelete = (topic, subtopic, note)
-            }) {
-                Label("Delete Note", systemImage: "trash")
-            }
-        }
-    }
-    
-    private func noteImage(_ note: Note) -> some View {
-        Group {
+}
+
+struct NoteCardView: View {
+    let note: Note
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Image preview if available
             if let attachmentUrl = note.attachment_url {
                 let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
                 if let image = UIImage(contentsOfFile: fileURL.path) {
                     Image(uiImage: image)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(height: 120)
-                                            .clipped()
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 80)
+                        .clipped()
                         .cornerRadius(8)
-                } else {
-                    Image(systemName: "note.text")
-                        .font(.system(size: 24))
-                        .foregroundColor(.gray)
-                                            .frame(height: 120)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.gray.opacity(0.1))
-                                    .cornerRadius(8)
                 }
-                                } else {
-                                    Image(systemName: "note.text")
-                                        .font(.system(size: 24))
+            }
+            // Note title
+            Text(note.title)
+                .font(.headline)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            // Note preview
+            Text(note.content)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+            // Date
+            if let date = parseDate(note.updated_at) {
+                Text(date, style: .date)
+                    .font(.caption)
                     .foregroundColor(.gray)
-                                        .frame(height: 120)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
+            } else {
+                Text(note.updated_at)
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
         }
-                                }
-                                
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+
     private func getDocumentsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
-    private func noteTitle(_ note: Note) -> some View {
-                                Text(note.title)
-                                    .font(.headline)
-                                    .foregroundColor(.appText)
-                                    .lineLimit(2)
-                            }
-    
-    private var addNoteButton: some View {
-                Button(action: {
-                    isShowingNewNoteSheet = true
-                }) {
-                    Image(systemName: "plus")
-                        .foregroundColor(.appAccent1)
+    private func parseDate(_ dateString: String) -> Date? {
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: dateString) {
+            return date
         }
+        // Try a fallback format if needed
+        let fallbackFormatter = DateFormatter()
+        fallbackFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return fallbackFormatter.date(from: dateString)
     }
 }
 
