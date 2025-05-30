@@ -19,10 +19,5 @@ class SupabaseConfig {
             supabaseKey: supabaseKey,
             options: options
         )
-        
-        // Clear any existing session on startup
-        Task {
-            try? await client.auth.signOut()
-        }
     }
 } 

@@ -24,7 +24,7 @@ struct NoteRecord: Codable {
     let subtopic_id: UUID
     let title: String
     let content: String
-    let attachment_url: String?
+    let attachment_urls: [String]?
     let created_at: String
     let updated_at: String
 }
@@ -218,7 +218,7 @@ class DataManager: ObservableObject {
     }
     
     // MARK: - Notes
-    func addNote(to subtopic: Subtopic, in topic: Topic, title: String, content: String, attachmentUrl: String? = nil) async throws -> Note {
+    func addNote(to subtopic: Subtopic, in topic: Topic, title: String, content: String, attachmentUrls: [String]? = nil) async throws -> Note {
         let session = try await supabase.auth.session
         let userId = session.user.id
         
@@ -227,7 +227,7 @@ class DataManager: ObservableObject {
             subtopic_id: subtopic.id,
             title: title,
             content: content,
-            attachment_url: attachmentUrl,
+            attachment_urls: attachmentUrls,
             created_at: ISO8601DateFormatter().string(from: Date()),
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
@@ -246,7 +246,7 @@ class DataManager: ObservableObject {
             subtopic_id: record.subtopic_id,
             title: record.title,
             content: record.content,
-            attachment_url: record.attachment_url,
+            attachment_urls: record.attachment_urls,
             created_at: record.created_at,
             updated_at: record.updated_at
         )
@@ -264,13 +264,13 @@ class DataManager: ObservableObject {
         return note
     }
     
-    func updateNote(_ note: Note, in subtopic: Subtopic, in topic: Topic, newTitle: String, newContent: String, newAttachmentUrl: String? = nil) async throws -> Note {
+    func updateNote(_ note: Note, in subtopic: Subtopic, in topic: Topic, newTitle: String, newContent: String, newAttachmentUrls: [String]? = nil) async throws -> Note {
         let updateData = NoteRecord(
             id: note.id,
             subtopic_id: note.subtopic_id,
             title: newTitle,
             content: newContent,
-            attachment_url: newAttachmentUrl,
+            attachment_urls: newAttachmentUrls,
             created_at: note.created_at,
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
@@ -290,7 +290,7 @@ class DataManager: ObservableObject {
             subtopic_id: record.subtopic_id,
             title: record.title,
             content: record.content,
-            attachment_url: record.attachment_url,
+            attachment_urls: record.attachment_urls,
             created_at: record.created_at,
             updated_at: record.updated_at
         )
@@ -361,7 +361,7 @@ class DataManager: ObservableObject {
                             subtopic_id,
                             title,
                             content,
-                            attachment_url,
+                            attachment_urls,
                             created_at,
                             updated_at
                         )
@@ -377,6 +377,15 @@ class DataManager: ObservableObject {
     }
     
     // MARK: - User Profile
+    func getUserEmail() async throws -> String {
+        let session = try await supabase.auth.session
+        return session.user.email ?? ""
+    }
+    
+    func updateUserEmail(_ newEmail: String) async throws {
+        try await supabase.auth.update(user: UserAttributes(email: newEmail))
+    }
+
     func updateUserProfile(fullName: String, avatarImage: UIImage?) async throws {
         let session = try await supabase.auth.session
         let userId = session.user.id

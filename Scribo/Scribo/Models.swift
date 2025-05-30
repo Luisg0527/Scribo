@@ -24,7 +24,7 @@ struct Note: Identifiable, Codable, Equatable {
     let subtopic_id: UUID
     var title: String
     var content: String
-    var attachment_url: String?
+    var attachment_urls: [String]?
     let created_at: String
     let updated_at: String
     
@@ -32,7 +32,7 @@ struct Note: Identifiable, Codable, Equatable {
         lhs.id == rhs.id &&
         lhs.title == rhs.title &&
         lhs.content == rhs.content &&
-        lhs.attachment_url == rhs.attachment_url
+        lhs.attachment_urls == rhs.attachment_urls
     }
 }
 

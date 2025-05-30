@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct ScriboApp: App {
+struct ScriboApp: App { 
     @StateObject private var noteDisplayState = NoteDisplayState()
     
     var body: some Scene {

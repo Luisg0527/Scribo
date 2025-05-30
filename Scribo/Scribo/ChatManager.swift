@@ -88,11 +88,19 @@ class ChatManager: ObservableObject {
     }
     
     func deleteChat(_ chatId: UUID) async throws {
-        try await supabase
-            .from("chats")
-            .delete()
-            .eq("id", value: chatId)
-            .execute()
+        do {
+            try await supabase
+                .from("chats")
+                .delete()
+                .eq("id", value: chatId)
+                .execute()
+        } catch {
+            print("❌ Error during chat deletion process:")
+            print("❌ Error type: \(type(of: error))")
+            print("❌ Error description: \(error.localizedDescription)")
+            print("❌ Full error: \(error)")
+            throw error
+        }
     }
     
     // MARK: - Message Operations

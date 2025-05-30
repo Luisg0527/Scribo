@@ -3,6 +3,8 @@ import PhotosUI
 import Photos
 import UniformTypeIdentifiers
 import AVFoundation
+import VisionKit
+import StoreKit
 
 // MARK: - Note Display State
 class NoteDisplayState: ObservableObject {
@@ -10,6 +12,113 @@ class NoteDisplayState: ObservableObject {
     @Published var currentNote: Note?
     @Published var currentTopic: Topic?
     @Published var currentSubtopic: Subtopic?
+}
+
+// Add this near the top of the file, after the imports
+enum AppError: LocalizedError {
+    case networkError(String)
+    case authenticationError(String)
+    case dataError(String)
+    case cameraError(String)
+    case unknownError(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .networkError(let message):
+            return "Network Error: \(message)"
+        case .authenticationError(let message):
+            return "Authentication Error: \(message)"
+        case .dataError(let message):
+            return "Data Error: \(message)"
+        case .cameraError(let message):
+            return "Camera Error: \(message)"
+        case .unknownError(let message):
+            return "Error: \(message)"
+        }
+    }
+    
+    var recoverySuggestion: String? {
+        switch self {
+        case .networkError:
+            return "Please check your internet connection and try again."
+        case .authenticationError:
+            return "Please try logging in again."
+        case .dataError:
+            return "Please try refreshing the data."
+        case .cameraError:
+            return "Please check camera permissions in Settings."
+        case .unknownError:
+            return "Please try again later."
+        }
+    }
+}
+
+// Add this class for managing alerts
+class AlertManager: ObservableObject {
+    @Published var showAlert = false
+    @Published var alertTitle = ""
+    @Published var alertMessage = ""
+    @Published var alertRecoverySuggestion = ""
+    
+    func showError(_ error: Error) {
+        if let appError = error as? AppError {
+            alertTitle = "Error"
+            alertMessage = appError.errorDescription ?? "An error occurred"
+            alertRecoverySuggestion = appError.recoverySuggestion ?? "Please try again later."
+        } else {
+            alertTitle = "Error"
+            alertMessage = error.localizedDescription
+            alertRecoverySuggestion = "Please try again later."
+        }
+        showAlert = true
+    }
+}
+
+// Add this struct before ProfileSheetView
+struct EditableField: View {
+    let icon: String
+    let title: String
+    @Binding var text: String
+    @State private var isEditing = false
+    let onSave: () async -> Void
+    @State private var isLoading = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+            Text(title)
+            Spacer()
+            if isEditing {
+                TextField(title, text: $text)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(8)
+                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
+                    .cornerRadius(8)
+                    .frame(width: 200)
+                    .onSubmit {
+                        Task {
+                            isLoading = true
+                            await onSave()
+                            isLoading = false
+                            isEditing = false
+                        }
+                    }
+            } else {
+                HStack {
+                    Text(text)
+                        .foregroundColor(.gray)
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+                .onTapGesture {
+                    isEditing = true
+                }
+            }
+        }
+    }
 }
 
 struct SidebarView: View {
@@ -28,15 +137,24 @@ struct SidebarView: View {
     @Binding var chats: [Chat]
     @Binding var currentChat: Chat?
     @State private var isLoadingChats = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isProfileSheetPresented = false
+    @AppStorage("hapticsEnabled") private var hapticsEnabled = true
+    @State private var isLoadingProfileImage = false
+    @StateObject private var alertManager = AlertManager()
     
     var body: some View {
         VStack(spacing: 0) {
             // Profile Section
             Button(action: {
-                showProfile = true
+                performHapticFeedback(style: .light)
+                isProfileSheetPresented = true
             }) {
                 HStack {
-                    if let profileImage {
+                    if isLoadingProfileImage {
+                        ProgressView()
+                            .frame(width: 40, height: 40)
+                    } else if let profileImage {
                         Image(uiImage: profileImage)
                             .resizable()
                             .scaledToFill()
@@ -47,7 +165,6 @@ struct SidebarView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.appAccent1)
                     }
-                    
                     VStack(alignment: .leading) {
                         Text("Profile")
                             .font(.headline)
@@ -56,15 +173,16 @@ struct SidebarView: View {
                             .font(.subheadline)
                             .foregroundColor(.appText.opacity(0.7))
                     }
-                    
                     Spacer()
-                    
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "ellipsis")
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 }
                 .padding()
                 .background(Color.appHeaderBackground)
+            }
+            .sheet(isPresented: $isProfileSheetPresented) {
+                ProfileSheetView(isPresented: $isProfileSheetPresented, authManager: authManager)
             }
             
             // Scrollable Content
@@ -72,43 +190,51 @@ struct SidebarView: View {
                 VStack(spacing: 0) {
                     // Other Tools Section
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Other Tools")
-                            .font(.headline)
-                            .foregroundColor(.appText)
+                        Button(action: {
+                            presentDocumentScanner()
+                        }) {
+                            HStack {
+                                Image(systemName: "doc.viewfinder")
+                                    .foregroundColor(.appAccent1)
+                                Text("Scanner")
+                                    .foregroundColor(.appText)
+                                Spacer()
+                            }
                             .padding(.horizontal)
                             .padding(.vertical, 12)
-                        
-                        ForEach(["Coming soon..."], id: \.self) { tool in
-                            Button(action: {
-                                // Tool action
-                            }) {
-                                HStack {
-                                    Image(systemName: "doc.viewfinder")
-                                        .foregroundColor(.appAccent1)
-                                    Text(tool)
-                                        .foregroundColor(.appText)
-                                    Spacer()
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 12)
-                            }
+                            .padding(.top, 16)
                         }
                     }
                     .background(Color.appCardBackground)
                     
                     // Recent Notes Section
                     VStack(alignment: .leading, spacing: 0) {
+                        HStack {
                         Text("Recent Notes")
-                            .font(.headline)
+                            .font(.title3)
+                            .fontWeight(.semibold)
                             .foregroundColor(.appText)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                Task {
+                                    do {
+                                        let alert = createNewNoteAlert()
+                                        presentAlert(alert)
+                                    }
+                                }
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(.appAccent1)
+                            }
+                        }
                             .padding(.horizontal)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 16)
                         
                         if showGhostBlocks {
                             ForEach(0..<3) { _ in
                                 HStack {
-                                    Image(systemName: "note.text")
-                                        .foregroundColor(.appAccent1.opacity(0.3))
                                     VStack(alignment: .leading, spacing: 4) {
                                         Rectangle()
                                             .fill(Color.gray.opacity(0.2))
@@ -125,8 +251,51 @@ struct SidebarView: View {
                                 .padding(.vertical, 12)
                             }
                         } else if !recentNotes.isEmpty {
-                            ForEach(recentNotes) { note in
-                                recentNoteButton(note)
+                            let groupedNotes = Dictionary(grouping: recentNotes) { note in
+                                let calendar = Calendar.current
+                                let dateFormatter = DateFormatter()
+                                dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                                
+                                guard let date = dateFormatter.date(from: note.updated_at) else {
+                                    return "Older"
+                                }
+                                
+                                if calendar.isDateInToday(date) {
+                                    return "Today"
+                                } else if calendar.isDateInYesterday(date) {
+                                    return "Yesterday"
+                                } else {
+                                    let days = calendar.dateComponents([.day], from: date, to: Date()).day ?? 0
+                                    if days < 7 {
+                                        return "\(days) days ago"
+                                    } else {
+                                        let weeks = days / 7
+                                        return "\(weeks) week\(weeks > 1 ? "s" : "") ago"
+                                    }
+                                }
+                            }
+                            
+                            // Sort date groups in reverse chronological order
+                            let sortedDateGroups = groupedNotes.keys.sorted { group1, group2 in
+                                let order = ["Today", "Yesterday", "1 day ago", "2 days ago", "3 days ago", "4 days ago", "5 days ago", "6 days ago", "1 week ago", "2 weeks ago", "3 weeks ago", "4 weeks ago", "Older"]
+                                let index1 = order.firstIndex(of: group1) ?? Int.max
+                                let index2 = order.firstIndex(of: group2) ?? Int.max
+                                return index1 < index2
+                            }
+                            
+                            ForEach(sortedDateGroups, id: \.self) { dateGroup in
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(dateGroup)
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.gray)
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                    
+                                    ForEach(groupedNotes[dateGroup] ?? []) { note in
+                                        recentNoteButton(note)
+                                    }
+                                }
                             }
                         } else {
                             Text("No recent notes")
@@ -142,7 +311,8 @@ struct SidebarView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
                             Text("Recent Chats")
-                                .font(.headline)
+                                .font(.title3)
+                                .fontWeight(.semibold)
                                 .foregroundColor(.appText)
                             
                             Spacer()
@@ -174,8 +344,6 @@ struct SidebarView: View {
                         if isLoadingChats {
                             ForEach(0..<3) { _ in
                                 HStack {
-                                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                                        .foregroundColor(.appAccent1.opacity(0.3))
                                     VStack(alignment: .leading, spacing: 4) {
                                         Rectangle()
                                             .fill(Color.gray.opacity(0.2))
@@ -198,47 +366,116 @@ struct SidebarView: View {
                                 .padding(.horizontal)
                                 .padding(.vertical, 12)
                         } else {
-                            ForEach(chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
-                                Button(action: {
-                                    currentChat = chat
-                                }) {
-                                    HStack {
-                                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                                            .foregroundColor(.appAccent1)
-                                        VStack(alignment: .leading) {
-                                            Text(chat.title)
-                                                .foregroundColor(.appText)
-                                            if !chat.messages.isEmpty {
-                                                Text(chat.messages.last?.content ?? "")
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        Spacer()
+                            let groupedChats = Dictionary(grouping: chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
+                                let calendar = Calendar.current
+                                if calendar.isDateInToday(chat.updatedAt) {
+                                    return "Today"
+                                } else if calendar.isDateInYesterday(chat.updatedAt) {
+                                    return "Yesterday"
+                                } else {
+                                    let days = calendar.dateComponents([.day], from: chat.updatedAt, to: Date()).day ?? 0
+                                    if days < 7 {
+                                        return "\(days) days ago"
+                                    } else {
+                                        let weeks = days / 7
+                                        return "\(weeks) week\(weeks > 1 ? "s" : "") ago"
                                     }
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 12)
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        Task {
-                                            do {
-                                                try await chatManager.deleteChat(chat.id)
-                                                await MainActor.run {
-                                                    if let index = chats.firstIndex(where: { $0.id == chat.id }) {
-                                                        chats.remove(at: index)
-                                                    }
-                                                    if currentChat?.id == chat.id {
-                                                        currentChat = chats.first
+                            }
+                            
+                            ForEach(groupedChats.keys.sorted(), id: \.self) { dateGroup in
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(dateGroup)
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.gray)
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                    
+                                    ForEach(groupedChats[dateGroup] ?? []) { chat in
+                                        Button(action: {
+                                            currentChat = chat
+                                        }) {
+                                            HStack {
+                                                Text(chat.title)
+                                                    .foregroundColor(.appText)
+                                                    .lineLimit(1)
+                                                    .truncationMode(.tail)
+                                                Spacer()
+                                            }
+                                            .padding(.horizontal)
+                                            .padding(.vertical, 12)
+                                        }
+                                        .contextMenu {
+                                            Button(action: {
+                                                Task {
+                                                    do {
+                                                        try await chatManager.deleteChat(chat.id)
+                                                        await MainActor.run {
+                                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
+                                                                chats.remove(at: index)
+                                                            }
+                                                            if currentChat?.id == chat.id {
+                                                                currentChat = chats.first
+                                                            }
+                                                        }
+                                                    } catch {
+                                                        print("❌ Failed to delete chat: \(error.localizedDescription)")
                                                     }
                                                 }
-                                            } catch {
-                                                print("❌ Failed to delete chat: \(error.localizedDescription)")
+                                            }) {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                            
+                                            Button(action: {
+                                                Task {
+                                                    do {
+                                                        // Create a temporary alert to get new title
+                                                        let alert = UIAlertController(
+                                                            title: "Edit Chat Title",
+                                                            message: "Enter new title for the chat",
+                                                            preferredStyle: .alert
+                                                        )
+                                                        
+                                                        alert.addTextField { textField in
+                                                            textField.text = chat.title
+                                                            textField.placeholder = "Enter title"
+                                                        }
+                                                        
+                                                        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                                                        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+                                                            if let newTitle = alert.textFields?.first?.text, !newTitle.isEmpty {
+                                                                Task {
+                                                                    do {
+                                                                        var updatedChat = chat
+                                                                        updatedChat.title = newTitle
+                                                                        try await chatManager.updateChat(updatedChat)
+                                                                        await MainActor.run {
+                                                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
+                                                                                chats[index] = updatedChat
+                                                                            }
+                                                                            if currentChat?.id == chat.id {
+                                                                                currentChat = updatedChat
+                                                                            }
+                                                                        }
+                                                                    } catch {
+                                                                        print("❌ Failed to update chat title: \(error.localizedDescription)")
+                                                                    }
+                                                                }
+                                                            }
+                                                        })
+                                                        
+                                                        // Present the alert
+                                                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                                           let viewController = windowScene.windows.first?.rootViewController {
+                                                            viewController.present(alert, animated: true)
+                                                        }
+                                                    }
+                                                }
+                                            }) {
+                                                Label("Edit Title", systemImage: "pencil")
                                             }
                                         }
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
                                     }
                                 }
                             }
@@ -250,42 +487,30 @@ struct SidebarView: View {
             
             // Bottom Buttons
             HStack(spacing: 0) {
-                // Sign Out Button
-                Button(action: {
-                    Task {
-                        await authManager.signOut()
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .foregroundColor(.red)
-                        Text("Sign Out")
-                            .foregroundColor(.red)
-                        Spacer()
-                    }
-                    .padding()
-                    .background(Color.appCardBackground)
-                }
-                
                 // Dark Mode Toggle
                 Button(action: {
-                    withAnimation {
+                    performHapticFeedback(style: .light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         isDarkMode.toggle()
                         // Force UI update
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                             windowScene.windows.forEach { window in
-                                window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                                window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
                             }
                         }
                     }
                 }) {
-                    Image(systemName: isDarkMode ? "moon.fill" : "sun.max.fill")
+                    Image(systemName: isDarkMode ? "sun.max.fill" : "moon.fill")
                         .font(.system(size: 20))
                         .foregroundColor(.appAccent1)
-                        .frame(width: 44, height: 44)
-                        .background(Color.appCardBackground)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, 20)
+                        .padding(.vertical, 16)
+                        .background(Color.clear)
+                        .rotationEffect(.degrees(isDarkMode ? 180 : 0))
                 }
             }
+            .background(Color.appCardBackground.opacity(0.8))
         }
         .frame(width: 280)
         .background(Color.appCardBackground)
@@ -328,7 +553,9 @@ struct SidebarView: View {
         do {
             recentNotes = try await dataManager.getRecentNotes()
         } catch {
-            print("Failed to load recent notes: \(error.localizedDescription)")
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to load recent notes"))
+            }
         }
         
         isLoadingRecentNotes = false
@@ -336,6 +563,7 @@ struct SidebarView: View {
     }
     
     private func loadProfileImage() async {
+        isLoadingProfileImage = true
         do {
             let user = try await dataManager.getUserProfile()
             if let avatarUrl = user.avatar_url {
@@ -348,8 +576,11 @@ struct SidebarView: View {
                 }
             }
         } catch {
-            print("Failed to load profile image: \(error.localizedDescription)")
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to load profile image"))
+            }
         }
+        isLoadingProfileImage = false
     }
     
     private func loadChats() async {
@@ -367,10 +598,11 @@ struct SidebarView: View {
                     await MainActor.run {
                         chats = [welcomeChat]
                         currentChat = welcomeChat
-                        print("📱 Updated UI with welcome chat")
                     }
                 } catch {
-                    print("❌ Failed to create welcome chat: \(error.localizedDescription)")
+                    await MainActor.run {
+                        alertManager.showError(AppError.dataError("Failed to create welcome chat"))
+                    }
                 }
             } else {
                 print("📱 Using existing chats")
@@ -383,14 +615,24 @@ struct SidebarView: View {
                 }
             }
         } catch {
-            print("❌ Failed to load chats: \(error.localizedDescription)")
+            await MainActor.run {
+                alertManager.showError(AppError.networkError("Failed to load chats"))
+            }
         }
         isLoadingChats = false
         print("📱 Finished loading chats")
     }
     
+    private func performHapticFeedback(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        if hapticsEnabled {
+            let generator = UIImpactFeedbackGenerator(style: style)
+            generator.impactOccurred()
+        }
+    }
+    
     private func recentNoteButton(_ note: Note) -> some View {
         Button(action: {
+            performHapticFeedback(style: .medium)
             Task {
                 do {
                     // Find the topic and subtopic for this note
@@ -415,553 +657,278 @@ struct SidebarView: View {
             }
         }) {
             HStack {
-                Image(systemName: "note.text")
-                    .foregroundColor(.appAccent1)
-                VStack(alignment: .leading) {
-                    Text(note.title)
-                        .foregroundColor(.appText)
-                }
+                Text(note.title)
+                    .foregroundColor(.appText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer()
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
         }
     }
-}
-
-// MARK: - Camera View
-struct CameraView: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var selectedPhoto: PhotosPickerItem?
-    @Binding var isShowing: Bool
-    @StateObject private var camera = CameraModel()
-    @State private var capturedImage: UIImage?
-    @State private var showAlert = false
-    @State private var flashMode: AVCaptureDevice.FlashMode = .off
     
-    var body: some View {
-        ZStack {
-            if camera.isSessionConfigured {
-                CameraPreview(camera: camera)
-                    .ignoresSafeArea()
+    private func presentDocumentScanner() {
+        print("📱 Starting document scanner...")
+        let scannerVC = VNDocumentCameraViewController()
+        let delegate = DocumentScannerDelegate(
+            onScanComplete: { scannedImage in
+                print("📱 Document scanner completed, received image of size: \(scannedImage.size)")
                 
-                VStack {
-                    // Top Controls
-                    HStack {
-                        Button(action: {
-                            dismiss()
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding()
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
+                                    // Create a new chat with the scanned document
+                                    Task {
+                                        do {
+                        print("📱 Creating new chat for scanned document...")
+                                            let dateFormatter = DateFormatter()
+                                            dateFormatter.dateFormat = "MMM d, h:mm a"
+                                            let timestamp = dateFormatter.string(from: Date())
+                                            let newChat = try await chatManager.createChat(title: "Scanned Document \(timestamp)")
+                        print("📱 Successfully created new chat with ID: \(newChat.id)")
                         
-                        Spacer()
+                        // Convert image to PDF
+                        print("📱 Converting scanned image to PDF...")
+                        let pdfData = try await convertImageToPDF(scannedImage)
+                        print("📱 PDF created with size: \(pdfData.count) bytes")
                         
-                        // Flash Control
-                        Button(action: {
-                            switch flashMode {
-                            case .off:
-                                flashMode = .on
-                            case .on:
-                                flashMode = .auto
-                            case .auto:
-                                flashMode = .off
-                            @unknown default:
-                                flashMode = .off
-                            }
-                            camera.setFlashMode(flashMode)
-                        }) {
-                            Image(systemName: flashMode == .off ? "bolt.slash" : 
-                                  flashMode == .on ? "bolt.fill" : "bolt.badge.a")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding()
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
-                        }
+                        // Save PDF to temporary file
+                        let tempDir = FileManager.default.temporaryDirectory
+                        let pdfFileName = "scanned_document_\(UUID().uuidString).pdf"
+                        let pdfURL = tempDir.appendingPathComponent(pdfFileName)
+                        try pdfData.write(to: pdfURL)
+                        print("📱 PDF saved to temporary file: \(pdfURL.path)")
                         
-                        Button(action: {
-                            camera.switchCamera()
-                        }) {
-                            Image(systemName: "camera.rotate")
-                                .font(.title)
-                                .foregroundColor(.white)
-                                .padding()
-                                .background(Color.black.opacity(0.5))
-                                .clipShape(Circle())
+                        // Create document message
+                        print("📱 Creating chat message with PDF document...")
+                        let message = ChatMessage(
+                            content: "I've scanned this document for you.",
+                            image: nil,
+                            document: DocumentMessage(
+                                url: pdfURL,
+                                name: "Scanned Document \(timestamp).pdf",
+                                type: "pdf"
+                            ),
+                            isUser: true,
+                            timestamp: Date(),
+                            chatId: newChat.id
+                        )
+                        
+                        // Add the message to the chat
+                        print("📱 Adding message to chat...")
+                        try await chatManager.addMessage(message, to: newChat.id)
+                        print("📱 Successfully added message to chat")
+                        
+                        // Update the UI
+                        print("📱 Updating UI with new chat...")
+                                            await MainActor.run {
+                                                chats.append(newChat)
+                                                currentChat = newChat
+                            print("📱 UI updated with new chat")
+                                            }
+                                        } catch {
+                        print("❌ Failed to process scanned document: \(error.localizedDescription)")
+                        await MainActor.run {
+                            alertManager.showError(AppError.dataError("Failed to process scanned document: \(error.localizedDescription)"))
                         }
                     }
-                    .padding()
-                    
-                    Spacer()
-                    
-                    // Bottom Controls
-                    HStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            camera.capturePhoto { image in
-                                if let image = image {
-                                    print("📸 Camera: Photo captured successfully")
-                                    capturedImage = image
-                                            
-                                            // Save to photo library and create PhotosPickerItem
-                                            PHPhotoLibrary.requestAuthorization { status in
-                                                if status == .authorized {
-                                                    PHPhotoLibrary.shared().performChanges({
-                                                        let request = PHAssetCreationRequest.forAsset()
-                                                if let data = image.jpegData(compressionQuality: 0.8) {
-                                                    request.addResource(with: .photo, data: data, options: nil)
-                                                }
-                                                    }) { success, error in
-                                                        if success {
-                                                            print("📸 Camera: Image saved to photo library")
-                                                            // Fetch the created asset
-                                                            let fetchOptions = PHFetchOptions()
-                                                            fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-                                                            let fetchResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
-                                                            if let asset = fetchResult.firstObject {
-                                                                DispatchQueue.main.async {
-                                                                    selectedPhoto = PhotosPickerItem(itemIdentifier: asset.localIdentifier)
-                                                                    print("📸 Camera: PhotosPickerItem created with identifier: \(asset.localIdentifier)")
-                                                            dismiss()
+                }
+            },
+            onError: { error in
+                print("❌ Document scanner error: \(error.localizedDescription)")
+                Task { @MainActor in
+                alertManager.showError(error)
+                }
+            }
+        )
+        scannerVC.delegate = delegate
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let viewController = windowScene.windows.first?.rootViewController {
+            print("📱 Presenting document scanner...")
+            viewController.present(scannerVC, animated: true) {
+                print("📱 Document scanner presented")
+            }
+        } else {
+            print("❌ Failed to present document scanner - no window scene or view controller found")
+        }
+    }
+    
+    private func convertImageToPDF(_ image: UIImage) async throws -> Data {
+        print("📱 Starting PDF conversion...")
+        let pdfData = NSMutableData()
+        
+        // Create PDF context
+        UIGraphicsBeginPDFContextToData(pdfData, CGRect(origin: .zero, size: image.size), nil)
+        UIGraphicsBeginPDFPage()
+        
+        // Draw image
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        
+        // End PDF context
+        UIGraphicsEndPDFContext()
+        
+        print("📱 PDF conversion completed")
+        return pdfData as Data
+    }
+    
+    private func createNewNoteAlert() -> UIAlertController {
+        let alert = UIAlertController(
+            title: "New Note",
+            message: "Select topic and subtopic",
+            preferredStyle: .actionSheet
+        )
+        
+        // Add topic selection actions
+        for topic in dataManager.topics {
+            let topicAction = UIAlertAction(title: topic.title, style: .default) { _ in
+                self.showSubtopicSelection(for: topic)
+            }
+            alert.addAction(topicAction)
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        return alert
+    }
+    
+    private func showSubtopicSelection(for topic: Topic) {
+        let alert = UIAlertController(
+            title: "Select Subtopic",
+            message: "Choose a subtopic for your note",
+            preferredStyle: .actionSheet
+        )
+        
+        // Add subtopic selection actions
+        for subtopic in topic.subtopics {
+            let subtopicAction = UIAlertAction(title: subtopic.title, style: .default) { _ in
+                self.showNoteDetailsInput(topic: topic, subtopic: subtopic)
+            }
+            alert.addAction(subtopicAction)
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let viewController = windowScene.windows.first?.rootViewController {
+            viewController.present(alert, animated: true)
+        }
+    }
+    
+    private func showNoteDetailsInput(topic: Topic, subtopic: Subtopic) {
+        let alert = UIAlertController(
+            title: "New Note",
+            message: "Enter note details",
+            preferredStyle: .alert
+        )
+        
+        alert.addTextField { textField in
+            textField.placeholder = "Title"
+        }
+        
+        alert.addTextField { textField in
+            textField.placeholder = "Content"
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Create", style: .default) { _ in
+            self.handleNoteCreation(alert, topic: topic, subtopic: subtopic)
+        })
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let viewController = windowScene.windows.first?.rootViewController {
+            viewController.present(alert, animated: true)
+        }
+    }
+    
+    private func handleNoteCreation(_ alert: UIAlertController, topic: Topic, subtopic: Subtopic) {
+        guard let title = alert.textFields?[0].text,
+              let content = alert.textFields?[1].text,
+              !title.isEmpty else { return }
+        
+        Task {
+            do {
+                // Create a new note using addNote
+                let newNote = try await dataManager.addNote(
+                    to: subtopic,
+                    in: topic,
+                    title: title,
+                    content: content
+                )
+                
+                // Add to recent notes
+                try await dataManager.addRecentNote(noteId: newNote.id.uuidString)
+                
+                // Update UI and show the note
+                await MainActor.run {
+                    noteDisplayState.currentNote = newNote
+                    noteDisplayState.currentTopic = topic
+                    noteDisplayState.currentSubtopic = subtopic
+                    noteDisplayState.isShowingNote = true
+                    isShowing = false
+                }
+            } catch {
+                print("❌ Failed to create note: \(error.localizedDescription)")
+                await MainActor.run {
+                    alertManager.showError(AppError.dataError("Failed to create note: \(error.localizedDescription)"))
+                }
+            }
+        }
+    }
+    
+    private func presentAlert(_ alert: UIAlertController) {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let viewController = windowScene.windows.first?.rootViewController {
+            viewController.present(alert, animated: true)
+        }
+    }
+}
+
+// Add this class at the bottom of the file, before the last closing brace
+class DocumentScannerDelegate: NSObject, VNDocumentCameraViewControllerDelegate {
+    private let onScanComplete: (UIImage) -> Void
+    private let onError: (Error) -> Void
+    
+    init(onScanComplete: @escaping (UIImage) -> Void, onError: @escaping (Error) -> Void) {
+        print("📱 Initializing DocumentScannerDelegate")
+        self.onScanComplete = onScanComplete
+        self.onError = onError
+        super.init()
+    }
+    
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
+        print("📱 Document scanner didFinishWith scan, page count: \(scan.pageCount)")
+        
+        // Process each scanned page
+        for i in 0..<scan.pageCount {
+            print("📱 Processing page \(i + 1) of \(scan.pageCount)")
+            let scannedImage = scan.imageOfPage(at: i)
+            print("📱 Page \(i + 1) image size: \(scannedImage.size)")
+            
+            // Ensure we're on the main thread for UI updates
+                DispatchQueue.main.async {
+                self.onScanComplete(scannedImage)
                                                                 }
                                                             }
-                                                        } else {
-                                                            print("❌ Camera: Failed to save to photo library: \(error?.localizedDescription ?? "Unknown error")")
-                                                        }
-                                                    }
-                                                } else {
-                                                    print("❌ Camera: Photo library access denied")
-                                                }
-                                        }
-                                } else {
-                                    print("❌ Camera: Failed to capture photo")
-                                }
-                            }
-                        }) {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 75, height: 75)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 3)
-                                        .frame(width: 65, height: 65)
-                                )
-                                .shadow(color: .black.opacity(0.3), radius: 5)
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.bottom, 30)
-                }
-            } else {
-                Color.black
-                    .ignoresSafeArea()
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            }
-        }
-        .alert("Camera Access Required", isPresented: $camera.alert) {
-            Button("Settings", role: .none) {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text("Please allow camera access in Settings to use this feature.")
-        }
-    }
-}
-
-// MARK: - Camera Preview
-struct CameraPreview: UIViewRepresentable {
-    @ObservedObject var camera: CameraModel
-    
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
-        camera.preview = AVCaptureVideoPreviewLayer(session: camera.session)
-        camera.preview.frame = view.frame
-        camera.preview.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(camera.preview)
         
-        // Ensure the preview layer updates when the view's bounds change
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
-        return view
-    }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // Update the preview layer frame when the view size changes
-        DispatchQueue.main.async {
-            self.camera.preview.frame = uiView.bounds
-        }
-    }
-}
-
-// MARK: - Camera Model
-class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
-    @Published var isTaken = false
-    @Published var session = AVCaptureSession()
-    @Published var alert = false
-    @Published var output = AVCapturePhotoOutput()
-    @Published var preview: AVCaptureVideoPreviewLayer!
-    @Published var isSessionConfigured = false
-    private var isConfiguring = false
-    private var flashMode: AVCaptureDevice.FlashMode = .off
-    
-    override init() {
-        super.init()
-        check()
-    }
-    
-    func check() {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            setUp()
-            return
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] status in
-                if status {
-                    DispatchQueue.main.async {
-                        self?.setUp()
-                    }
-                }
+        print("📱 Dismissing scanner view controller")
+        controller.dismiss(animated: true) {
+            print("📱 Scanner view controller dismissed")
             }
-        case .denied:
+    }
+    
+    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
+        print("❌ Document scanner failed with error: \(error.localizedDescription)")
             DispatchQueue.main.async {
-                self.alert = true
+            self.onError(AppError.cameraError(error.localizedDescription))
             }
-            return
-        default:
-            return
-        }
-    }
-    
-    func setUp() {
-        guard !isConfiguring else { return }
-        isConfiguring = true
-        
-        // Stop any existing session
-        if session.isRunning {
-            session.stopRunning()
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            
-            self.session.beginConfiguration()
-            
-            // Remove any existing inputs
-            for input in self.session.inputs {
-                self.session.removeInput(input)
-            }
-            
-            // Add video input
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-                  let input = try? AVCaptureDeviceInput(device: device) else {
-                print("Failed to get camera device")
-                DispatchQueue.main.async {
-                    self.isConfiguring = false
-                }
-                return
-            }
-            
-            if self.session.canAddInput(input) {
-                self.session.addInput(input)
-            }
-            
-            // Add photo output
-            if self.session.canAddOutput(self.output) {
-                self.session.addOutput(self.output)
-                self.output.isHighResolutionCaptureEnabled = true
-                self.output.maxPhotoQualityPrioritization = .quality
-            }
-            
-            self.session.commitConfiguration()
-            
-            DispatchQueue.main.async {
-                self.isSessionConfigured = true
-                self.isConfiguring = false
-                
-                // Start the session on a background thread
-                DispatchQueue.global(qos: .userInitiated).async {
-                    self.session.startRunning()
-                }
-            }
-        }
-    }
-    
-    func setFlashMode(_ mode: AVCaptureDevice.FlashMode) {
-        flashMode = mode
-    }
-    
-    func capturePhoto(completion: @escaping (UIImage?) -> Void) {
-        guard isSessionConfigured else {
-            print("Camera session not configured")
-            completion(nil)
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                completion(nil)
-                return
-            }
-            
-            let settings = AVCapturePhotoSettings()
-            settings.flashMode = self.flashMode
-            settings.isHighResolutionPhotoEnabled = true
-            settings.photoQualityPrioritization = .quality
-            
-            self.output.capturePhoto(with: settings, delegate: self)
-            self.completion = completion
-        }
-    }
-    
-    private var completion: ((UIImage?) -> Void)?
-    
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error = error {
-            print("Error capturing photo: \(error.localizedDescription)")
-            completion?(nil)
-            return
-        }
-        
-        guard let data = photo.fileDataRepresentation(),
-              let image = UIImage(data: data) else {
-            completion?(nil)
-            return
-        }
-        
-        completion?(image)
-    }
-    
-    func switchCamera() {
-        guard isSessionConfigured, !isConfiguring else { return }
-        isConfiguring = true
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            
-            self.session.beginConfiguration()
-            
-            // Remove existing input
-            guard let currentInput = self.session.inputs.first as? AVCaptureDeviceInput else {
-                DispatchQueue.main.async {
-                    self.isConfiguring = false
-                }
-                return
-            }
-            self.session.removeInput(currentInput)
-            
-            // Get new camera position
-            let newPosition: AVCaptureDevice.Position = currentInput.device.position == .back ? .front : .back
-            
-            // Get new device
-            guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
-                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
-                DispatchQueue.main.async {
-                    self.isConfiguring = false
-                }
-                return
-            }
-            
-            // Add new input
-            if self.session.canAddInput(newInput) {
-                self.session.addInput(newInput)
-            }
-            
-            self.session.commitConfiguration()
-            
-            DispatchQueue.main.async {
-                self.isConfiguring = false
-            }
-        }
-    }
-    
-    deinit {
-        if session.isRunning {
-            session.stopRunning()
-        }
-    }
-}
-
-// MARK: - Attachment Menu View
-struct AttachmentMenuView: View {
-    @Binding var isShowing: Bool
-    @Binding var selectedPhoto: PhotosPickerItem?
-    @Binding var selectedDocument: URL?
-    @Binding var isDocumentPickerPresented: Bool
-    @State private var isShowingCamera = false
-    
-    let menuItems = [
-        ("doc.fill", "Document", "Share a document"),
-        ("photo.fill", "Photos", "Share photos"),
-        ("camera.fill", "Camera", "Take a photo")
-    ]
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                ForEach(menuItems, id: \.1) { item in
-                    if item.1 == "Photos" {
-                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                            menuItemView(item)
-                        }
-                    } else if item.1 == "Document" {
-                        Button(action: {
-                            isDocumentPickerPresented = true
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                isShowing = false
-                            }
-                        }) {
-                            menuItemView(item)
-                        }
-                    } else if item.1 == "Camera" {
-                        Button(action: {
-                            isShowingCamera = true
-                        }) {
-                            menuItemView(item)
+        controller.dismiss(animated: true) {
+            print("📱 Scanner view controller dismissed after error")
                         }
                     }
-                }
-            }
-            .background(Color.appHeaderBackground)
-        }
-        .frame(height: 190)
-        .background(Color.appHeaderBackground)
-        .fullScreenCover(isPresented: $isShowingCamera) {
-            CameraView(selectedPhoto: $selectedPhoto, isShowing: $isShowingCamera)
-                .onDisappear {
-                    if selectedPhoto != nil {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            isShowing = false
-                        }
-                    }
-                }
-        }
-    }
     
-    private func menuItemView(_ item: (String, String, String)) -> some View {
-        HStack(spacing: 16) {
-            Image(systemName: item.0)
-                .font(.system(size: 24))
-                .foregroundColor(.appAccent1)
-                .frame(width: 32)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.1)
-                    .font(.body)
-                    .foregroundColor(.appText)
-                Text(item.2)
-                    .font(.caption)
-                    .foregroundColor(.appText.opacity(0.6))
-            }
-            
-            Spacer()
+    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
+        print("📱 Document scanner was cancelled by user")
+        controller.dismiss(animated: true) {
+            print("📱 Scanner view controller dismissed after cancel")
         }
-        .padding()
-        .background(Color.appHeaderBackground)
-    }
-}
-
-struct PhotoPickerView: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var selectedPhoto: PhotosPickerItem?
-    @Binding var isShowing: Bool
-    @State private var selectedImage: UIImage?
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Photo Library")
-                    .font(.headline)
-                    .foregroundColor(.appText)
-                Spacer()
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isShowing = false
-                    }
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.appAccent1)
-                }
-            }
-            .padding()
-            .background(Color.appHeaderBackground)
-            
-            // System Photo Picker
-            PhotosPicker(
-                selection: $selectedPhoto,
-                matching: .images,
-                photoLibrary: .shared()
-            ) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.appCardBackground)
-                        .frame(height: 420)
-                        .overlay(
-                            VStack {
-                                if let selectedImage = selectedImage {
-                                    Image(uiImage: selectedImage)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(height: 420)
-                                        .cornerRadius(12)
-                                } else {
-                                    VStack {
-                                        Image(systemName: "photo.on.rectangle.angled")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.appAccent1)
-                                        Text("Tap to select a photo")
-                                            .foregroundColor(.appText)
-                                    }
-                                }
-                            }
-                        )
-                }
-                .padding()
-            }
-            .onChange(of: selectedPhoto) { oldValue, newValue in
-                if let newValue {
-                    Task {
-                        if let data = try? await newValue.loadTransferable(type: Data.self),
-                           let uiImage = UIImage(data: data) {
-                            selectedImage = uiImage
-                        }
-                    }
-                }
-            }
-        }
-        .frame(height: 400)
-        .background(Color.appBackground)
-    }
-}
-
-// Add this extension for custom corner radius
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat = .infinity
-    var corners: UIRectCorner = .allCorners
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
-        return Path(path.cgPath)
     }
 }
 
@@ -978,9 +945,10 @@ struct ContentView: View {
     @State private var currentChat: Chat?
     @StateObject private var chatManager = ChatManager()
     @State private var isLoadingChats = false
+    @StateObject private var alertManager = AlertManager()
     
     var body: some View {
-        Group {
+        ZStack {
             if authManager.isAuthenticated {
                 mainView
                     .onAppear {
@@ -988,10 +956,43 @@ struct ContentView: View {
                             await loadChats()
                         }
                     }
-            } else if authManager.isResettingPassword {
-                NewPasswordView(authManager: authManager)
-            } else {
-                LoginMethodView(authManager: authManager)
+            }
+            
+            if !authManager.isAuthenticated {
+                if authManager.isResettingPassword {
+                    NewPasswordView(authManager: authManager)
+                        .transition(.move(edge: .top))
+                } else {
+                    LoginMethodView(authManager: authManager)
+                        .transition(.move(edge: .top))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: authManager.isAuthenticated)
+        .animation(.easeInOut(duration: 0.4), value: authManager.isResettingPassword)
+        .onChange(of: authManager.isAuthenticated) { oldValue, newValue in
+            if !newValue {
+                isSidebarShowing = false
+            }
+        }
+        .alert(alertManager.alertTitle, isPresented: $alertManager.showAlert) {
+            Button("OK", role: .cancel) { }
+            if !alertManager.alertRecoverySuggestion.isEmpty {
+                Button("Try Again") {
+                    // Retry the last operation
+                    Task {
+                        await loadChats()
+                    }
+                }
+            }
+        } message: {
+            VStack {
+                Text(alertManager.alertMessage)
+                if !alertManager.alertRecoverySuggestion.isEmpty {
+                    Text(alertManager.alertRecoverySuggestion)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
@@ -1058,23 +1059,39 @@ struct ContentView: View {
             if showNotebook {
                 NotebookView(isPresented: $showNotebook)
                     .environmentObject(noteDisplayState)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing),
+                        removal: .move(edge: .trailing)
+                    ))
             } else if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
                 NavigationView {
                     NoteView(note: noteDisplayState.currentNote, isPresented: $showNotebook, dataManager: dataManager)
                         .navigationBarItems(leading: Button(action: {
-                            noteDisplayState.isShowingNote = false
-                            noteDisplayState.currentNote = nil
-                            noteDisplayState.currentTopic = nil
-                            noteDisplayState.currentSubtopic = nil
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                noteDisplayState.isShowingNote = false
+                                noteDisplayState.currentNote = nil
+                                noteDisplayState.currentTopic = nil
+                                noteDisplayState.currentSubtopic = nil
+                            }
                         }) {
                             Image(systemName: "chevron.left")
                                 .foregroundColor(.blue)
                         })
                 }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing),
+                    removal: .move(edge: .trailing)
+                ))
             } else {
                 ChatView(chats: $chats, currentChat: $currentChat)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading),
+                        removal: .move(edge: .leading)
+                    ))
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: showNotebook)
+        .animation(.easeInOut(duration: 0.3), value: noteDisplayState.isShowingNote)
     }
     
     private var sidebarOverlay: some View {
@@ -1155,7 +1172,6 @@ struct ContentView: View {
         do {
             let loadedChats = try await chatManager.getChats()
             if loadedChats.isEmpty {
-                // Create a Welcome chat in the database if no chats exist
                 do {
                     let welcomeChat = try await chatManager.createChat(title: "Welcome")
                     await MainActor.run {
@@ -1163,7 +1179,9 @@ struct ContentView: View {
                         currentChat = welcomeChat
                     }
                 } catch {
-                    print("❌ Failed to create welcome chat: \(error.localizedDescription)")
+                    await MainActor.run {
+                        alertManager.showError(AppError.dataError("Failed to create welcome chat"))
+                    }
                 }
             } else {
                 await MainActor.run {
@@ -1174,7 +1192,9 @@ struct ContentView: View {
                 }
             }
         } catch {
-            print("Failed to load chats: \(error.localizedDescription)")
+            await MainActor.run {
+                alertManager.showError(AppError.networkError("Failed to load chats"))
+            }
         }
         isLoadingChats = false
     }
@@ -1186,5 +1206,236 @@ struct ContentView_Previews: PreviewProvider {
             .environmentObject(NoteDisplayState())
             .previewDevice(PreviewDevice(rawValue: "iPhone 16 Pro"))
             .previewDisplayName("iPhone 16 Pro")
+    }
+}
+
+struct ProfileSheetView: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var authManager: AuthManager
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    @State private var hapticsEnabled = true
+    @State private var selectedLanguage = "English"
+    @State private var selectedVoice = "Default"
+    @State private var speechSpeed: Double = 1.0
+    @State private var feedbackText = ""
+    @StateObject private var dataManager = DataManager()
+    @State private var fullName = ""
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var avatarImage: UIImage?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var email = ""
+    @StateObject private var alertManager = AlertManager()
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                // Profile Image Section
+                Section {
+                    VStack(spacing: 16) {
+                        if let avatarImage {
+                            Image(uiImage: avatarImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
+                                .shadow(color: Color.black.opacity(0.1), radius: 8)
+                        } else {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .frame(width: 100, height: 100)
+                                .foregroundColor(.gray)
+                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
+                        }
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            Text("Change Photo")
+                                .font(.subheadline)
+                                .foregroundColor(.appAccent1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                
+                // Account Info Section
+                Section(header: Text("Account")) {
+                    EditableField(
+                        icon: "person",
+                        title: "Full Name",
+                        text: $fullName,
+                        onSave: saveProfile
+                    )
+                    EditableField(
+                        icon: "envelope",
+                        title: "Email",
+                        text: $email,
+                        onSave: saveEmail
+                    )
+                }
+                
+                Section(header: Text("Preferences")) {
+                    Picker("Language", selection: $selectedLanguage) {
+                        Text("English").tag("English")
+                        Text("Spanish").tag("Spanish")
+                    }
+                    HStack {
+                        Image(systemName: "moon")
+                        Text("Dark Mode")
+                        Spacer()
+                        Toggle("", isOn: $isDarkMode)
+                            .labelsHidden()
+                    }
+                    HStack {
+                        Image(systemName: "iphone.gen3")
+                        Text("Haptic Feedback")
+                        Spacer()
+                        Toggle("", isOn: $hapticsEnabled)
+                            .labelsHidden()
+                    }
+                }
+                
+                Section(header: Text("Suggestions")) {
+                    TextField("Your feedback or feature request", text: $feedbackText)
+                    Button(action: {
+                        // Handle feedback submission
+                    }) {
+                        Label("Submit Feedback", systemImage: "paperplane")
+                    }
+                }
+                
+                Section(header: Text("About")) {
+                    HStack {
+                        Image(systemName: "info.circle")
+                        Text("Version")
+                        Spacer()
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                            .foregroundColor(.gray)
+                    }
+                    HStack {
+                        Image(systemName: "doc.text")
+                        Text("Privacy Policy")
+                        Spacer()
+                        Link("View", destination: URL(string: "https://yourapp.com/privacy")!)
+                    }
+                }
+                
+                Section {
+                    Button(role: .destructive) {
+                        Task {
+                            await authManager.signOut()
+                        }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                                .foregroundColor(.gray)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .onChange(of: selectedItem) { oldValue, newValue in
+                Task {
+                    if let data = try? await newValue?.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        await MainActor.run {
+                            avatarImage = image
+                        }
+                    }
+                }
+            }
+            .task {
+                await loadProfile()
+            }
+            .alert(alertManager.alertTitle, isPresented: $alertManager.showAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                VStack {
+                    Text(alertManager.alertMessage)
+                    if !alertManager.alertRecoverySuggestion.isEmpty {
+                        Text(alertManager.alertRecoverySuggestion)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func loadProfile() async {
+        isLoading = true
+        do {
+            let user = try await dataManager.getUserProfile()
+            let userEmail = try await dataManager.getUserEmail()
+            await MainActor.run {
+                fullName = user.full_name
+                email = userEmail
+                
+                if let avatarUrl = user.avatar_url {
+                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(avatarUrl)
+                    if let data = try? Data(contentsOf: fileURL),
+                       let image = UIImage(data: data) {
+                        avatarImage = image
+                    }
+                }
+            }
+        } catch {
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to load profile: \(error.localizedDescription)"))
+            }
+        }
+        isLoading = false
+    }
+    
+    private func saveProfile() async {
+        isLoading = true
+        do {
+            try await dataManager.updateUserProfile(fullName: fullName, avatarImage: avatarImage)
+            await MainActor.run {
+                isPresented = false
+            }
+        } catch {
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to save profile: \(error.localizedDescription)"))
+            }
+        }
+        isLoading = false
+    }
+    
+    private func saveEmail() async {
+        do {
+            // First verify the new email is different from current
+            let currentEmail = try await dataManager.getUserEmail()
+            if currentEmail == email {
+                return
+            }
+            
+            // Update email through Supabase auth
+            try await dataManager.updateUserEmail(email)
+            
+            // Show success message
+            await MainActor.run {
+                alertManager.alertTitle = "Success"
+                alertManager.alertMessage = "Email updated successfully. Please check your new email for verification."
+                alertManager.alertRecoverySuggestion = ""
+                alertManager.showAlert = true
+            }
+        } catch {
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to update email: \(error.localizedDescription)"))
+            }
+        }
     }
 }

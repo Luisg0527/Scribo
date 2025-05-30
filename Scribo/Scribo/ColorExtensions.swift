@@ -2,31 +2,31 @@ import SwiftUI
 
 struct AppColors {
     static func background(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "20212A") : Color(hex: "F5F5F7")
+        colorScheme == .dark ? Color(hex: "1A1B2E") : Color(hex: "F5F5F7")
     }
     
     static func cardBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "2D2F3C") : Color(hex: "FFFFFF")
+        colorScheme == .dark ? Color(hex: "25273D") : Color(hex: "FFFFFF")
     }
     
     static func headerBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "373A4A") : Color(hex: "F0F0F0")
+        colorScheme == .dark ? Color(hex: "2D2F4A") : Color(hex: "F0F0F0")
     }
     
     static func accent1(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white : Color(hex: "007AFF")
+        colorScheme == .dark ? Color(hex: "E6E4F0") : Color(hex: "6A5ACD")
     }
     
     static func accent2(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "303240") : Color(hex: "E5E5EA")
+        colorScheme == .dark ? Color(hex: "2D2F4A") : Color(hex: "E5E5EA")
     }
     
     static func text(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white : Color.black
+        colorScheme == .dark ? Color.white : Color(hex: "1A1B2E")
     }
     
     static func textSecondary(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.7) : Color.black.opacity(0.7)
+        colorScheme == .dark ? Color.white.opacity(0.7) : Color(hex: "1A1B2E").opacity(0.7)
     }
 }
 

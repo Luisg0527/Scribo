@@ -105,7 +105,7 @@ struct TopicPreviewView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Image(systemName: "folder.fill.badge.person.crop")
                                     .font(.system(size: 24))
-                                    .foregroundColor(.appAccent2)
+                                    .foregroundColor(.appAccent1)
                                 
                                 Text(subtopic.title)
                                     .font(.headline)
@@ -114,7 +114,7 @@ struct TopicPreviewView: View {
                                 
                                 Text("\(subtopic.notes.count) notes")
                                     .font(.caption)
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.appTextSecondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
@@ -164,6 +164,7 @@ struct SubtopicPreviewView: View {
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewNoteSheet = false
     @State private var searchText = ""
+    @Environment(\.colorScheme) var colorScheme
 
     var filteredNotes: [Note] {
         if searchText.isEmpty {
@@ -180,24 +181,27 @@ struct SubtopicPreviewView: View {
             // Search Bar
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.accentColor)
                 TextField("Search notes...", text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
+                            .foregroundColor(.accentColor)
                     }
                 }
             }
             .padding(8)
-            .background(Color(.systemGray6))
+            .background(Color(colorScheme == .dark ? .systemGray6 : .systemGray6))
             .cornerRadius(10)
             .padding([.horizontal, .top])
 
             // Grid of Notes
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                LazyVGrid(columns: [
+                    GridItem(.fixed(200), spacing: 2),
+                    GridItem(.fixed(200), spacing: 2)
+                ], spacing: 2) {
                     ForEach(filteredNotes) { note in
                         NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
                             .onAppear {
@@ -214,6 +218,9 @@ struct SubtopicPreviewView: View {
                                     }
                                 }
                             }
+                            .onDisappear {
+                                noteDisplayState.currentNote = nil
+                            }
                         ) {
                             NoteCardView(note: note)
                         }
@@ -227,55 +234,87 @@ struct SubtopicPreviewView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { isShowingNewNoteSheet = true }) {
                     Image(systemName: "plus")
+                        .foregroundColor(.accentColor)
                 }
             }
         }
         .sheet(isPresented: $isShowingNewNoteSheet) {
             NewNoteView(topic: topic, subtopic: subtopic, dataManager: dataManager)
         }
+        .onAppear {
+            noteDisplayState.currentNote = nil
+        }
     }
 }
 
 struct NoteCardView: View {
     let note: Note
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Image preview if available
-            if let attachmentUrl = note.attachment_url {
-                let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
-                if let image = UIImage(contentsOfFile: fileURL.path) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 80)
-                        .clipped()
-                        .cornerRadius(8)
+            if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
+                ZStack(alignment: .topTrailing) {
+                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrls[0])
+                    if let image = UIImage(contentsOfFile: fileURL.path) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 160, height: 124)
+                            .clipped()
+                            .cornerRadius(4)
+                    }
+                    
+                    if attachmentUrls.count > 1 {
+                        Text("\(attachmentUrls.count)")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(6)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
+                            .padding(8)
+                    }
                 }
+                .frame(width: 160, height: 124)
+            } else {
+                // Placeholder for notes without images
+                Color(colorScheme == .dark ? .systemGray6 : .systemGray6)
+                    .frame(width: 160, height: 124)
+                    .cornerRadius(4)
             }
+            
             // Note title
             Text(note.title)
                 .font(.headline)
                 .foregroundColor(.primary)
                 .lineLimit(1)
+                .frame(width: 160, alignment: .leading)
+            
             // Note preview
             Text(note.content)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .lineLimit(2)
+                .frame(width: 160, alignment: .leading)
+            
             // Date
             if let date = parseDate(note.updated_at) {
-                Text(date, style: .date)
+                Text(formatDate(date))
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
+                    .frame(width: 160, alignment: .leading)
             } else {
                 Text(note.updated_at)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
+                    .frame(width: 160, alignment: .leading)
             }
         }
+        .frame(width: 160, height: 240)
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color.clear)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
@@ -286,6 +325,12 @@ struct NoteCardView: View {
     
     private func parseDate(_ dateString: String) -> Date? {
         let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: dateString) {
+            return date
+        }
+        // Try without fractional seconds
+        isoFormatter.formatOptions = [.withInternetDateTime]
         if let date = isoFormatter.date(from: dateString) {
             return date
         }
@@ -293,6 +338,29 @@ struct NoteCardView: View {
         let fallbackFormatter = DateFormatter()
         fallbackFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return fallbackFormatter.date(from: dateString)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        if calendar.isDateInToday(date) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            return "Today at " + formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            return "Yesterday at " + formatter.string(from: date)
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, yyyy"
+            return formatter.string(from: date)
+        }
     }
 }
 
@@ -599,6 +667,11 @@ struct TopicRow: View {
                 HighlightedText(text: topic.title, searchText: searchText)
                     .font(.headline)
                 Spacer()
+                Text("\(topic.subtopics.count)")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.appTextSecondary)
+                    .padding(.trailing, 8)
             }
             .padding(.vertical, 6)
             .contextMenu {
@@ -675,6 +748,11 @@ struct SubtopicRow: View {
                     HighlightedText(text: subtopic.title, searchText: searchText)
                         .font(.subheadline)
                     Spacer()
+                    Text("\(subtopic.notes.count)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.appTextSecondary)
+                        .padding(.trailing, 8)
                 }
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
@@ -757,8 +835,8 @@ struct NoteDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if let attachmentUrl = note.attachment_url {
-                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrl)
+                if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
+                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrls[0])
                     if let image = UIImage(contentsOfFile: fileURL.path) {
                         Image(uiImage: image)
                             .resizable()
@@ -791,11 +869,31 @@ struct NewTopicView: View {
     @State private var title = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var isQuickNote = false
+    @State private var subtopicTitle = ""
+    @State private var noteTitle = ""
+    @State private var noteContent = ""
+    @EnvironmentObject var noteDisplayState: NoteDisplayState
     
     var body: some View {
         NavigationView {
             Form {
-                TextField("Topic Title", text: $title)
+                Section {
+                    TextField("Topic Title", text: $title)
+                }
+                
+                Section {
+                    Toggle("Create Quick Note", isOn: $isQuickNote)
+                }
+                
+                if isQuickNote {
+                    Section(header: Text("Quick Note Details")) {
+                        TextField("Subtopic Title", text: $subtopicTitle)
+                        TextField("Note Title", text: $noteTitle)
+                        TextEditor(text: $noteContent)
+                            .frame(height: 100)
+                    }
+                }
             }
             .navigationTitle("New Topic")
             .navigationBarItems(
@@ -807,7 +905,7 @@ struct NewTopicView: View {
                         await saveTopic()
                     }
                 }
-                .disabled(title.isEmpty || isSaving)
+                .disabled(title.isEmpty || isSaving || (isQuickNote && (subtopicTitle.isEmpty || noteTitle.isEmpty)))
             )
             .alert("Error", isPresented: .init(
                 get: { errorMessage != nil },
@@ -823,9 +921,28 @@ struct NewTopicView: View {
     private func saveTopic() async {
         isSaving = true
         do {
-            _ = try await dataManager.addTopic(title: title)
-            await MainActor.run {
-                dismiss()
+            let newTopic = try await dataManager.addTopic(title: title)
+            
+            if isQuickNote {
+                let newSubtopic = try await dataManager.addSubtopic(to: newTopic, title: subtopicTitle)
+                let newNote = try await dataManager.addNote(
+                    to: newSubtopic,
+                    in: newTopic,
+                    title: noteTitle,
+                    content: noteContent
+                )
+                
+                await MainActor.run {
+                    noteDisplayState.currentTopic = newTopic
+                    noteDisplayState.currentSubtopic = newSubtopic
+                    noteDisplayState.currentNote = newNote
+                    noteDisplayState.isShowingNote = true
+                    dismiss()
+                }
+            } else {
+                await MainActor.run {
+                    dismiss()
+                }
             }
         } catch {
             await MainActor.run {

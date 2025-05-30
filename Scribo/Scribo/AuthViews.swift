@@ -82,7 +82,7 @@ struct LoginMethodView: View {
                             
                             // Social Login Buttons
                             VStack(spacing: 16) {
-                                // Apple Sign In
+                                /* Apple Sign In
                                 Button(action: {
                                     Task {
                                         await authManager.signInWithApple()
@@ -101,7 +101,7 @@ struct LoginMethodView: View {
                                     .cornerRadius(12)
                                     .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
                                 }
-                                
+                                */
                                 // Google Sign In
                                 Button(action: {
                                     Task {
@@ -181,7 +181,10 @@ struct LoginMethodView: View {
                                 
                                 HStack(spacing: 16) {
                                     Button(action: {
-                                        // Handle Terms of Use
+                                        // Present Terms of Use
+                                        let termsView = TermsOfUse()
+                                        let hostingController = UIHostingController(rootView: termsView)
+                                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                                     }) {
                                         Text("Terms of Use")
                                             .font(.system(size: 13))
@@ -193,7 +196,10 @@ struct LoginMethodView: View {
                                         .foregroundColor(.white.opacity(0.5))
                                     
                                     Button(action: {
-                                        // Handle Privacy Policy
+                                        // Present Privacy Policy
+                                        let privacyView = PrivacyPolicy()
+                                        let hostingController = UIHostingController(rootView: privacyView)
+                                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                                     }) {
                                         Text("Privacy Policy")
                                             .font(.system(size: 13))
@@ -228,7 +234,7 @@ struct LoginView: View {
             if showSignUp {
                 SignUpView(authManager: authManager, showSignUp: $showSignUp)
             } else if showForgotPassword {
-                ForgotPasswordView(authManager: authManager)
+                ForgotPasswordView(authManager: authManager, showForgotPassword: $showForgotPassword)
             } else {
                 ZStack {
                     Color.black
@@ -257,9 +263,9 @@ struct LoginView: View {
                         Image("ScriboIcon")
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 60, height: 60)
+                            .frame(width: 50, height: 50)
                             .padding(.top, 40)
-                            .padding(.bottom, 24)
+                            .padding(.bottom, 84)
                         
                         // Welcome Text
                         Text("Welcome back")
@@ -402,7 +408,10 @@ struct LoginView: View {
                         // Terms and Privacy
                         HStack(spacing: 16) {
                             Button(action: {
-                                // Handle Terms of Use
+                                // Present Terms of Use
+                                let termsView = TermsOfUse()
+                                let hostingController = UIHostingController(rootView: termsView)
+                                UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                             }) {
                                 Text("Terms of Use")
                                     .font(.system(size: 15))
@@ -412,7 +421,10 @@ struct LoginView: View {
                                 .font(.system(size: 15))
                                 .foregroundColor(.white)
                             Button(action: {
-                                // Handle Privacy Policy
+                                // Present Privacy Policy
+                                let privacyView = PrivacyPolicy()
+                                let hostingController = UIHostingController(rootView: privacyView)
+                                UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                             }) {
                                 Text("Privacy Policy")
                                     .font(.system(size: 15))
@@ -480,9 +492,9 @@ struct SignUpView: View {
                 Image("ScriboIcon")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)
+                    .frame(width: 50, height: 50)
                     .padding(.top, 40)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 84)
                 
                 // Welcome Text
                 Text("Create Account")
@@ -664,7 +676,10 @@ struct SignUpView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Handle Terms of Use
+                        // Present Terms of Use
+                        let termsView = TermsOfUse()
+                        let hostingController = UIHostingController(rootView: termsView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -674,7 +689,10 @@ struct SignUpView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Handle Privacy Policy
+                        // Present Privacy Policy
+                        let privacyView = PrivacyPolicy()
+                        let hostingController = UIHostingController(rootView: privacyView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))
@@ -705,7 +723,7 @@ struct ForgotPasswordView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
-    @State private var showLogin = false
+    @Binding var showForgotPassword: Bool
     
     var body: some View {
         ZStack {
@@ -716,7 +734,7 @@ struct ForgotPasswordView: View {
                 // Back Button
                 HStack {
                     Button(action: {
-                        showLogin = true
+                        showForgotPassword = false
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: "chevron.left")
@@ -735,9 +753,9 @@ struct ForgotPasswordView: View {
                 Image("ScriboIcon")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)
+                    .frame(width: 50, height: 50)
                     .padding(.top, 40)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 84)
                 
                 // Welcome Text
                 Text("Reset Password")
@@ -804,7 +822,7 @@ struct ForgotPasswordView: View {
                 
                 // Back to Login
                 Button(action: {
-                    showLogin = true
+                    showForgotPassword = false
                 }) {
                     Text("Back to Login")
                         .font(.system(size: 15))
@@ -817,7 +835,10 @@ struct ForgotPasswordView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Handle Terms of Use
+                        // Present Terms of Use
+                        let termsView = TermsOfUse()
+                        let hostingController = UIHostingController(rootView: termsView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -827,7 +848,10 @@ struct ForgotPasswordView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Handle Privacy Policy
+                        // Present Privacy Policy
+                        let privacyView = PrivacyPolicy()
+                        let hostingController = UIHostingController(rootView: privacyView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))
@@ -844,7 +868,7 @@ struct ForgotPasswordView: View {
         }
         .alert("Success", isPresented: $showSuccess) {
             Button("OK", role: .cancel) {
-                showLogin = true
+                showForgotPassword = false
             }
         } message: {
             Text("Password reset link has been sent to your email.")
@@ -879,9 +903,9 @@ struct NewPasswordView: View {
                 Image("ScriboIcon")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 50, height: 50)
                     .padding(.top, 40)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 84)
                 
                 // Welcome Text
                 Text("Set New Password")
@@ -1000,7 +1024,10 @@ struct NewPasswordView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Handle Terms of Use
+                        // Present Terms of Use
+                        let termsView = TermsOfUse()
+                        let hostingController = UIHostingController(rootView: termsView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -1010,7 +1037,10 @@ struct NewPasswordView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Handle Privacy Policy
+                        // Present Privacy Policy
+                        let privacyView = PrivacyPolicy()
+                        let hostingController = UIHostingController(rootView: privacyView)
+                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))

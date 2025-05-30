@@ -223,20 +223,17 @@ struct ChatView: View {
     @State private var isTextFieldFocused: Bool = false
     @State private var isAttachmentMenuShowing: Bool = false
     @State private var showActionCards: Bool = true
-    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedPhotos: [PhotosPickerItem] = []
+    @State private var selectedImages: [UIImage] = []
     @State private var selectedDocument: URL?
     @State private var isDocumentPickerPresented = false
-    @State private var selectedImage: UIImage?
-    @FocusState private var isFocused: Bool
-    @State private var animatedText = ""
-    @State private var hasAnimatedText = false
-    @StateObject private var dataManager = DataManager()
-    @StateObject private var chatManager = ChatManager()
     @State private var isProcessingOCR: Bool = false
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
     @AppStorage("isDarkMode") private var isDarkMode = false
     @Environment(\.colorScheme) var colorScheme
+    @StateObject private var chatManager = ChatManager()
+    @StateObject private var dataManager = DataManager()
     @State private var classificationService = TextClassificationService(
         //serverURL: ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder",
         //apiKey: ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
@@ -245,6 +242,10 @@ struct ChatView: View {
     )
     @State private var showPhotoLibraryPermissionAlert = false
     @State private var photoLibraryPermissionDenied = false
+    @State private var isShowing = false
+    @FocusState private var isFocused: Bool
+    @State private var animatedText = ""
+    @State private var hasAnimatedText = false
     
     let welcomeMessage = "Hello! What can I help you with?"
     
@@ -273,68 +274,20 @@ struct ChatView: View {
                 }
             }
         }
-        .onChange(of: selectedPhoto) { oldValue, newValue in
-            print("📱 ChatView: selectedPhoto changed")
+        .onChange(of: selectedPhotos) { oldValue, newValue in
             withAnimation {
-                showActionCards = newValue == nil
+                showActionCards = newValue.isEmpty
             }
-            if let newValue {
-                print("📱 ChatView: New photo selected, attempting to load")
-                Task {
-                    do {
-                        // Try to load the image data
-                        if let data = try await newValue.loadTransferable(type: Data.self) {
-                            print("📱 ChatView: Successfully loaded image data")
-                            if let uiImage = UIImage(data: data) {
-                                print("📱 ChatView: Successfully created UIImage from data")
-                                await MainActor.run {
-                                    selectedImage = uiImage
-                                }
-                            } else {
-                                print("❌ ChatView: Failed to create UIImage from data")
-                            }
-                        } else {
-                            // If loading as Data fails, try to get the asset identifier
-                            if let identifier = newValue.itemIdentifier {
-                                print("📱 ChatView: Got asset identifier: \(identifier)")
-                                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
-                                if let asset = fetchResult.firstObject {
-                                    print("📱 ChatView: Successfully fetched asset")
-                                    
-                                    let options = PHImageRequestOptions()
-                                    options.deliveryMode = .highQualityFormat
-                                    options.isNetworkAccessAllowed = true
-                                    options.isSynchronous = true
-                                    
-                                    PHImageManager.default().requestImage(
-                                        for: asset,
-                                        targetSize: PHImageManagerMaximumSize,
-                                        contentMode: .aspectFit,
-                                        options: options
-                                    ) { image, info in
-                                        if let error = info?[PHImageErrorKey] as? Error {
-                                            print("❌ ChatView: Error fetching image: \(error.localizedDescription)")
-                                            return
-                                        }
-                                        
-                                        if let image = image {
-                                            print("📱 ChatView: Successfully loaded image from asset")
-                                            Task { @MainActor in
-                                                selectedImage = image
-                                            }
-                                        } else {
-                                            print("❌ ChatView: Failed to fetch image from asset")
-                                        }
-                                    }
-                                } else {
-                                    print("❌ ChatView: Failed to fetch asset with identifier: \(identifier)")
-                                }
-                            } else {
-                                print("❌ ChatView: No asset identifier available")
+            
+            Task {
+                for photo in newValue {
+                    if let data = try? await photo.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        await MainActor.run {
+                            if !selectedImages.contains(where: { $0.pngData() == uiImage.pngData() }) {
+                                selectedImages.append(uiImage)
                             }
                         }
-                    } catch {
-                        print("❌ ChatView: Error loading image: \(error.localizedDescription)")
                     }
                 }
             }
@@ -439,7 +392,7 @@ struct ChatView: View {
                 .multilineTextAlignment(.leading)
                 .frame(width: 200)
                 .frame(height: 50)
-                .background(Color.appCardBackground)
+                .background(Color.appAccent2)
                 .cornerRadius(13)
                 .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         }
@@ -456,8 +409,8 @@ struct ChatView: View {
     
     private var chatInputView: some View {
         VStack(spacing: 0) {
-            if let selectedPhoto = selectedPhoto {
-                photoPreviewView(selectedPhoto)
+            if let selectedPhotos = selectedPhotos.first {
+                photoPreviewView(selectedPhotos)
             }
             
             if let selectedDocument = selectedDocument {
@@ -470,21 +423,43 @@ struct ChatView: View {
     
     private func photoPreviewView(_ photo: PhotosPickerItem) -> some View {
         HStack {
-            PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                HStack {
-                    Image(systemName: "photo")
-                        .foregroundColor(.appAccent1)
-                    Text("Change Photo")
-                        .foregroundColor(.appAccent1)
+            PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 10, matching: .images) {
+                ZStack {
+                    if let firstImage = selectedImages.first {
+                        Image(uiImage: firstImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.appAccent1, lineWidth: 2)
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.appCardBackground)
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .foregroundColor(.appAccent1)
+                            )
+                    }
+                    
+                    if selectedImages.count > 1 {
+                        Text("+\(selectedImages.count - 1)")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(6)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Circle())
+                            .offset(x: 20, y: 20)
+                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.appCardBackground)
-                .cornerRadius(16)
             }
             
             Button(action: {
-                self.selectedPhoto = nil
+                selectedPhotos = []
+                selectedImages = []
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.gray)
@@ -582,15 +557,15 @@ struct ChatView: View {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.system(size: 24))
                 .foregroundColor(.appAccent1)
-                .opacity(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil ? 0.5 : 1)
+                .opacity(promptText.isEmpty && selectedPhotos.isEmpty && selectedDocument == nil ? 0.5 : 1)
         }
-        .disabled(promptText.isEmpty && selectedPhoto == nil && selectedDocument == nil)
+        .disabled(promptText.isEmpty && selectedPhotos.isEmpty && selectedDocument == nil)
     }
     
     private var attachmentMenuView: some View {
         Group {
             if isAttachmentMenuShowing {
-                AttachmentMenuView(isShowing: $isAttachmentMenuShowing, selectedPhoto: $selectedPhoto, selectedDocument: $selectedDocument, isDocumentPickerPresented: $isDocumentPickerPresented)
+                AttachmentMenuView(isShowing: $isAttachmentMenuShowing, selectedPhotos: $selectedPhotos, selectedDocument: $selectedDocument, isDocumentPickerPresented: $isDocumentPickerPresented)
             }
         }
     }
@@ -682,10 +657,9 @@ struct ChatView: View {
     }
     
     private func sendMessage() async {
-        guard !promptText.isEmpty || selectedPhoto != nil || selectedDocument != nil else { return }
+        guard !promptText.isEmpty || !selectedPhotos.isEmpty || selectedDocument != nil else { return }
         guard var currentChat = currentChat else { return }
         
-        print("📱 ChatView: Starting to send message")
         
         // Add user message
         let userMessage = ChatMessage(
@@ -719,7 +693,14 @@ struct ChatView: View {
             currentChat.messages.append(processingMessage)
             // Update chat title if it's the first message
             if currentChat.messages.count == 2 {
-                currentChat.title = promptText.prefix(30) + (promptText.count > 30 ? "..." : "")
+                if !promptText.isEmpty {
+                    // If it's a text message, use the message as title
+                    currentChat.title = promptText.prefix(30) + (promptText.count > 30 ? "..." : "")
+                } else if selectedDocument != nil {
+                    // If it's a document, use the document name
+                    currentChat.title = selectedDocument?.lastPathComponent ?? "Document"
+                }
+                // For photos, we'll set the title after classification
             }
             if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
                 chats[index] = currentChat
@@ -736,28 +717,22 @@ struct ChatView: View {
         }
         
         // Clear input
-        let currentPhoto = selectedPhoto
+        let currentPhotos = selectedPhotos
         let currentDocument = selectedDocument
         await MainActor.run {
             promptText = ""
-            selectedPhoto = nil
+            selectedPhotos = []
+            selectedImages = []
             selectedDocument = nil
         }
         
-        // Process the photo if one was selected
-        if let photo = currentPhoto {
-            print("📱 ChatView: Processing selected photo")
+        // Process the photos if any were selected
+        if !currentPhotos.isEmpty {
             do {
-                if let data = try await photo.loadTransferable(type: Data.self) {
-                    print("📱 ChatView: Successfully loaded photo data")
-                    if let uiImage = UIImage(data: data) {
-                        print("📱 ChatView: Successfully created UIImage from photo data")
-                        
-                        // Process image with OCR
-                        let recognizedText = await processImageWithOCR(uiImage)
-                        
-                        if let text = recognizedText {
-                            print("📱 ChatView: OCR extracted text: \(text)")
+                for photo in currentPhotos {
+                    if let data = try await photo.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        if let text = await processImageWithOCR(uiImage) {
                             // Classify the text
                             do {
                                 let classification = try await classificationService.classifyText(text)
@@ -765,7 +740,7 @@ struct ChatView: View {
                                 // Add the photo message with OCR results and classification
                                 let photoMessage = ChatMessage(
                                     content: """
-                                    I've extracted the text from your image and created a note for you. Redirecting you to the note...
+                                    I've extracted the text from your image and created a note titled "\(classification.note_name)" under \(classification.topic) > \(classification.subtopic). Redirecting you to the note...
                                     """,
                                     image: uiImage,
                                     document: nil,
@@ -780,8 +755,12 @@ struct ChatView: View {
                                         currentChat.messages.remove(at: index)
                                     }
                                     currentChat.messages.append(photoMessage)
-                                    if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                                        chats[index] = currentChat
+                                    // Update chat title with the classified note name
+                                    if currentChat.title == "Welcome" || currentChat.title == "Processing..." {
+                                        currentChat.title = classification.note_name
+                                        if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                            chats[index] = currentChat
+                                        }
                                     }
                                     self.currentChat = currentChat
                                 }
@@ -834,10 +813,21 @@ struct ChatView: View {
                                 let defaultClassification = TextClassificationResponse(
                                     topic: "Uncategorized",
                                     subtopic: "General",
-                                    note_name: "Note from \(Date())",
+                                    note_name: "Uncategorized Note",
                                     raw_scores: [:]
                                 )
                                 try? await createNoteFromClassification(defaultClassification)
+                                
+                                // Update chat title for uncategorized note
+                                await MainActor.run {
+                                    if currentChat.title == "Welcome" || currentChat.title == "Processing..." {
+                                        currentChat.title = "Uncategorized Note"
+                                        if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                            chats[index] = currentChat
+                                        }
+                                    }
+                                    self.currentChat = currentChat
+                                }
                             }
                         } else {
                             print("❌ ChatView: OCR failed to extract text")
@@ -899,40 +889,11 @@ struct ChatView: View {
                             print("❌ Failed to save error message: \(error.localizedDescription)")
                         }
                     }
-                } else {
-                    print("❌ ChatView: Failed to load photo data")
-                    let errorMessage = ChatMessage(
-                        content: "Failed to load the image. Please try again.",
-                        image: nil,
-                        document: nil,
-                        isUser: false,
-                        timestamp: Date(),
-                        chatId: currentChat.id
-                    )
-                    
-                    await MainActor.run {
-                        // Remove processing message
-                        if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
-                            currentChat.messages.remove(at: index)
-                        }
-                        currentChat.messages.append(errorMessage)
-                        if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                            chats[index] = currentChat
-                        }
-                        self.currentChat = currentChat
-                    }
-                    
-                    // Save message to database
-                    do {
-                        try await chatManager.addMessage(errorMessage, to: currentChat.id)
-                    } catch {
-                        print("❌ Failed to save error message: \(error.localizedDescription)")
-                    }
                 }
             } catch {
-                print("❌ ChatView: Error processing photo: \(error.localizedDescription)")
+                print("❌ ChatView: Error processing photos: \(error.localizedDescription)")
                 let errorMessage = ChatMessage(
-                    content: "Error processing the image: \(error.localizedDescription)",
+                    content: "Error processing the images: \(error.localizedDescription)",
                     image: nil,
                     document: nil,
                     isUser: false,
@@ -1036,35 +997,16 @@ struct ChatView: View {
             in: topic,
             title: classification.note_name,
             content: currentChat?.messages.last?.content ?? "",  // Use the OCR text from the last message
-            attachmentUrl: currentImageURL
+            attachmentUrls: currentImageURL != nil ? [currentImageURL!] : nil
         )
         
         // Update UI on main thread
         await MainActor.run {
-            // Add success message
-            let successMessage = ChatMessage(
-                content: "✅ Note created successfully!",
-                image: nil,
-                document: nil,
-                isUser: false,
-                timestamp: Date(),
-                chatId: currentChat?.id
-            )
-            currentChat?.messages.append(successMessage)
-            
-            // Add a small delay before showing the note
-            Task {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        // Set up note display state and show note
-                        noteDisplayState.currentNote = note
-                        noteDisplayState.currentTopic = topic
-                        noteDisplayState.currentSubtopic = subtopic
-                        noteDisplayState.isShowingNote = true
-                    }
-                }
-            }
+            noteDisplayState.currentTopic = topic
+            noteDisplayState.currentSubtopic = subtopic
+            noteDisplayState.currentNote = note
+            noteDisplayState.isShowingNote = true
+            isShowing = false
         }
     }
     
@@ -1269,5 +1211,113 @@ struct ChatListView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Attachment Menu View
+struct AttachmentMenuView: View {
+    @Binding var isShowing: Bool
+    @Binding var selectedPhotos: [PhotosPickerItem]
+    @Binding var selectedDocument: URL?
+    @Binding var isDocumentPickerPresented: Bool
+    @State private var isShowingCamera = false
+    
+    let menuItems = [
+        ("doc.fill", "Document", "Share a document"),
+        ("photo.fill", "Photos", "Share photos"),
+        ("camera.fill", "Camera", "Take a photo")
+    ]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                ForEach(menuItems, id: \.1) { item in
+                    if item.1 == "Photos" {
+                        PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 10, matching: .images) {
+                            menuItemView(item)
+                        }
+                    } else if item.1 == "Document" {
+                        Button(action: {
+                            isDocumentPickerPresented = true
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                isShowing = false
+                            }
+                        }) {
+                            menuItemView(item)
+                        }
+                    } else if item.1 == "Camera" {
+                        Button(action: {
+                            isShowingCamera = true
+                        }) {
+                            menuItemView(item)
+                        }
+                    }
+                }
+            }
+            .background(Color.appHeaderBackground)
+        }
+        .frame(height: 190)
+        .background(Color.appHeaderBackground)
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            CameraView { image in
+                if let image = image {
+                    // Save to photo library and create PhotosPickerItem
+                    PHPhotoLibrary.requestAuthorization { status in
+                        if status == .authorized {
+                            PHPhotoLibrary.shared().performChanges({
+                                let request = PHAssetCreationRequest.forAsset()
+                                if let data = image.jpegData(compressionQuality: 0.8) {
+                                    request.addResource(with: .photo, data: data, options: nil)
+                                }
+                            }) { success, error in
+                                if success {
+                                    print("📸 Camera: Image saved to photo library")
+                                    // Fetch the created asset
+                                    let fetchOptions = PHFetchOptions()
+                                    fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                                    let fetchResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+                                    if let asset = fetchResult.firstObject {
+                                        DispatchQueue.main.async {
+                                            let pickerItem = PhotosPickerItem(itemIdentifier: asset.localIdentifier)
+                                            selectedPhotos.append(pickerItem)
+                                            print("📸 Camera: PhotosPickerItem created with identifier: \(asset.localIdentifier)")
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                isShowing = false
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    print("❌ Camera: Failed to save to photo library: \(error?.localizedDescription ?? "Unknown error")")
+                                }
+                            }
+                        } else {
+                            print("❌ Camera: Photo library access denied")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func menuItemView(_ item: (String, String, String)) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: item.0)
+                .font(.system(size: 24))
+                .foregroundColor(.appAccent1)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.1)
+                    .font(.body)
+                    .foregroundColor(.appText)
+                Text(item.2)
+                    .font(.caption)
+                    .foregroundColor(.appText.opacity(0.6))
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .background(Color.appHeaderBackground)
     }
 } 
