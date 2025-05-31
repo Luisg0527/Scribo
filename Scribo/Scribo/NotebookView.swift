@@ -192,7 +192,7 @@ struct SubtopicPreviewView: View {
                 }
             }
             .padding(8)
-            .background(Color(colorScheme == .dark ? .systemGray6 : .systemGray6))
+            .background(Color.appCardBackground)    
             .cornerRadius(10)
             .padding([.horizontal, .top])
 
@@ -279,10 +279,17 @@ struct NoteCardView: View {
                 }
                 .frame(width: 160, height: 124)
             } else {
-                // Placeholder for notes without images
-                Color(colorScheme == .dark ? .systemGray6 : .systemGray6)
-                    .frame(width: 160, height: 124)
-                    .cornerRadius(4)
+                ZStack {
+                    Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
+                        .frame(width: 160, height: 124)
+                        .cornerRadius(8)
+
+                    Image(systemName: "photo.on.rectangle")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(.gray.opacity(0.6))
+                    }
             }
             
             // Note title

@@ -70,144 +70,6 @@ struct Chat: Identifiable, Codable {
     }
 }
 
-// MARK: - Chat Message Model
-struct ChatMessage: Identifiable, Equatable, Codable {
-    let id: UUID
-    let content: String
-    let image: UIImage?
-    let document: DocumentMessage?
-    let isUser: Bool
-    let timestamp: Date
-    var isProcessing: Bool = false
-    var error: String? = nil
-    var chatId: UUID?
-    var imageUrl: String?
-    var documentUrl: String?
-    var documentName: String?
-    var documentType: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case content
-        case isUser = "is_user"
-        case timestamp = "created_at"
-        case isProcessing
-        case error
-        case chatId = "chat_id"
-        case imageUrl = "image_url"
-        case documentUrl = "document_url"
-        case documentName = "document_name"
-        case documentType = "document_type"
-    }
-    
-    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.content == rhs.content &&
-        lhs.isUser == rhs.isUser &&
-        lhs.timestamp == rhs.timestamp &&
-        lhs.isProcessing == rhs.isProcessing &&
-        lhs.error == rhs.error
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        content = try container.decode(String.self, forKey: .content)
-        isUser = try container.decode(Bool.self, forKey: .isUser)
-        
-        // Decode timestamp from ISO8601 string
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let timestampString = try container.decode(String.self, forKey: .timestamp)
-        guard let timestamp = dateFormatter.date(from: timestampString) else {
-            throw DecodingError.dataCorruptedError(forKey: .timestamp, in: container, debugDescription: "Date string does not match format")
-        }
-        self.timestamp = timestamp
-        
-        isProcessing = try container.decodeIfPresent(Bool.self, forKey: .isProcessing) ?? false
-        error = try container.decodeIfPresent(String.self, forKey: .error)
-        chatId = try container.decodeIfPresent(UUID.self, forKey: .chatId)
-        imageUrl = try container.decodeIfPresent(String.self, forKey: .imageUrl)
-        documentUrl = try container.decodeIfPresent(String.self, forKey: .documentUrl)
-        documentName = try container.decodeIfPresent(String.self, forKey: .documentName)
-        documentType = try container.decodeIfPresent(String.self, forKey: .documentType)
-        
-        // Load image if URL exists
-        if let imageUrl = imageUrl {
-            let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(imageUrl)
-            if let data = try? Data(contentsOf: fileURL),
-               let uiImage = UIImage(data: data) {
-                image = uiImage
-            } else {
-                image = nil
-            }
-        } else {
-            image = nil
-        }
-        
-        // Create document message if URL exists
-        if let documentUrl = documentUrl,
-           let url = URL(string: documentUrl),
-           let documentName = documentName,
-           let documentType = documentType {
-            document = DocumentMessage(url: url, name: documentName, type: documentType)
-        } else {
-            document = nil
-        }
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(content, forKey: .content)
-        try container.encode(isUser, forKey: .isUser)
-        
-        // Encode timestamp as ISO8601 string
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        try container.encode(dateFormatter.string(from: timestamp), forKey: .timestamp)
-        
-        try container.encode(isProcessing, forKey: .isProcessing)
-        try container.encodeIfPresent(error, forKey: .error)
-        try container.encodeIfPresent(chatId, forKey: .chatId)
-        try container.encodeIfPresent(imageUrl, forKey: .imageUrl)
-        try container.encodeIfPresent(documentUrl, forKey: .documentUrl)
-        try container.encodeIfPresent(documentName, forKey: .documentName)
-        try container.encodeIfPresent(documentType, forKey: .documentType)
-    }
-    
-    init(content: String, image: UIImage? = nil, document: DocumentMessage? = nil, isUser: Bool, timestamp: Date, isProcessing: Bool = false, error: String? = nil, chatId: UUID? = nil) {
-        self.id = UUID()
-        self.content = content
-        self.image = image
-        self.document = document
-        self.isUser = isUser
-        self.timestamp = timestamp
-        self.isProcessing = isProcessing
-        self.error = error
-        self.chatId = chatId
-        self.documentName = document?.name
-        self.documentType = document?.type
-        
-        // Save image if provided
-        if let image = image {
-            let fileName = "\(id).jpg"
-            let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(fileName)
-            if let data = image.jpegData(compressionQuality: 0.8) {
-                try? data.write(to: fileURL)
-                self.imageUrl = fileName
-            } else {
-                self.imageUrl = nil
-            }
-        } else {
-            self.imageUrl = nil
-        }
-        
-        // Set document URL if provided
-        self.documentUrl = document?.url.absoluteString
-    }
-}
-
 struct DocumentMessage: Identifiable, Codable {
     let id = UUID()
     let url: URL
@@ -234,6 +96,7 @@ struct ChatView: View {
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var chatManager = ChatManager()
     @StateObject private var dataManager = DataManager()
+    @StateObject private var alertManager = AlertManager()
     @State private var classificationService = TextClassificationService(
         //serverURL: ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "Placeholder",
         //apiKey: ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "Placeholder"
@@ -281,13 +144,22 @@ struct ChatView: View {
             
             Task {
                 for photo in newValue {
-                    if let data = try? await photo.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        await MainActor.run {
-                            if !selectedImages.contains(where: { $0.pngData() == uiImage.pngData() }) {
-                                selectedImages.append(uiImage)
+                    do {
+                        if let data = try await photo.loadTransferable(type: Data.self) {
+                            if let uiImage = UIImage(data: data) {
+                                await MainActor.run {
+                                    if !selectedImages.contains(where: { $0.pngData() == uiImage.pngData() }) {
+                                        selectedImages.append(uiImage)
+                                    }
+                                }
+                            } else {
+                                print("❌ Failed to create UIImage from data")
                             }
+                        } else {
+                            print("❌ Failed to load photo data")
                         }
+                    } catch {
+                        print("❌ Error loading photo: \(error.localizedDescription)")
                     }
                 }
             }
@@ -323,6 +195,9 @@ struct ChatView: View {
                     }
                 }
                 .padding(.vertical)
+            }
+            .refreshable {
+                await reloadChat()
             }
             .onChange(of: currentChat?.messages) { _, _ in
                 withAnimation {
@@ -377,6 +252,7 @@ struct ChatView: View {
         }
         .frame(height: 70)
         .background(Color.clear)
+        .padding(.bottom, 20)
     }
     
     private func actionCardButton(_ action: String) -> some View {
@@ -440,8 +316,8 @@ struct ChatView: View {
                             .fill(Color.appCardBackground)
                             .frame(width: 60, height: 60)
                             .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.appAccent1)
+                                ProgressView()
+                                    .frame(width: 30, height: 30)
                             )
                     }
                     
@@ -660,7 +536,6 @@ struct ChatView: View {
         guard !promptText.isEmpty || !selectedPhotos.isEmpty || selectedDocument != nil else { return }
         guard var currentChat = currentChat else { return }
         
-        
         // Add user message
         let userMessage = ChatMessage(
             content: promptText,
@@ -691,17 +566,6 @@ struct ChatView: View {
         await MainActor.run {
             currentChat.messages.append(userMessage)
             currentChat.messages.append(processingMessage)
-            // Update chat title if it's the first message
-            if currentChat.messages.count == 2 {
-                if !promptText.isEmpty {
-                    // If it's a text message, use the message as title
-                    currentChat.title = promptText.prefix(30) + (promptText.count > 30 ? "..." : "")
-                } else if selectedDocument != nil {
-                    // If it's a document, use the document name
-                    currentChat.title = selectedDocument?.lastPathComponent ?? "Document"
-                }
-                // For photos, we'll set the title after classification
-            }
             if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
                 chats[index] = currentChat
             }
@@ -730,139 +594,117 @@ struct ChatView: View {
         if !currentPhotos.isEmpty {
             do {
                 for photo in currentPhotos {
-                    if let data = try await photo.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        if let text = await processImageWithOCR(uiImage) {
-                            // Classify the text
-                            do {
-                                let classification = try await classificationService.classifyText(text)
-                                
-                                // Add the photo message with OCR results and classification
-                                let photoMessage = ChatMessage(
-                                    content: """
-                                    I've extracted the text from your image and created a note titled "\(classification.note_name)" under \(classification.topic) > \(classification.subtopic). Redirecting you to the note...
-                                    """,
-                                    image: uiImage,
-                                    document: nil,
-                                    isUser: false,
-                                    timestamp: Date(),
-                                    chatId: currentChat.id
-                                )
-                                
-                                await MainActor.run {
-                                    // Remove processing message
-                                    if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
-                                        currentChat.messages.remove(at: index)
-                                    }
-                                    currentChat.messages.append(photoMessage)
-                                    // Update chat title with the classified note name
-                                    if currentChat.title == "Welcome" || currentChat.title == "Processing..." {
-                                        currentChat.title = classification.note_name
-                                        if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                                            chats[index] = currentChat
+                    do {
+                        if let data = try await photo.loadTransferable(type: Data.self) {
+                            // Save image to photo library and get reference
+                            let fileName = "\(UUID().uuidString).jpg"
+                            let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
+                            try data.write(to: fileURL)
+                            
+                            if let uiImage = UIImage(data: data) {
+                                if let text = await processImageWithOCR(uiImage) {
+                                    // Classify the text
+                                    do {
+                                        let classification = try await classificationService.classifyText(text)
+                                        
+                                        // Add the photo message with OCR results and classification
+                                        let photoMessage = ChatMessage(
+                                            content: "I've created a note titled \"\(classification.note_name)\" under \(classification.topic) > \(classification.subtopic). Redirecting you to the note...",
+                                            image: uiImage,
+                                            document: nil,
+                                            isUser: false,
+                                            timestamp: Date(),
+                                            chatId: currentChat.id
+                                        )
+                                        
+                                        await MainActor.run {
+                                            // Remove processing message
+                                            if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
+                                                currentChat.messages.remove(at: index)
+                                            }
+                                            currentChat.messages.append(photoMessage)
+                                            // Update chat title with the classified note name
+                                            if currentChat.title == "Welcome" || currentChat.title == "Processing..." {
+                                                currentChat.title = classification.note_name
+                                                if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                                    chats[index] = currentChat
+                                                }
+                                            }
+                                            self.currentChat = currentChat
                                         }
+                                        
+                                        // Save message to database
+                                        try await chatManager.addMessage(photoMessage, to: currentChat.id)
+                                        
+                                        // Create the note
+                                        try await createNoteFromClassification(classification)
+                                    } catch {
+                                        print("❌ ChatView: Classification error: \(error.localizedDescription)")
+                                        let photoMessage = ChatMessage(
+                                            content: "I've extracted text from your image but couldn't automatically categorize it. You can manually organize it later.",
+                                            image: uiImage,
+                                            document: nil,
+                                            isUser: false,
+                                            timestamp: Date(),
+                                            chatId: currentChat.id
+                                        )
+                                        
+                                        await MainActor.run {
+                                            // Remove processing message
+                                            if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
+                                                currentChat.messages.remove(at: index)
+                                            }
+                                            currentChat.messages.append(photoMessage)
+                                            if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                                                chats[index] = currentChat
+                                            }
+                                            self.currentChat = currentChat
+                                        }
+                                        
+                                        // Save message to database
+                                        try await chatManager.addMessage(photoMessage, to: currentChat.id)
+                                        
+                                        // Create a default note even if classification fails
+                                        let defaultClassification = TextClassificationResponse(
+                                            topic: "Uncategorized",
+                                            subtopic: "General",
+                                            note_name: "Uncategorized Note",
+                                            raw_scores: [:]
+                                        )
+                                        try? await createNoteFromClassification(defaultClassification)
                                     }
-                                    self.currentChat = currentChat
-                                }
-                                
-                                // Save message to database
-                                do {
-                                    try await chatManager.addMessage(photoMessage, to: currentChat.id)
-                                } catch {
-                                    print("❌ Failed to save photo message: \(error.localizedDescription)")
-                                }
-                                
-                                // Create the note
-                                try await createNoteFromClassification(classification)
-                            } catch {
-                                print("❌ ChatView: Classification error: \(error.localizedDescription)")
-                                let photoMessage = ChatMessage(
-                                    content: """
-                                    Extracted text:
-                                    \(text)
+                                } else {
+                                    print("❌ ChatView: OCR failed to extract text")
+                                    let photoMessage = ChatMessage(
+                                        content: "I couldn't extract any text from this image. Please try uploading a clearer image or describe what you'd like to do.",
+                                        image: uiImage,
+                                        document: nil,
+                                        isUser: false,
+                                        timestamp: Date(),
+                                        chatId: currentChat.id
+                                    )
                                     
-                                    Note: The text was extracted but couldn't be automatically categorized. You can manually organize it later.
-                                    """,
-                                    image: uiImage,
-                                    document: nil,
-                                    isUser: false,
-                                    timestamp: Date(),
-                                    chatId: currentChat.id
-                                )
-                                
-                                await MainActor.run {
-                                    // Remove processing message
-                                    if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
-                                        currentChat.messages.remove(at: index)
-                                    }
-                                    currentChat.messages.append(photoMessage)
-                                    if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                                        chats[index] = currentChat
-                                    }
-                                    self.currentChat = currentChat
-                                }
-                                
-                                // Save message to database
-                                do {
-                                    try await chatManager.addMessage(photoMessage, to: currentChat.id)
-                                } catch {
-                                    print("❌ Failed to save photo message: \(error.localizedDescription)")
-                                }
-                                
-                                // Create a default note even if classification fails
-                                let defaultClassification = TextClassificationResponse(
-                                    topic: "Uncategorized",
-                                    subtopic: "General",
-                                    note_name: "Uncategorized Note",
-                                    raw_scores: [:]
-                                )
-                                try? await createNoteFromClassification(defaultClassification)
-                                
-                                // Update chat title for uncategorized note
-                                await MainActor.run {
-                                    if currentChat.title == "Welcome" || currentChat.title == "Processing..." {
-                                        currentChat.title = "Uncategorized Note"
+                                    await MainActor.run {
+                                        // Remove processing message
+                                        if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
+                                            currentChat.messages.remove(at: index)
+                                        }
+                                        currentChat.messages.append(photoMessage)
                                         if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
                                             chats[index] = currentChat
                                         }
+                                        self.currentChat = currentChat
                                     }
-                                    self.currentChat = currentChat
+                                    
+                                    // Save message to database
+                                    try await chatManager.addMessage(photoMessage, to: currentChat.id)
                                 }
-                            }
-                        } else {
-                            print("❌ ChatView: OCR failed to extract text")
-                            let photoMessage = ChatMessage(
-                                content: "No text could be extracted from this image. Please describe the image content.",
-                                image: uiImage,
-                                document: nil,
-                                isUser: false,
-                                timestamp: Date(),
-                                chatId: currentChat.id
-                            )
-                            
-                            await MainActor.run {
-                                // Remove processing message
-                                if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
-                                    currentChat.messages.remove(at: index)
-                                }
-                                currentChat.messages.append(photoMessage)
-                                if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                                    chats[index] = currentChat
-                                }
-                                self.currentChat = currentChat
-                            }
-                            
-                            // Save message to database
-                            do {
-                                try await chatManager.addMessage(photoMessage, to: currentChat.id)
-                            } catch {
-                                print("❌ Failed to save photo message: \(error.localizedDescription)")
                             }
                         }
-                    } else {
-                        print("❌ ChatView: Failed to create UIImage from photo data")
+                    } catch {
+                        print("❌ ChatView: Failed to process photo: \(error.localizedDescription)")
                         let errorMessage = ChatMessage(
-                            content: "Failed to process the image. Please try again.",
+                            content: "Failed to process the image. Please try again with a different image.",
                             image: nil,
                             document: nil,
                             isUser: false,
@@ -882,48 +724,17 @@ struct ChatView: View {
                             self.currentChat = currentChat
                         }
                         
-                        // Save message to database
-                        do {
-                            try await chatManager.addMessage(errorMessage, to: currentChat.id)
-                        } catch {
-                            print("❌ Failed to save error message: \(error.localizedDescription)")
-                        }
+                        // Save error message to database
+                        try? await chatManager.addMessage(errorMessage, to: currentChat.id)
                     }
                 }
             } catch {
-                print("❌ ChatView: Error processing photos: \(error.localizedDescription)")
-                let errorMessage = ChatMessage(
-                    content: "Error processing the images: \(error.localizedDescription)",
-                    image: nil,
-                    document: nil,
-                    isUser: false,
-                    timestamp: Date(),
-                    chatId: currentChat.id
-                )
-                
-                await MainActor.run {
-                    // Remove processing message
-                    if let index = currentChat.messages.lastIndex(where: { $0.isProcessing }) {
-                        currentChat.messages.remove(at: index)
-                    }
-                    currentChat.messages.append(errorMessage)
-                    if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
-                        chats[index] = currentChat
-                    }
-                    self.currentChat = currentChat
-                }
-                
-                // Save message to database
-                do {
-                    try await chatManager.addMessage(errorMessage, to: currentChat.id)
-                } catch {
-                    print("❌ Failed to save error message: \(error.localizedDescription)")
-                }
+                print("❌ ChatView: Failed to process photos: \(error.localizedDescription)")
             }
         } else if let document = currentDocument {
             // Handle document
             let documentMessage = ChatMessage(
-                content: "I've received your document: \(document.lastPathComponent)",
+                content: "I've received your document: \(document.lastPathComponent). I'll help you organize it.",
                 image: nil,
                 document: DocumentMessage(url: document, name: document.lastPathComponent, type: document.pathExtension),
                 isUser: false,
@@ -947,10 +758,9 @@ struct ChatView: View {
                 print("❌ Failed to save document message: \(error.localizedDescription)")
             }
         } else {
-            // Simulate AI response for text-only messages
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            // Handle text-only messages
             let aiResponse = ChatMessage(
-                content: "I understand you want to \(userMessage.content). I'll help you organize this content into appropriate topics and notes.",
+                content: "To help you organize your content, you can:\n\n1. Upload an image or document to automatically categorize it\n2. Use the action cards below to perform specific tasks\n3. Type your request and I'll guide you through the process",
                 image: nil,
                 document: nil,
                 isUser: false,
@@ -1022,6 +832,24 @@ struct ChatView: View {
             } else {
                 timer.invalidate()
                 hasAnimatedText = true
+            }
+        }
+    }
+    
+    private func reloadChat() async {
+        guard let currentChat = currentChat else { return }
+        do {
+            let updatedChat = try await chatManager.getChat(currentChat.id)
+            await MainActor.run {
+                if let index = chats.firstIndex(where: { $0.id == currentChat.id }) {
+                    chats[index] = updatedChat
+                }
+                self.currentChat = updatedChat
+            }
+        } catch {
+            print("❌ Failed to reload chat: \(error.localizedDescription)")
+            await MainActor.run {
+                alertManager.showError(AppError.dataError("Failed to reload chat: \(error.localizedDescription)"))
             }
         }
     }

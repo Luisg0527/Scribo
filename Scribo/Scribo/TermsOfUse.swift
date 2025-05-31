@@ -8,56 +8,66 @@ struct TermsOfUse: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .padding(.bottom)
-                
+
                 Group {
                     Text("Last Updated: \(Date().formatted(date: .long, time: .omitted))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    
+
                     Text("1. Acceptance of Terms")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("By accessing and using Scribo, you agree to be bound by these Terms of Use. If you do not agree to these terms, please do not use the application.")
-                    
-                    Text("2. User Accounts")
+                    Text("By using Scribo, you agree to these Terms of Use. If you do not agree, please do not use the app.")
+
+                    Text("2. Eligibility")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("• You must be at least 13 years old to use Scribo\n• You are responsible for maintaining the confidentiality of your account\n• You agree to provide accurate and complete information when creating your account\n• You are responsible for all activities that occur under your account")
-                    
-                    Text("3. User Content")
+                    Text("You must be at least 13 years old to use Scribo.")
+
+                    Text("3. User Accounts")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("• You retain ownership of the content you create\n• You are responsible for the content you create and share\n• You must not create content that is illegal, harmful, or violates others' rights\n• We reserve the right to remove content that violates these terms")
-                    
-                    Text("4. Prohibited Activities")
+                    Text("• You are responsible for your account's security and activity.\n• You agree to provide accurate information.\n• Do not share your credentials.")
+
+                    Text("4. User Content")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("You agree not to:\n• Use the app for any illegal purpose\n• Attempt to gain unauthorized access\n• Interfere with the app's functionality\n• Share your account credentials\n• Use automated systems or bots")
-                    
-                    Text("5. Intellectual Property")
+                    Text("• You retain full ownership of your notes and photos.\n• You are responsible for your content.\n• Do not upload illegal, harmful, or infringing content.\n• We may remove content that violates these terms.")
+
+                    Text("5. Prohibited Activities")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("• The app and its original content are owned by Scribo\n• You may not copy, modify, or distribute the app without permission\n• Your content remains your property")
-                    
-                    Text("6. Termination")
+                    Text("You agree not to:\n• Use Scribo for illegal purposes\n• Access unauthorized parts of the system\n• Interfere with app functionality\n• Use bots or automation")
+
+                    Text("6. Intellectual Property")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("We reserve the right to terminate or suspend your account at any time for violations of these terms or for any other reason at our discretion.")
-                    
-                    Text("7. Disclaimer")
+                    Text("All content and code in Scribo is owned by the developer. You may not copy, modify, or distribute the app without permission.")
+
+                    Text("7. Termination")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("The app is provided 'as is' without any warranties. We are not responsible for any loss of data or other damages that may occur from using the app.")
-                    
-                    Text("8. Changes to Terms")
+                    Text("We may suspend or terminate your access at any time if you violate these terms.")
+
+                    Text("8. Disclaimers")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("We reserve the right to modify these terms at any time. We will notify users of any material changes.")
-                    
-                    Text("Contact")
+                    Text("Scribo is provided 'as is'. We do not guarantee error-free service or data loss protection.")
+
+                    Text("9. Changes to Terms")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("If you have any questions about these Terms of Use, please contact us at:\n[Your Contact Information]")
+                    Text("We may update these terms at any time. Continued use of the app means you accept the new terms.")
+
+                    Text("10. Governing Law")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("These terms are governed by the laws of Mexico.")
+
+                    Text("Contact Us")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("For any questions about these Terms of Use, contact us at:\nsantiparedes738@gmail.com")
                 }
                 .padding(.horizontal)
             }
@@ -65,7 +75,3 @@ struct TermsOfUse: View {
         }
     }
 }
-
-#Preview {
-    TermsOfUse()
-} 

@@ -383,7 +383,7 @@ struct SidebarView: View {
                                 }
                             }
                             
-                            ForEach(groupedChats.keys.sorted(), id: \.self) { dateGroup in
+                            ForEach(groupedChats.keys.sorted().reversed(), id: \.self) { dateGroup in
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text(dateGroup)
                                         .font(.subheadline)
@@ -1012,7 +1012,7 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
-            // Handle deep link for password reset
+            // Handle deep link for password reset and OAuth
             print("🔗 Received deep link: \(url)")
             if url.scheme == "scribo" {
                 if url.host == "reset-password" {
@@ -1027,6 +1027,11 @@ struct ContentView: View {
                     }
                 } else {
                     print("❌ Invalid URL host: \(url.host ?? "nil")")
+                }
+            } else if url.absoluteString.contains("supabase.co/auth/v1/callback") {
+                print("✅ Valid Supabase callback URL detected")
+                Task {
+                    await authManager.checkSession()
                 }
             } else {
                 print("❌ Invalid URL scheme: \(url.scheme ?? "nil")")
@@ -1253,6 +1258,20 @@ struct ProfileSheetView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.appAccent1)
                         }
+                        .onChange(of: selectedItem) { oldValue, newValue in
+                            Task {
+                                if let data = try? await newValue?.loadTransferable(type: Data.self),
+                                   let image = UIImage(data: data) {
+                                    await MainActor.run {
+                                        avatarImage = image
+                                        // Automatically save the profile when image changes
+                                        Task {
+                                            await saveProfile()
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -1296,10 +1315,7 @@ struct ProfileSheetView: View {
                 }
                 
                 Section(header: Text("Suggestions")) {
-                    TextField("Your feedback or feature request", text: $feedbackText)
-                    Button(action: {
-                        // Handle feedback submission
-                    }) {
+                    NavigationLink(destination: FeedbackView()) {
                         Label("Submit Feedback", systemImage: "paperplane")
                     }
                 }

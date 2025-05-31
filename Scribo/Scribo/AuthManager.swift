@@ -8,6 +8,7 @@ private struct UserInsertData: Encodable {
     let full_name: String
     let avatar_url: String?
     let created_at: String
+    let auth_id: String
 }
 
 class AuthManager: ObservableObject {
@@ -55,19 +56,55 @@ class AuthManager: ObservableObject {
     func checkSession() async {
         do {
             let session = try await supabase.auth.session
+            print("🔑 Session user ID: \(session.user.id)")
             isAuthenticated = true
             
             // Get user profile from users table
-            let response = try await supabase
-                .from("users")
-                .select()
-                .eq("id", value: session.user.id)
-                .single()
-                .execute()
-            
-            let decoder = JSONDecoder()
-            currentUser = try decoder.decode(User.self, from: response.data)
+            print("🔍 Fetching user profile with ID: \(session.user.id)")
+            do {
+                let response = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("auth_id", value: session.user.id)
+                    .single()
+                    .execute()
+                
+                print("📦 Raw response data: \(String(data: response.data, encoding: .utf8) ?? "none")")
+                let decoder = JSONDecoder()
+                currentUser = try decoder.decode(User.self, from: response.data)
+                print("✅ Successfully decoded user profile")
+            } catch {
+                print("⚠️ User profile not found, creating new profile...")
+                // Create new user profile
+                let now = ISO8601DateFormatter().string(from: Date())
+                let userData = UserInsertData(
+                    id: UUID().uuidString,  // Generate new UUID for id
+                    full_name: "",
+                    avatar_url: nil,
+                    created_at: now,
+                    auth_id: session.user.id.uuidString  // Use auth user ID for auth_id
+                )
+                
+                print("📝 Creating user profile with data: \(userData)")
+                try await supabase
+                    .from("users")
+                    .insert(userData)
+                    .execute()
+                
+                // Fetch the newly created profile
+                let userResponse = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("auth_id", value: session.user.id)
+                    .single()
+                    .execute()
+                
+                let decoder = JSONDecoder()
+                currentUser = try decoder.decode(User.self, from: userResponse.data)
+                print("✅ Successfully created and decoded user profile")
+            }
         } catch {
+            print("❌ Error in checkSession: \(error.localizedDescription)")
             isAuthenticated = false
             currentUser = nil
             self.error = error.localizedDescription
@@ -81,19 +118,55 @@ class AuthManager: ObservableObject {
                 email: email,
                 password: password
             )
+            print("🔑 Sign in successful, user ID: \(response.user.id)")
             isAuthenticated = true
             
             // Get user profile from users table
-            let userResponse = try await supabase
-                .from("users")
-                .select()
-                .eq("id", value: response.user.id)
-                .single()
-                .execute()
-            
-            let decoder = JSONDecoder()
-            currentUser = try decoder.decode(User.self, from: userResponse.data)
+            print("🔍 Fetching user profile with ID: \(response.user.id)")
+            do {
+                let userResponse = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("auth_id", value: response.user.id)
+                    .single()
+                    .execute()
+                
+                print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
+                let decoder = JSONDecoder()
+                currentUser = try decoder.decode(User.self, from: userResponse.data)
+                print("✅ Successfully decoded user profile")
+            } catch {
+                print("⚠️ User profile not found, creating new profile...")
+                // Create new user profile
+                let now = ISO8601DateFormatter().string(from: Date())
+                let userData = UserInsertData(
+                    id: UUID().uuidString,  // Generate new UUID for id
+                    full_name: "",
+                    avatar_url: nil,
+                    created_at: now,
+                    auth_id: response.user.id.uuidString  // Use auth user ID for auth_id
+                )
+                
+                print("📝 Creating user profile with data: \(userData)")
+                try await supabase
+                    .from("users")
+                    .insert(userData)
+                    .execute()
+                
+                // Fetch the newly created profile
+                let userResponse = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("auth_id", value: response.user.id)
+                    .single()
+                    .execute()
+                
+                let decoder = JSONDecoder()
+                currentUser = try decoder.decode(User.self, from: userResponse.data)
+                print("✅ Successfully created and decoded user profile")
+            }
         } catch {
+            print("❌ Error in signIn: \(error.localizedDescription)")
             self.error = handleAuthError(error)
         }
     }
@@ -105,33 +178,40 @@ class AuthManager: ObservableObject {
                 email: email,
                 password: password
             )
+            print("🔑 Sign up successful, user ID: \(response.user.id)")
             isAuthenticated = true
             
             // Create user profile in users table
             let now = ISO8601DateFormatter().string(from: Date())
             let userData = UserInsertData(
-                id: response.user.id.uuidString,
+                id: UUID().uuidString,  // Generate new UUID for id
                 full_name: "",
                 avatar_url: nil,
-                created_at: now
+                created_at: now,
+                auth_id: response.user.id.uuidString  // Use auth user ID for auth_id
             )
             
+            print("📝 Creating user profile with data: \(userData)")
             try await supabase
                 .from("users")
                 .insert(userData)
                 .execute()
             
             // Fetch the created user profile
+            print("🔍 Fetching newly created user profile")
             let userResponse = try await supabase
                 .from("users")
                 .select()
-                .eq("id", value: response.user.id)
+                .eq("auth_id", value: response.user.id)
                 .single()
                 .execute()
             
+            print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
             let decoder = JSONDecoder()
             currentUser = try decoder.decode(User.self, from: userResponse.data)
+            print("✅ Successfully decoded user profile")
         } catch {
+            print("❌ Error in signUp: \(error.localizedDescription)")
             self.error = handleAuthError(error)
         }
     }
@@ -244,26 +324,101 @@ class AuthManager: ObservableObject {
     @MainActor
     func signInWithGoogle() async {
         do {
-            let response = try await supabase.auth.signInWithOAuth(
+            print("🔑 Starting Google Sign In process...")
+            
+            // Use the Supabase callback URL
+            let redirectURL = URL(string: "https://kyklpwptsuubycuaaeoq.supabase.co/auth/v1/callback")!
+            
+            print("🔑 Attempting to sign in with Google...")
+            
+            // Create a strong reference to the authentication session
+            let authSession = try await supabase.auth.signInWithOAuth(
                 provider: .google,
-                redirectTo: URL(string: "scribo://auth-callback")!
+                redirectTo: redirectURL,
+                queryParams: [
+                    (name: "access_type", value: "offline"),
+                    (name: "prompt", value: "consent")
+                ]
             )
             
-            // The response is already a session
-            isAuthenticated = true
+            print("🔑 Google Sign In successful, user ID: \(authSession.user.id)")
+            
+            // Ensure we're on the main thread for UI updates
+            await MainActor.run {
+                isAuthenticated = true
+            }
             
             // Get user profile from users table
-            let userResponse = try await supabase
-                .from("users")
-                .select()
-                .eq("id", value: response.user.id)
-                .single()
-                .execute()
-            
-            let decoder = JSONDecoder()
-            currentUser = try decoder.decode(User.self, from: userResponse.data)
+            print("🔍 Fetching user profile...")
+            do {
+                let userResponse = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("id", value: authSession.user.id)
+                    .single()
+                    .execute()
+                
+                print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
+                let decoder = JSONDecoder()
+                let user = try decoder.decode(User.self, from: userResponse.data)
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    currentUser = user
+                    print("✅ User profile fetched successfully")
+                }
+            } catch {
+                print("📝 Creating new user profile...")
+                // Create new user profile if it doesn't exist
+                let now = ISO8601DateFormatter().string(from: Date())
+                
+                // Safely extract metadata values
+                let fullName = authSession.user.userMetadata["full_name"]?.stringValue ?? ""
+                let avatarUrl = authSession.user.userMetadata["avatar_url"]?.stringValue
+                
+                let userData = UserInsertData(
+                    id: authSession.user.id.uuidString,  // Use auth user ID as the id
+                    full_name: fullName,
+                    avatar_url: avatarUrl,
+                    created_at: now,
+                    auth_id: authSession.user.id.uuidString
+                )
+                
+                print("📝 Creating user profile with data: \(userData)")
+                try await supabase
+                    .from("users")
+                    .insert(userData)
+                    .execute()
+                
+                // Fetch the newly created user profile
+                print("🔍 Fetching newly created user profile")
+                let userResponse = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("id", value: authSession.user.id)
+                    .single()
+                    .execute()
+                
+                print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
+                let decoder = JSONDecoder()
+                let user = try decoder.decode(User.self, from: userResponse.data)
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    currentUser = user
+                    print("✅ New user profile created successfully")
+                }
+            }
+        } catch let error as AuthError {
+            print("❌ Google Sign In failed with AuthError: \(error.localizedDescription)")
+            await MainActor.run {
+                self.error = handleAuthError(error)
+            }
         } catch {
-            self.error = handleAuthError(error)
+            print("❌ Google Sign In failed with unknown error: \(error.localizedDescription)")
+            await MainActor.run {
+                self.error = handleAuthError(error)
+            }
         }
     }
     
@@ -282,7 +437,7 @@ class AuthManager: ObservableObject {
             let userResponse = try await supabase
                 .from("users")
                 .select()
-                .eq("id", value: response.user.id)
+                .eq("auth_id", value: response.user.id)
                 .single()
                 .execute()
             

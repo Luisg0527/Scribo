@@ -55,25 +55,24 @@ class ChatManager: ObservableObject {
     func getChats() async throws -> [Chat] {
         let response = try await supabase
             .from("chats")
-            .select("""
-                *,
-                chat_messages (
-                    id,
-                    content,
-                    is_user,
-                    created_at,
-                    image_url,
-                    document_url,
-                    document_name,
-                    document_type
-                )
-            """)
+            .select("*, chat_messages(*)")
             .order("updated_at", ascending: false)
             .execute()
         
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([Chat].self, from: response.data)
+    }
+    
+    func getChat(_ id: UUID) async throws -> Chat {
+        let response = try await supabase
+            .from("chats")
+            .select("*, chat_messages(*)")
+            .eq("id", value: id)
+            .single()
+            .execute()
+        
+        let decoder = JSONDecoder()
+        return try decoder.decode(Chat.self, from: response.data)
     }
     
     func updateChat(_ chat: Chat) async throws {
