@@ -37,6 +37,8 @@ struct NoteView: View {
     @State private var showingCamera = false
     @FocusState private var focusedField: Field?
     @Environment(\.colorScheme) var colorScheme
+    @State private var showingSaveAlert = false
+    @State private var hasChanges: Bool = false
     
     enum Field {
         case title, content
@@ -113,6 +115,9 @@ struct NoteView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                         .focused($focusedField, equals: .title)
+                        .onChange(of: editedTitle) { _, _ in
+                            hasChanges = true
+                        }
                     
                     Divider()
                         .padding(.horizontal, 16)
@@ -132,6 +137,9 @@ struct NoteView: View {
                             .padding(.vertical, 12)
                             .frame(minHeight: 100)
                             .focused($focusedField, equals: .content)
+                            .onChange(of: editedContent) { _, _ in
+                                hasChanges = true
+                            }
                     }
                     .padding(.horizontal, 3)
                     .padding(.vertical, 12)
@@ -194,9 +202,23 @@ struct NoteView: View {
             .padding(.bottom, 32)
         }
         .background(colorScheme == .dark ? Color.black : Color.white)
-        .navigationBarBackButtonHidden(false)
+        .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    if hasChanges {
+                        showingSaveAlert = true
+                    } else {
+                        dismiss()
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     Task {
@@ -208,6 +230,19 @@ struct NoteView: View {
                         .foregroundColor(.accentColor)
                 }
             }
+        }
+        .alert("Save Changes?", isPresented: $showingSaveAlert) {
+            Button("Don't Save", role: .destructive) {
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                Task {
+                    await saveNote()
+                }
+            }
+        } message: {
+            Text("Do you want to save your changes?")
         }
         .onChange(of: selectedPhotos) { oldValue, newValue in
             Task {
@@ -320,7 +355,8 @@ struct ImageCard: View {
                     .foregroundColor(.white)
                     .shadow(radius: 1)
             }
-            .padding(8),
+            .padding(8)
+            .contentShape(Rectangle()),
             alignment: .topTrailing
         )
     }

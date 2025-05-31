@@ -39,6 +39,10 @@ class AuthManager: ObservableObject {
             return "Network error. Please check your internet connection."
         } else if errorMessage.contains("expired") {
             return "Your session has expired. Please log in again."
+        } else if errorMessage.contains("invalid refresh token") || errorMessage.contains("refresh token not found") {
+            return "Your session has expired. Please log in again."
+        } else if errorMessage.contains("invalid login credentials") {
+            return "Incorrect email or password. Please try again."
         }
         
         // Default error message
@@ -107,7 +111,7 @@ class AuthManager: ObservableObject {
             print("❌ Error in checkSession: \(error.localizedDescription)")
             isAuthenticated = false
             currentUser = nil
-            self.error = error.localizedDescription
+            self.error = handleAuthError(error)
         }
     }
     
@@ -168,6 +172,8 @@ class AuthManager: ObservableObject {
         } catch {
             print("❌ Error in signIn: \(error.localizedDescription)")
             self.error = handleAuthError(error)
+            isAuthenticated = false
+            currentUser = nil
         }
     }
     
