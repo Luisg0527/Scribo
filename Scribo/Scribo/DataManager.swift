@@ -29,6 +29,17 @@ struct NoteRecord: Codable {
     let updated_at: String
 }
 
+// MARK: - Upload Request
+struct UploadRequest: Codable {
+    let title: String
+    let type: String
+    let image_url: String?
+    let document_url: String?
+    let category: String?
+    let topic: String?
+    let subtopic: String?
+}
+
 class DataManager: ObservableObject {
     @Published var topics: [Topic] = []
     private let supabase = SupabaseConfig.shared.client
@@ -487,6 +498,28 @@ class DataManager: ObservableObject {
             .from("notes_view")
             .upsert(recentNote, onConflict: "user_id,note_id")
             .execute()
+    }
+    
+    // MARK: - Uploads
+    func getUploads() async throws -> [Upload] {
+        let response = try await supabase
+            .from("uploads")
+            .select()
+            .order("created_at", ascending: false)
+            .execute()
+        
+        return try JSONDecoder().decode([Upload].self, from: response.data)
+    }
+    
+    func createUpload(_ upload: UploadRequest) async throws -> Upload {
+        let response = try await supabase
+            .from("uploads")
+            .insert(upload)
+            .select()
+            .single()
+            .execute()
+        
+        return try JSONDecoder().decode(Upload.self, from: response.data)
     }
 } 
  

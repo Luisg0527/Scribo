@@ -82,23 +82,29 @@ struct EditableField: View {
     @State private var isEditing = false
     let onSave: () async -> Void
     @State private var isLoading = false
+    @State private var inputText: String = ""
     @Environment(\.colorScheme) var colorScheme
-    
+
     var body: some View {
         HStack {
             Image(systemName: icon)
             Text(title)
             Spacer()
             if isEditing {
-                TextField(title, text: $text)
+                TextField(title, text: $inputText)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(8)
                     .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
                     .cornerRadius(8)
                     .frame(width: 200)
                     .onSubmit {
+                        guard !inputText.trimmingCharacters(in: .whitespaces).isEmpty else {
+                            // Don't save and stay in editing mode
+                            return
+                        }
                         Task {
                             isLoading = true
+                            text = inputText
                             await onSave()
                             isLoading = false
                             isEditing = false
@@ -106,20 +112,22 @@ struct EditableField: View {
                     }
             } else {
                 HStack {
-                    Text(text)
-                        .foregroundColor(.gray)
+                    Text(text.isEmpty ? "Not set" : text)
+                        .foregroundColor(text.isEmpty ? .gray.opacity(0.6) : .gray)
                     if isLoading {
                         ProgressView()
                             .scaleEffect(0.8)
                     }
                 }
                 .onTapGesture {
+                    inputText = text
                     isEditing = true
                 }
             }
         }
     }
 }
+
 
 struct SidebarView: View {
     @Binding var isShowing: Bool
@@ -130,13 +138,9 @@ struct SidebarView: View {
     @State private var recentNotes: [Note] = []
     @ObservedObject var authManager: AuthManager
     @StateObject private var dataManager = DataManager()
-    @StateObject private var chatManager = ChatManager()
     @State private var profileImage: UIImage?
     @State private var isLoadingRecentNotes = false
     @State private var showGhostBlocks = true
-    @Binding var chats: [Chat]
-    @Binding var currentChat: Chat?
-    @State private var isLoadingChats = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isProfileSheetPresented = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled = true
@@ -180,6 +184,7 @@ struct SidebarView: View {
                 }
                 .padding()
                 .background(Color.appHeaderBackground)
+                .shadow(color: .appShadow, radius: 8, x: 0, y: 4)
             }
             .sheet(isPresented: $isProfileSheetPresented) {
                 ProfileSheetView(isPresented: $isProfileSheetPresented, authManager: authManager)
@@ -188,25 +193,6 @@ struct SidebarView: View {
             // Scrollable Content
             ScrollView {
                 VStack(spacing: 0) {
-                    // Other Tools Section
-                    VStack(alignment: .leading, spacing: 0) {
-                        Button(action: {
-                            presentDocumentScanner()
-                        }) {
-                            HStack {
-                                Image(systemName: "doc.viewfinder")
-                                    .foregroundColor(.appAccent1)
-                                Text("Scanner")
-                                    .foregroundColor(.appText)
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 12)
-                            .padding(.top, 16)
-                        }
-                    }
-                    .background(Color.appCardBackground)
-                    
                     // Recent Notes Section
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
@@ -306,182 +292,6 @@ struct SidebarView: View {
                         }
                     }
                     .padding(.top, 3.0)
-                    
-                    // Recent Chats Section
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text("Recent Chats")
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.appText)
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                Task {
-                                    do {
-                                        // Create a new chat with a timestamp-based title
-                                        let dateFormatter = DateFormatter()
-                                        dateFormatter.dateFormat = "MMM d, h:mm a"
-                                        let timestamp = dateFormatter.string(from: Date())
-                                        let newChat = try await chatManager.createChat(title: "Chat \(timestamp)")
-                                        await MainActor.run {
-                                            chats.append(newChat)
-                                            currentChat = newChat
-                                        }
-                                    } catch {
-                                        print("❌ Failed to create new chat: \(error.localizedDescription)")
-                                    }
-                                }
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundColor(.appAccent1)
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                        
-                        if isLoadingChats {
-                            ForEach(0..<3) { _ in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Rectangle()
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(width: 120, height: 16)
-                                            .cornerRadius(4)
-                                        Rectangle()
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(width: 80, height: 12)
-                                            .cornerRadius(4)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 12)
-                            }
-                        } else if chats.isEmpty {
-                            Text("No recent chats")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .padding(.horizontal)
-                                .padding(.vertical, 12)
-                        } else {
-                            let groupedChats = Dictionary(grouping: chats.sorted(by: { $0.updatedAt > $1.updatedAt })) { chat in
-                                let calendar = Calendar.current
-                                if calendar.isDateInToday(chat.updatedAt) {
-                                    return "Today"
-                                } else if calendar.isDateInYesterday(chat.updatedAt) {
-                                    return "Yesterday"
-                                } else {
-                                    let days = calendar.dateComponents([.day], from: chat.updatedAt, to: Date()).day ?? 0
-                                    if days < 7 {
-                                        return "\(days) days ago"
-                                    } else {
-                                        let weeks = days / 7
-                                        return "\(weeks) week\(weeks > 1 ? "s" : "") ago"
-                                    }
-                                }
-                            }
-                            
-                            ForEach(groupedChats.keys.sorted().reversed(), id: \.self) { dateGroup in
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(dateGroup)
-                                        .font(.subheadline)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.gray)
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 8)
-                                    
-                                    ForEach(groupedChats[dateGroup] ?? []) { chat in
-                                        Button(action: {
-                                            currentChat = chat
-                                        }) {
-                                            HStack {
-                                                Text(chat.title)
-                                                    .foregroundColor(.appText)
-                                                    .lineLimit(1)
-                                                    .truncationMode(.tail)
-                                                Spacer()
-                                            }
-                                            .padding(.horizontal)
-                                            .padding(.vertical, 12)
-                                        }
-                                        .contextMenu {
-                                            Button(action: {
-                                                Task {
-                                                    do {
-                                                        try await chatManager.deleteChat(chat.id)
-                                                        await MainActor.run {
-                                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
-                                                                chats.remove(at: index)
-                                                            }
-                                                            if currentChat?.id == chat.id {
-                                                                currentChat = chats.first
-                                                            }
-                                                        }
-                                                    } catch {
-                                                        print("❌ Failed to delete chat: \(error.localizedDescription)")
-                                                    }
-                                                }
-                                            }) {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                            
-                                            Button(action: {
-                                                Task {
-                                                    do {
-                                                        // Create a temporary alert to get new title
-                                                        let alert = UIAlertController(
-                                                            title: "Edit Chat Title",
-                                                            message: "Enter new title for the chat",
-                                                            preferredStyle: .alert
-                                                        )
-                                                        
-                                                        alert.addTextField { textField in
-                                                            textField.text = chat.title
-                                                            textField.placeholder = "Enter title"
-                                                        }
-                                                        
-                                                        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                                                        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
-                                                            if let newTitle = alert.textFields?.first?.text, !newTitle.isEmpty {
-                                                                Task {
-                                                                    do {
-                                                                        var updatedChat = chat
-                                                                        updatedChat.title = newTitle
-                                                                        try await chatManager.updateChat(updatedChat)
-                                                                        await MainActor.run {
-                                                                            if let index = chats.firstIndex(where: { $0.id == chat.id }) {
-                                                                                chats[index] = updatedChat
-                                                                            }
-                                                                            if currentChat?.id == chat.id {
-                                                                                currentChat = updatedChat
-                                                                            }
-                                                                        }
-                                                                    } catch {
-                                                                        print("❌ Failed to update chat title: \(error.localizedDescription)")
-                                                                    }
-                                                                }
-                                                            }
-                                                        })
-                                                        
-                                                        // Present the alert
-                                                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                                           let viewController = windowScene.windows.first?.rootViewController {
-                                                            viewController.present(alert, animated: true)
-                                                        }
-                                                    }
-                                                }
-                                            }) {
-                                                Label("Edit Title", systemImage: "pencil")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 3.0)
                 }
             }
             
@@ -514,7 +324,7 @@ struct SidebarView: View {
         }
         .frame(width: 280)
         .background(Color.appCardBackground)
-        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .preferredColorScheme(isDarkMode ? .light : .dark)
         .fullScreenCover(isPresented: $showProfile) {
             NavigationView {
                 ProfileView()
@@ -524,12 +334,11 @@ struct SidebarView: View {
             Task {
                 await loadProfileImage()
                 await loadRecentNotes()
-                await loadChats()
             }
             // Set initial color scheme
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                    window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
                 }
             }
         }
@@ -537,7 +346,6 @@ struct SidebarView: View {
             if newValue {
                 Task {
                     await loadRecentNotes()
-                    await loadChats()
                 }
             }
         }
@@ -583,46 +391,6 @@ struct SidebarView: View {
         isLoadingProfileImage = false
     }
     
-    private func loadChats() async {
-        print("📱 Starting to load chats...")
-        isLoadingChats = true
-        do {
-            let loadedChats = try await chatManager.getChats()
-            print("📱 Loaded \(loadedChats.count) chats from database")
-            
-            if loadedChats.isEmpty {
-                print("📱 No chats found, creating welcome chat...")
-                do {
-                    let welcomeChat = try await chatManager.createChat(title: "Welcome")
-                    print("📱 Successfully created welcome chat")
-                    await MainActor.run {
-                        chats = [welcomeChat]
-                        currentChat = welcomeChat
-                    }
-                } catch {
-                    await MainActor.run {
-                        alertManager.showError(AppError.dataError("Failed to create welcome chat"))
-                    }
-                }
-            } else {
-                print("📱 Using existing chats")
-                await MainActor.run {
-                    chats = loadedChats
-                    if currentChat == nil {
-                        currentChat = chats.first
-                    }
-                    print("📱 Updated UI with \(chats.count) chats")
-                }
-            }
-        } catch {
-            await MainActor.run {
-                alertManager.showError(AppError.networkError("Failed to load chats"))
-            }
-        }
-        isLoadingChats = false
-        print("📱 Finished loading chats")
-    }
-    
     private func performHapticFeedback(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         if hapticsEnabled {
             let generator = UIImpactFeedbackGenerator(style: style)
@@ -666,108 +434,6 @@ struct SidebarView: View {
             .padding(.horizontal)
             .padding(.vertical, 12)
         }
-    }
-    
-    private func presentDocumentScanner() {
-        print("📱 Starting document scanner...")
-        let scannerVC = VNDocumentCameraViewController()
-        let delegate = DocumentScannerDelegate(
-            onScanComplete: { scannedImage in
-                print("📱 Document scanner completed, received image of size: \(scannedImage.size)")
-                
-                                    // Create a new chat with the scanned document
-                                    Task {
-                                        do {
-                        print("📱 Creating new chat for scanned document...")
-                                            let dateFormatter = DateFormatter()
-                                            dateFormatter.dateFormat = "MMM d, h:mm a"
-                                            let timestamp = dateFormatter.string(from: Date())
-                                            let newChat = try await chatManager.createChat(title: "Scanned Document \(timestamp)")
-                        print("📱 Successfully created new chat with ID: \(newChat.id)")
-                        
-                        // Convert image to PDF
-                        print("📱 Converting scanned image to PDF...")
-                        let pdfData = try await convertImageToPDF(scannedImage)
-                        print("📱 PDF created with size: \(pdfData.count) bytes")
-                        
-                        // Save PDF to temporary file
-                        let tempDir = FileManager.default.temporaryDirectory
-                        let pdfFileName = "scanned_document_\(UUID().uuidString).pdf"
-                        let pdfURL = tempDir.appendingPathComponent(pdfFileName)
-                        try pdfData.write(to: pdfURL)
-                        print("📱 PDF saved to temporary file: \(pdfURL.path)")
-                        
-                        // Create document message
-                        print("📱 Creating chat message with PDF document...")
-                        let message = ChatMessage(
-                            content: "I've scanned this document for you.",
-                            image: nil,
-                            document: DocumentMessage(
-                                url: pdfURL,
-                                name: "Scanned Document \(timestamp).pdf",
-                                type: "pdf"
-                            ),
-                            isUser: true,
-                            timestamp: Date(),
-                            chatId: newChat.id
-                        )
-                        
-                        // Add the message to the chat
-                        print("📱 Adding message to chat...")
-                        try await chatManager.addMessage(message, to: newChat.id)
-                        print("📱 Successfully added message to chat")
-                        
-                        // Update the UI
-                        print("📱 Updating UI with new chat...")
-                                            await MainActor.run {
-                                                chats.append(newChat)
-                                                currentChat = newChat
-                            print("📱 UI updated with new chat")
-                                            }
-                                        } catch {
-                        print("❌ Failed to process scanned document: \(error.localizedDescription)")
-                        await MainActor.run {
-                            alertManager.showError(AppError.dataError("Failed to process scanned document: \(error.localizedDescription)"))
-                        }
-                    }
-                }
-            },
-            onError: { error in
-                print("❌ Document scanner error: \(error.localizedDescription)")
-                Task { @MainActor in
-                alertManager.showError(error)
-                }
-            }
-        )
-        scannerVC.delegate = delegate
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let viewController = windowScene.windows.first?.rootViewController {
-            print("📱 Presenting document scanner...")
-            viewController.present(scannerVC, animated: true) {
-                print("📱 Document scanner presented")
-            }
-        } else {
-            print("❌ Failed to present document scanner - no window scene or view controller found")
-        }
-    }
-    
-    private func convertImageToPDF(_ image: UIImage) async throws -> Data {
-        print("📱 Starting PDF conversion...")
-        let pdfData = NSMutableData()
-        
-        // Create PDF context
-        UIGraphicsBeginPDFContextToData(pdfData, CGRect(origin: .zero, size: image.size), nil)
-        UIGraphicsBeginPDFPage()
-        
-        // Draw image
-        image.draw(in: CGRect(origin: .zero, size: image.size))
-        
-        // End PDF context
-        UIGraphicsEndPDFContext()
-        
-        print("📱 PDF conversion completed")
-        return pdfData as Data
     }
     
     private func createNewNoteAlert() -> UIAlertController {
@@ -856,12 +522,11 @@ struct SidebarView: View {
                 // Add to recent notes
                 try await dataManager.addRecentNote(noteId: newNote.id.uuidString)
                 
-                // Update UI and show the note
+                // Update UI but don't show the note
                 await MainActor.run {
                     noteDisplayState.currentNote = newNote
                     noteDisplayState.currentTopic = topic
                     noteDisplayState.currentSubtopic = subtopic
-                    noteDisplayState.isShowingNote = true
                     isShowing = false
                 }
             } catch {
@@ -881,57 +546,6 @@ struct SidebarView: View {
     }
 }
 
-// Add this class at the bottom of the file, before the last closing brace
-class DocumentScannerDelegate: NSObject, VNDocumentCameraViewControllerDelegate {
-    private let onScanComplete: (UIImage) -> Void
-    private let onError: (Error) -> Void
-    
-    init(onScanComplete: @escaping (UIImage) -> Void, onError: @escaping (Error) -> Void) {
-        print("📱 Initializing DocumentScannerDelegate")
-        self.onScanComplete = onScanComplete
-        self.onError = onError
-        super.init()
-    }
-    
-    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-        print("📱 Document scanner didFinishWith scan, page count: \(scan.pageCount)")
-        
-        // Process each scanned page
-        for i in 0..<scan.pageCount {
-            print("📱 Processing page \(i + 1) of \(scan.pageCount)")
-            let scannedImage = scan.imageOfPage(at: i)
-            print("📱 Page \(i + 1) image size: \(scannedImage.size)")
-            
-            // Ensure we're on the main thread for UI updates
-                DispatchQueue.main.async {
-                self.onScanComplete(scannedImage)
-                                                                }
-                                                            }
-        
-        print("📱 Dismissing scanner view controller")
-        controller.dismiss(animated: true) {
-            print("📱 Scanner view controller dismissed")
-            }
-    }
-    
-    func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-        print("❌ Document scanner failed with error: \(error.localizedDescription)")
-            DispatchQueue.main.async {
-            self.onError(AppError.cameraError(error.localizedDescription))
-            }
-        controller.dismiss(animated: true) {
-            print("📱 Scanner view controller dismissed after error")
-                        }
-                    }
-    
-    func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
-        print("📱 Document scanner was cancelled by user")
-        controller.dismiss(animated: true) {
-            print("📱 Scanner view controller dismissed after cancel")
-        }
-    }
-}
-
 // MARK: - Main Content View
 struct ContentView: View {
     @StateObject private var authManager = AuthManager()
@@ -941,21 +555,12 @@ struct ContentView: View {
     @State private var showNotebook: Bool = false
     @AppStorage("isDarkMode") private var isDarkMode = true
     @StateObject private var dataManager = DataManager()
-    @State private var chats: [Chat] = []
-    @State private var currentChat: Chat?
-    @StateObject private var chatManager = ChatManager()
-    @State private var isLoadingChats = false
     @StateObject private var alertManager = AlertManager()
     
     var body: some View {
         ZStack {
             if authManager.isAuthenticated {
                 mainView
-                    .onAppear {
-                        Task {
-                            await loadChats()
-                        }
-                    }
             }
             
             if !authManager.isAuthenticated {
@@ -980,9 +585,6 @@ struct ContentView: View {
             if !alertManager.alertRecoverySuggestion.isEmpty {
                 Button("Try Again") {
                     // Retry the last operation
-                    Task {
-                        await loadChats()
-                    }
                 }
             }
         } message: {
@@ -995,7 +597,7 @@ struct ContentView: View {
                 }
             }
         }
-        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .preferredColorScheme(isDarkMode ? .light : .dark)
         .onChange(of: isDarkMode) { oldValue, newValue in
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
@@ -1007,7 +609,7 @@ struct ContentView: View {
             // Set initial color scheme
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
+                    window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
                 }
             }
         }
@@ -1055,7 +657,7 @@ struct ContentView: View {
                 
                 sidebarOverlay
             }
-            .preferredColorScheme(isDarkMode ? .dark : .light)
+            .preferredColorScheme(isDarkMode ? .light : .dark)
         }
     }
     
@@ -1071,32 +673,21 @@ struct ContentView: View {
             } else if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
                 NavigationView {
                     NoteView(note: noteDisplayState.currentNote, isPresented: $showNotebook, dataManager: dataManager)
-                        .navigationBarItems(leading: Button(action: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                noteDisplayState.isShowingNote = false
-                                noteDisplayState.currentNote = nil
-                                noteDisplayState.currentTopic = nil
-                                noteDisplayState.currentSubtopic = nil
-                            }
-                        }) {
-                            Image(systemName: "chevron.left")
-                                .foregroundColor(.blue)
-                        })
                 }
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing),
                     removal: .move(edge: .trailing)
                 ))
             } else {
-                ChatView(chats: $chats, currentChat: $currentChat)
+                DocumentManagerView()
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading),
                         removal: .move(edge: .leading)
                     ))
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: showNotebook)
-        .animation(.easeInOut(duration: 0.3), value: noteDisplayState.isShowingNote)
+        .animation(.easeInOut(duration: 0.2), value: showNotebook)
+        .animation(.easeInOut(duration: 0.2), value: noteDisplayState.isShowingNote)
     }
     
     private var sidebarOverlay: some View {
@@ -1109,7 +700,7 @@ struct ContentView: View {
                     }
                 
                 HStack {
-                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager, chats: $chats, currentChat: $currentChat)
+                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
                         .transition(.move(edge: .leading))
                     
                     Spacer()
@@ -1126,6 +717,7 @@ struct ContentView: View {
                 navigationButton
             }
             .background(Color.appHeaderBackground)
+            .shadow(color: .appShadow, radius: 8, x: 0, y: 4)
         }
     }
     
@@ -1170,38 +762,6 @@ struct ContentView: View {
                 .padding(.vertical, 20)
             }
         }
-    }
-    
-    private func loadChats() async {
-        isLoadingChats = true
-        do {
-            let loadedChats = try await chatManager.getChats()
-            if loadedChats.isEmpty {
-                do {
-                    let welcomeChat = try await chatManager.createChat(title: "Welcome")
-                    await MainActor.run {
-                        chats = [welcomeChat]
-                        currentChat = welcomeChat
-                    }
-                } catch {
-                    await MainActor.run {
-                        alertManager.showError(AppError.dataError("Failed to create welcome chat"))
-                    }
-                }
-            } else {
-                await MainActor.run {
-                    chats = loadedChats
-                    if currentChat == nil {
-                        currentChat = chats.first
-                    }
-                }
-            }
-        } catch {
-            await MainActor.run {
-                alertManager.showError(AppError.networkError("Failed to load chats"))
-            }
-        }
-        isLoadingChats = false
     }
 }
 

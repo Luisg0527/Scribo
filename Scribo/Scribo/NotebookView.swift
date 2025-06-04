@@ -181,13 +181,13 @@ struct SubtopicPreviewView: View {
             // Search Bar
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(.gray)
                 TextField("Search notes...", text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(.gray)
                     }
                 }
             }

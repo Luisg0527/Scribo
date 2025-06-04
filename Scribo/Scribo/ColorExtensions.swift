@@ -28,6 +28,10 @@ struct AppColors {
     static func textSecondary(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color.white.opacity(0.7) : Color(hex: "1A1B2E").opacity(0.7)
     }
+    
+    static func shadow(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.black.opacity(0.3) : Color(hex: "FF3366").opacity(0.15)
+    }
 }
 
 extension Color {
@@ -57,6 +61,10 @@ extension Color {
     
     static var appTextSecondary: Color {
         AppColors.textSecondary(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
+    }
+    
+    static var appShadow: Color {
+        AppColors.shadow(for: UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light)
     }
 }
 

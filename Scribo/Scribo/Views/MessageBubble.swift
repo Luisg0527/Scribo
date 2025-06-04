@@ -7,9 +7,9 @@ struct DocumentPreview: View {
     var body: some View {
         HStack {
             Image(systemName: "doc.fill")
-                .foregroundColor(.blue)
+                .foregroundColor(.appAccent1)
             Text(document.name)
-                .foregroundColor(.blue)
+                .foregroundColor(.appAccent1)
         }
         .padding(12)
         .background(Color.gray.opacity(0.2))
