@@ -93,6 +93,18 @@ struct DocumentManagerView: View {
     @State private var isLoadingDocuments = true
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var showTopicConfirmation = false
+    @State private var pendingClassification: TextClassificationResponse?
+    @State private var pendingImage: UIImage?
+    @State private var pendingType: DocumentType?
+    @State private var selectedTopic: String?
+    @State private var selectedSubtopic: String?
+    @State private var showTopicPicker = false
+    @State private var newTopicName = ""
+    @State private var newSubtopicName = ""
+    @State private var isRefreshing = false
+    @State private var selectedTopicId: UUID?
+    @State private var showSubtopicPicker = false
     
     var filteredDocuments: [DocumentItem] {
         documents.filter { document in
@@ -142,45 +154,58 @@ struct DocumentManagerView: View {
                 .foregroundColor(.appText)
                 
                 // Document Grid
-            ScrollView {
-                    if isLoadingDocuments {
-                        ProgressView("Loading documents...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(.top, 40)
-                    } else if filteredDocuments.isEmpty {
-                        VStack(spacing: 16) {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .font(.system(size: 40))
-                                .foregroundColor(.gray.opacity(0.5))
-                                .padding(.bottom, 8)
-                            
-                            Text("Ready to Organize!")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.gray.opacity(0.7))
-                            
-                            Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
-                                .font(.body)
-                                .foregroundColor(.gray.opacity(0.6))
-                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
+                ScrollView {
+                    RefreshableView(isRefreshing: $isRefreshing) {
+                        Task {
+                            await loadExistingDocuments()
+                            await loadUploads()
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 80)
-                    } else {
-                        LazyVGrid(columns: [
-                            GridItem(.fixed(160), spacing: 36),
-                            GridItem(.fixed(160), spacing: 36)
-                        ], spacing: 16) {
-                            ForEach(filteredDocuments) { document in
-                                DocumentCard(document: document)
-                                    .onTapGesture {
-                                        handleDocumentTap(document)
-                                    }
+                    } content: {
+                        if isLoadingDocuments {
+                            ProgressView("Loading documents...")
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.top, 40)
+                        } else if filteredDocuments.isEmpty {
+                            VStack(spacing: 16) {
+                                Image(systemName: "doc.text.magnifyingglass")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray.opacity(0.5))
+                                    .padding(.bottom, 8)
+                                
+                                Text("Ready to Organize!")
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.gray.opacity(0.7))
+                                
+                                Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
+                                    .font(.body)
+                                    .foregroundColor(.gray.opacity(0.6))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, 80)
+                        } else {
+                            LazyVGrid(columns: [
+                                GridItem(.fixed(160), spacing: 36),
+                                GridItem(.fixed(160), spacing: 36)
+                            ], spacing: 16) {
+                                ForEach(filteredDocuments) { document in
+                                    DocumentCard(document: document)
+                                        .onTapGesture {
+                                            handleDocumentTap(document)
+                                        }
+                                }
+                            }
+                            .padding()
                         }
-                        .padding()
                     }
+                }
+                .refreshable {
+                    isRefreshing = true
+                    await loadExistingDocuments()
+                    await loadUploads()
+                    isRefreshing = false
                 }
                 
                 // Bottom Bar
@@ -284,6 +309,133 @@ struct DocumentManagerView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .alert("Confirm Topic", isPresented: $showTopicConfirmation) {
+            Button("Edit") {
+                showTopicPicker = true
+            }
+            Button("Confirm") {
+                Task {
+                    await confirmAndCreateDocument()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingClassification = nil
+                pendingImage = nil
+                pendingType = nil
+                selectedTopic = nil
+                selectedSubtopic = nil
+                selectedTopicId = nil
+            }
+        } message: {
+            if let topic = selectedTopic, let subtopic = selectedSubtopic {
+                Text("Would you like to categorize this as:\nTopic: \(topic)\nSubtopic: \(subtopic)")
+            }
+        }
+        .sheet(isPresented: $showTopicPicker) {
+            NavigationView {
+                Form {
+                    Section(header: Text("Select Existing Topic")) {
+                        ForEach(dataManager.topics, id: \.id) { topic in
+                            Button(action: {
+                                selectedTopicId = topic.id
+                                selectedTopic = topic.title
+                                showSubtopicPicker = true
+                            }) {
+                                HStack {
+                                    Text(topic.title)
+                                    Spacer()
+                                    if selectedTopic == topic.title {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Section(header: Text("Create New Topic")) {
+                        TextField("New Topic", text: $newTopicName)
+                            .onChange(of: newTopicName) { oldValue, newValue in
+                                if !newValue.isEmpty {
+                                    selectedTopic = nil
+                                    selectedSubtopic = nil
+                                    selectedTopicId = nil
+                                }
+                            }
+                        TextField("New Subtopic", text: $newSubtopicName)
+                            .onChange(of: newSubtopicName) { oldValue, newValue in
+                                if !newValue.isEmpty {
+                                    selectedTopic = nil
+                                    selectedSubtopic = nil
+                                    selectedTopicId = nil
+                                }
+                            }
+                        Button("Create New Topic & Subtopic") {
+                            if !newTopicName.isEmpty && !newSubtopicName.isEmpty {
+                                selectedTopic = newTopicName
+                                selectedSubtopic = newSubtopicName
+                                showTopicPicker = false
+                                Task {
+                                    await confirmAndCreateDocument()
+                                }
+                            }
+                        }
+                        .disabled(newTopicName.isEmpty || newSubtopicName.isEmpty)
+                    }
+                }
+                .navigationTitle("Select Topic")
+                .navigationBarItems(trailing: Button("Cancel") {
+                    showTopicPicker = false
+                })
+            }
+        }
+        .sheet(isPresented: $showSubtopicPicker) {
+            NavigationView {
+                Form {
+                    if let topicId = selectedTopicId,
+                       let topic = dataManager.topics.first(where: { $0.id == topicId }) {
+                        Section(header: Text("Select Subtopic for \(topic.title)")) {
+                            ForEach(topic.subtopics, id: \.id) { subtopic in
+                                Button(action: {
+                                    selectedSubtopic = subtopic.title
+                                    showSubtopicPicker = false
+                                    showTopicPicker = false
+                                    Task {
+                                        await confirmAndCreateDocument()
+                                    }
+                                }) {
+                                    HStack {
+                                        Text(subtopic.title)
+                                        Spacer()
+                                        if selectedSubtopic == subtopic.title {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Section(header: Text("Create New Subtopic")) {
+                            TextField("New Subtopic", text: $newSubtopicName)
+                            Button("Create New Subtopic") {
+                                if !newSubtopicName.isEmpty {
+                                    selectedSubtopic = newSubtopicName
+                                    showSubtopicPicker = false
+                                    showTopicPicker = false
+                                    Task {
+                                        await confirmAndCreateDocument()
+                                    }
+                                }
+                            }
+                            .disabled(newSubtopicName.isEmpty)
+                        }
+                    }
+                }
+                .navigationTitle("Select Subtopic")
+                .navigationBarItems(trailing: Button("Cancel") {
+                    showSubtopicPicker = false
+                })
+            }
         }
     }
     
@@ -394,78 +546,26 @@ struct DocumentManagerView: View {
         
         do {
             // Save image first
-                            let fileName = "\(UUID().uuidString).jpg"
+            let fileName = "\(UUID().uuidString).jpg"
             let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
             if let data = image.jpegData(compressionQuality: 0.8) {
-                            try data.write(to: fileURL)
-                            
+                try data.write(to: fileURL)
+                
                 // Process image with OCR
                 processingStatus = "Extracting text..."
                 if let text = await processImageWithOCR(image) {
-                                    // Classify the text
+                    // Classify the text
                     processingStatus = "Categorizing content..."
-                                        let classification = try await classificationService.classifyText(text)
-                                        
-                    // Create document item for UI
-                    processingStatus = "Creating document..."
-                    let document = DocumentItem(
-                        id: UUID(),
-                        title: classification.note_name,
-                        type: type,
-                        date: Date(),
-                        image: image,
-                        documentURL: fileURL,
-                        category: "\(classification.topic) > \(classification.subtopic)",
-                        topic: classification.topic,
-                        subtopic: classification.subtopic
-                    )
+                    let classification = try await classificationService.classifyText(text)
                     
-                    // Add to documents array
-                                        await MainActor.run {
-                        documents.insert(document, at: 0)
-                    }
-                    
-                    // First create or find topic
-                    var topic = dataManager.topics.first { $0.title == classification.topic }
-                    if topic == nil {
-                        topic = try await dataManager.addTopic(title: classification.topic)
-                    }
-                    guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
-                    
-                    // Then create or find subtopic
-                    var subtopic = topic.subtopics.first { $0.title == classification.subtopic }
-                    if subtopic == nil {
-                        subtopic = try await dataManager.addSubtopic(to: topic, title: classification.subtopic)
-                    }
-                    guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
-                    
-                    // Create note with the image
-                    let note = try await dataManager.addNote(
-                        to: subtopic,
-                        in: topic,
-                        title: classification.note_name,
-                        content: text,
-                        attachmentUrls: [fileName]
-                    )
-                    
-                    // Now create the upload with the note_id
-                    try await saveUpload(
-                        title: classification.note_name,
-                        type: type.rawValue,
-                        imageURL: fileName,
-                        documentURL: nil,
-                        category: "\(classification.topic) > \(classification.subtopic)",
-                        topic: classification.topic,
-                        subtopic: classification.subtopic,
-                        noteId: note.id
-                    )
-                    
-                    // Update UI
-                                        await MainActor.run {
-                        noteDisplayState.currentTopic = topic
-                        noteDisplayState.currentSubtopic = subtopic
-                        noteDisplayState.currentNote = note
-                        noteDisplayState.isShowingNote = true
+                    // Store pending data for confirmation
+                    await MainActor.run {
+                        pendingClassification = classification
+                        pendingImage = image
+                        pendingType = type
+                        selectedTopic = classification.topic
+                        selectedSubtopic = classification.subtopic
+                        showTopicConfirmation = true
                     }
                 } else {
                     // Show warning to user when OCR fails
@@ -473,78 +573,11 @@ struct DocumentManagerView: View {
                         alertMessage = "We couldn't extract any text from this image. Please try with a clearer image or add a description manually."
                         showAlert = true
                     }
-                    
-                    // Create an uncategorized note for development
-                                        let defaultClassification = TextClassificationResponse(
-                                            topic: "Uncategorized",
-                                            subtopic: "General",
-                        note_name: "Uncategorized Note \(Date().formatted(date: .abbreviated, time: .shortened))",
-                                            raw_scores: [:]
-                                        )
-                    
-                    // Create document item for uncategorized note
-                    let document = DocumentItem(
-                        id: UUID(),
-                        title: defaultClassification.note_name,
-                        type: type,
-                        date: Date(),
-                        image: image,
-                        documentURL: fileURL,
-                        category: "Uncategorized > General",
-                        topic: "Uncategorized",
-                        subtopic: "General"
-                    )
-                    
-                    // Add to documents array
-                                    await MainActor.run {
-                        documents.insert(document, at: 0)
-                    }
-                    
-                    // Create topic, subtopic, and note for uncategorized
-                    var topic = dataManager.topics.first { $0.title == "Uncategorized" }
-                    if topic == nil {
-                        topic = try await dataManager.addTopic(title: "Uncategorized")
-                    }
-                    guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
-                    
-                    var subtopic = topic.subtopics.first { $0.title == "General" }
-                    if subtopic == nil {
-                        subtopic = try await dataManager.addSubtopic(to: topic, title: "General")
-                    }
-                    guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
-                    
-                    let note = try await dataManager.addNote(
-                        to: subtopic,
-                        in: topic,
-                        title: defaultClassification.note_name,
-                        content: "",
-                        attachmentUrls: [fileName]
-                    )
-                    
-                    // Create upload with note_id
-                    try await saveUpload(
-                        title: defaultClassification.note_name,
-                        type: type.rawValue,
-                        imageURL: fileName,
-                        documentURL: nil,
-                        category: "Uncategorized > General",
-                        topic: "Uncategorized",
-                        subtopic: "General",
-                        noteId: note.id
-                    )
-                    
-                    // Update UI
-                    await MainActor.run {
-                        noteDisplayState.currentTopic = topic
-                        noteDisplayState.currentSubtopic = subtopic
-                        noteDisplayState.currentNote = note
-                        noteDisplayState.isShowingNote = true
-                                }
-                            }
-                        }
-                    } catch {
+                }
+            }
+        } catch {
             print("❌ Failed to process image: \(error.localizedDescription)")
-                        await MainActor.run {
+            await MainActor.run {
                 alertMessage = "Failed to process image: \(error.localizedDescription)"
                 showAlert = true
             }
@@ -552,6 +585,106 @@ struct DocumentManagerView: View {
         
         isProcessingOCR = false
         processingStatus = ""
+    }
+    
+    private func confirmAndCreateDocument() async {
+        guard let classification = pendingClassification,
+              let image = pendingImage,
+              let type = pendingType,
+              let topic = selectedTopic,
+              let subtopic = selectedSubtopic else {
+            return
+        }
+        
+        do {
+            let fileName = "\(UUID().uuidString).jpg"
+            let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
+            if let data = image.jpegData(compressionQuality: 0.8) {
+                try data.write(to: fileURL)
+                
+                // Create document item for UI
+                let document = DocumentItem(
+                    id: UUID(),
+                    title: classification.note_name,
+                    type: type,
+                    date: Date(),
+                    image: image,
+                    documentURL: fileURL,
+                    category: "\(topic) > \(subtopic)",
+                    topic: topic,
+                    subtopic: subtopic
+                )
+                
+                // Add to documents array
+                await MainActor.run {
+                    documents.insert(document, at: 0)
+                }
+                
+                // First create or find topic
+                var topicObj = dataManager.topics.first { $0.title == topic }
+                if topicObj == nil {
+                    topicObj = try await dataManager.addTopic(title: topic)
+                }
+                guard let topicObj = topicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
+                
+                // Then create or find subtopic
+                var subtopicObj = topicObj.subtopics.first { $0.title == subtopic }
+                if subtopicObj == nil {
+                    subtopicObj = try await dataManager.addSubtopic(to: topicObj, title: subtopic)
+                }
+                guard let subtopicObj = subtopicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
+                
+                // Create note with the image
+                let note = try await dataManager.addNote(
+                    to: subtopicObj,
+                    in: topicObj,
+                    title: classification.note_name,
+                    content: "",
+                    attachmentUrls: [fileName]
+                )
+                
+                // Create upload with note_id
+                try await saveUpload(
+                    title: classification.note_name,
+                    type: type.rawValue,
+                    imageURL: fileName,
+                    documentURL: nil,
+                    category: "\(topic) > \(subtopic)",
+                    topic: topic,
+                    subtopic: subtopic,
+                    noteId: note.id
+                )
+                
+                // Update UI
+                await MainActor.run {
+                    noteDisplayState.currentTopic = topicObj
+                    noteDisplayState.currentSubtopic = subtopicObj
+                    noteDisplayState.currentNote = note
+                    noteDisplayState.isShowingNote = true
+                }
+            }
+        } catch {
+            print("❌ Failed to create document: \(error.localizedDescription)")
+            await MainActor.run {
+                alertMessage = "Failed to create document: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+        
+        // Clear pending data
+        await MainActor.run {
+            pendingClassification = nil
+            pendingImage = nil
+            pendingType = nil
+            selectedTopic = nil
+            selectedSubtopic = nil
+            selectedTopicId = nil
+            newTopicName = ""
+            newSubtopicName = ""
+            showTopicConfirmation = false
+            showTopicPicker = false
+            showSubtopicPicker = false
+        }
     }
     
     private func processImageWithOCR(_ image: UIImage) async -> String? {
@@ -850,5 +983,33 @@ struct DocumentPicker: UIViewControllerRepresentable {
 struct DocumentManagerView_Previews: PreviewProvider {
     static var previews: some View {
         DocumentManagerView()
+    }
+}
+
+// Add RefreshableView
+struct RefreshableView<Content: View>: View {
+    @Binding var isRefreshing: Bool
+    let action: () async -> Void
+    let content: Content
+    
+    init(isRefreshing: Binding<Bool>,
+         action: @escaping () async -> Void,
+         @ViewBuilder content: () -> Content) {
+        self._isRefreshing = isRefreshing
+        self.action = action
+        self.content = content()
+    }
+    
+    var body: some View {
+        if #available(iOS 15.0, *) {
+            content
+                .refreshable {
+                    isRefreshing = true
+                    await action()
+                    isRefreshing = false
+                }
+        } else {
+            content
+        }
     }
 } 
