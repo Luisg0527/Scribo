@@ -184,7 +184,6 @@ struct SidebarView: View {
                 }
                 .padding()
                 .background(Color.appHeaderBackground)
-                .shadow(color: .appShadow, radius: 8, x: 0, y: 4)
             }
             .sheet(isPresented: $isProfileSheetPresented) {
                 ProfileSheetView(isPresented: $isProfileSheetPresented, authManager: authManager)
@@ -325,11 +324,6 @@ struct SidebarView: View {
         .frame(width: 280)
         .background(Color.appCardBackground)
         .preferredColorScheme(isDarkMode ? .light : .dark)
-        .fullScreenCover(isPresented: $showProfile) {
-            NavigationView {
-                ProfileView()
-            }
-        }
         .onAppear {
             Task {
                 await loadProfileImage()
@@ -731,26 +725,12 @@ struct ContentView: View {
                 .font(.system(size: 20))
                 .foregroundColor(.appAccent1)
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 26)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
     
     private var navigationButton: some View {
         Group {
-            if noteDisplayState.isShowingNote {
-                Button(action: {
-                    noteDisplayState.isShowingNote = false
-                    noteDisplayState.currentNote = nil
-                    noteDisplayState.currentTopic = nil
-                    noteDisplayState.currentSubtopic = nil
-                }) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.appAccent1)
-                }
-                .padding(.horizontal, 34)
-                .padding(.vertical, 20)
-            } else {
                 Button(action: {
                     showNotebook = true
                 }) {
@@ -758,12 +738,12 @@ struct ContentView: View {
                         .font(.system(size: 20))
                         .foregroundColor(.appAccent1)
                 }
-                .padding(.horizontal, 34)
-                .padding(.vertical, 20)
+                .padding(.horizontal, 24)
+                .padding(.vertical,16)
             }
         }
     }
-}
+
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {

@@ -14,70 +14,6 @@ struct TextClassificationResponse: Codable {
     let raw_scores: [String: Double]
 }
 
-// MARK: - Chat Model
-struct Chat: Identifiable, Codable {
-    let id: UUID
-    var messages: [ChatMessage]
-    var createdAt: Date
-    var updatedAt: Date
-    var title: String
-    var userId: UUID?
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case messages = "chat_messages"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case title
-        case userId = "user_id"
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        messages = try container.decode([ChatMessage].self, forKey: .messages)
-        title = try container.decode(String.self, forKey: .title)
-        
-        // Decode dates from ISO8601 strings
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        let createdAtString = try container.decode(String.self, forKey: .createdAt)
-        let updatedAtString = try container.decode(String.self, forKey: .updatedAt)
-        
-        guard let createdAt = dateFormatter.date(from: createdAtString),
-              let updatedAt = dateFormatter.date(from: updatedAtString) else {
-            throw DecodingError.dataCorruptedError(forKey: .createdAt, in: container, debugDescription: "Date string does not match format")
-        }
-        
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        
-        // Decode user_id as UUID
-        if let userIdString = try container.decodeIfPresent(String.self, forKey: .userId) {
-            userId = UUID(uuidString: userIdString)
-        } else {
-            userId = nil
-        }
-    }
-    
-    init(id: UUID = UUID(), messages: [ChatMessage] = [], createdAt: Date = Date(), updatedAt: Date = Date(), title: String = "New Chat", userId: UUID? = nil) {
-        self.id = id
-        self.messages = messages
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.title = title
-        self.userId = userId
-    }
-}
-
-struct DocumentMessage: Identifiable, Codable {
-    let id = UUID()
-    let url: URL
-    let name: String
-    let type: String
-}
-
 // MARK: - Document Type
 enum DocumentType: String {
     case photo = "photo"
@@ -111,6 +47,7 @@ struct Upload: Identifiable, Codable {
     let subtopic: String?
     let created_at: String
     let updated_at: String
+    let note_id: UUID
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -123,6 +60,7 @@ struct Upload: Identifiable, Codable {
         case subtopic
         case created_at
         case updated_at
+        case note_id
     }
 }
 
@@ -137,13 +75,14 @@ struct DocumentManagerView: View {
     @State private var isShowingCamera = false
     @State private var isShowingScanner = false
     @State private var isProcessingOCR: Bool = false
+    @State private var processingStatus: String = ""
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
     @AppStorage("isDarkMode") private var isDarkMode = false
     @StateObject private var dataManager = DataManager()
     @StateObject private var alertManager = AlertManager()
     @State private var classificationService = TextClassificationService(
-        serverURL: "http://10.22.149.108:8000/classify",
+        serverURL: "http://192.168.68.120:8000/classify",
         apiKey: "dev-secret-12345"
     )
     @State private var showPhotoLibraryPermissionAlert = false
@@ -168,112 +107,127 @@ struct DocumentManagerView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Search and Filter Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search documents...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-            }
-            .padding()
-            .background(Color.appCardBackground)
-            
-            // Filter Pills
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    FilterPill(title: "All", isSelected: selectedFilter == nil) {
-                        selectedFilter = nil
-                    }
-                    FilterPill(title: "Photos", isSelected: selectedFilter == .photo) {
-                        selectedFilter = .photo
-                    }
-                    FilterPill(title: "Scanned", isSelected: selectedFilter == .scanned) {
-                        selectedFilter = .scanned
-                    }
-                    FilterPill(title: "Documents", isSelected: selectedFilter == .document) {
-                        selectedFilter = .document
-                    }
+        ZStack {
+            VStack(spacing: 0) {
+                // Search and Filter Bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search uploads...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-            }
-            .background(Color.appHeaderBackground)
-            
-            // Document Grid
-            ScrollView {
-                if isLoadingDocuments {
-                    ProgressView("Loading documents...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 40)
-                } else if filteredDocuments.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 40))
-                .foregroundColor(.appAccent1)
-                            .padding(.bottom, 8)
-                        
-                        Text("Ready to Organize!")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                .foregroundColor(.appText)
-                        
-                        Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
-                .font(.body)
-                .foregroundColor(.appTextSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, 80)
-                } else {
-                    LazyVGrid(columns: [
-                        GridItem(.fixed(160), spacing: 16),
-                        GridItem(.fixed(160), spacing: 16)
-                    ], spacing: 16) {
-                        ForEach(filteredDocuments) { document in
-                            DocumentCard(document: document)
-                                .onTapGesture {
-                                    handleDocumentTap(document)
-                                }
+                .padding()
+                .background(Color.appCardBackground)
+                
+                // Filter Pills
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        FilterPill(title: "All", isSelected: selectedFilter == nil) {
+                            selectedFilter = nil
+                        }
+                        FilterPill(title: "Photos", isSelected: selectedFilter == .photo) {
+                            selectedFilter = .photo
+                        }
+                        FilterPill(title: "Scanned", isSelected: selectedFilter == .scanned) {
+                            selectedFilter = .scanned
+                        }
+                        FilterPill(title: "Documents", isSelected: selectedFilter == .document) {
+                            selectedFilter = .document
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
                 }
-            }
-            
-            // Bottom Bar
-        HStack {
-                Menu {
-                    Button(action: { isPhotoPickerPresented = true }) {
-                        Label("Photo", systemImage: "photo.fill")
-                    }
-                    
-                    Button(action: { isShowingCamera = true }) {
-                        Label("Camera", systemImage: "camera.fill")
-                    }
-                    
-                    Button(action: { isShowingScanner = true }) {
-                        Label("Scan", systemImage: "doc.viewfinder")
-                    }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 24))
-                    .foregroundColor(.appAccent1)
-            }
-            
-            Spacer()
+                .background(Color.appHeaderBackground)
+                .foregroundColor(.appText)
                 
-        Button(action: {
-                    // TODO: Implement share functionality
-        }) {
-                    Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 24))
-                .foregroundColor(.appAccent1)
-        }
-    }
-            .padding()
-            .background(Color.appHeaderBackground.opacity(0.8))
+                // Document Grid
+            ScrollView {
+                    if isLoadingDocuments {
+                        ProgressView("Loading documents...")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, 40)
+                    } else if filteredDocuments.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray.opacity(0.5))
+                                .padding(.bottom, 8)
+                            
+                            Text("Ready to Organize!")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.gray.opacity(0.7))
+                            
+                            Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
+                                .font(.body)
+                                .foregroundColor(.gray.opacity(0.6))
+                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 80)
+                    } else {
+                        LazyVGrid(columns: [
+                            GridItem(.fixed(160), spacing: 36),
+                            GridItem(.fixed(160), spacing: 36)
+                        ], spacing: 16) {
+                            ForEach(filteredDocuments) { document in
+                                DocumentCard(document: document)
+                                    .onTapGesture {
+                                        handleDocumentTap(document)
+                                    }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+                
+                // Bottom Bar
+                HStack {
+                    Menu {
+                        Button(action: { isShowingScanner = true }) {
+                            Label("Scan", systemImage: "doc.viewfinder")
+                        }
+                        Button(action: { isShowingCamera = true }) {
+                            Label("Camera", systemImage: "camera.fill")
+                        }
+                        Button(action: { isPhotoPickerPresented = true }) {
+                            Label("Photo", systemImage: "photo.fill")
+                        }
+                        
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.appAccent1)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 3)
+                    
+                    Spacer()
+                }
+                .padding()
+                .background(Color.appHeaderBackground.opacity(0.8))
+            }
+            
+            // Processing Overlay
+            if isProcessingOCR {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                            .overlay(
+                        VStack(spacing: 16) {
+                                ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                    
+                            Text(processingStatus)
+                                .font(.headline)
+                            .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        }
+                    )
+            }
         }
         .background(Color.appBackground)
         .task {
@@ -365,7 +319,7 @@ struct DocumentManagerView: View {
                                         topic: topic.title,
                                         subtopic: subtopic.title
                                     )
-            await MainActor.run {
+                                    await MainActor.run {
                                         documents.append(document)
                                     }
                                 }
@@ -393,7 +347,7 @@ struct DocumentManagerView: View {
                             topic: upload.topic,
                             subtopic: upload.subtopic
                         )
-        await MainActor.run {
+                await MainActor.run {
                             documents.append(document)
                         }
                     }
@@ -436,6 +390,7 @@ struct DocumentManagerView: View {
     
     private func processAndCategorizeImage(_ image: UIImage, type: DocumentType) async {
         isProcessingOCR = true
+        processingStatus = "Processing image..."
         
         do {
             // Save image first
@@ -445,11 +400,14 @@ struct DocumentManagerView: View {
                             try data.write(to: fileURL)
                             
                 // Process image with OCR
+                processingStatus = "Extracting text..."
                 if let text = await processImageWithOCR(image) {
                                     // Classify the text
+                    processingStatus = "Categorizing content..."
                                         let classification = try await classificationService.classifyText(text)
                                         
-                    // Create document item
+                    // Create document item for UI
+                    processingStatus = "Creating document..."
                     let document = DocumentItem(
                         id: UUID(),
                         title: classification.note_name,
@@ -467,7 +425,30 @@ struct DocumentManagerView: View {
                         documents.insert(document, at: 0)
                     }
                     
-                    // Save to Supabase
+                    // First create or find topic
+                    var topic = dataManager.topics.first { $0.title == classification.topic }
+                    if topic == nil {
+                        topic = try await dataManager.addTopic(title: classification.topic)
+                    }
+                    guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
+                    
+                    // Then create or find subtopic
+                    var subtopic = topic.subtopics.first { $0.title == classification.subtopic }
+                    if subtopic == nil {
+                        subtopic = try await dataManager.addSubtopic(to: topic, title: classification.subtopic)
+                    }
+                    guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
+                    
+                    // Create note with the image
+                    let note = try await dataManager.addNote(
+                        to: subtopic,
+                        in: topic,
+                        title: classification.note_name,
+                        content: text,
+                        attachmentUrls: [fileName]
+                    )
+                    
+                    // Now create the upload with the note_id
                     try await saveUpload(
                         title: classification.note_name,
                         type: type.rawValue,
@@ -475,14 +456,20 @@ struct DocumentManagerView: View {
                         documentURL: nil,
                         category: "\(classification.topic) > \(classification.subtopic)",
                         topic: classification.topic,
-                        subtopic: classification.subtopic
+                        subtopic: classification.subtopic,
+                        noteId: note.id
                     )
                     
-                    // Create note in the notebook
-                    try await createNoteFromClassification(classification, image: image)
+                    // Update UI
+                                        await MainActor.run {
+                        noteDisplayState.currentTopic = topic
+                        noteDisplayState.currentSubtopic = subtopic
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.isShowingNote = true
+                    }
                 } else {
                     // Show warning to user when OCR fails
-                                        await MainActor.run {
+                    await MainActor.run {
                         alertMessage = "We couldn't extract any text from this image. Please try with a clearer image or add a description manually."
                         showAlert = true
                     }
@@ -513,7 +500,28 @@ struct DocumentManagerView: View {
                         documents.insert(document, at: 0)
                     }
                     
-                    // Save to Supabase
+                    // Create topic, subtopic, and note for uncategorized
+                    var topic = dataManager.topics.first { $0.title == "Uncategorized" }
+                    if topic == nil {
+                        topic = try await dataManager.addTopic(title: "Uncategorized")
+                    }
+                    guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
+                    
+                    var subtopic = topic.subtopics.first { $0.title == "General" }
+                    if subtopic == nil {
+                        subtopic = try await dataManager.addSubtopic(to: topic, title: "General")
+                    }
+                    guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
+                    
+                    let note = try await dataManager.addNote(
+                        to: subtopic,
+                        in: topic,
+                        title: defaultClassification.note_name,
+                        content: "",
+                        attachmentUrls: [fileName]
+                    )
+                    
+                    // Create upload with note_id
                     try await saveUpload(
                         title: defaultClassification.note_name,
                         type: type.rawValue,
@@ -521,11 +529,17 @@ struct DocumentManagerView: View {
                         documentURL: nil,
                         category: "Uncategorized > General",
                         topic: "Uncategorized",
-                        subtopic: "General"
+                        subtopic: "General",
+                        noteId: note.id
                     )
                     
-                    // Create the uncategorized note
-                    try await createNoteFromClassification(defaultClassification, image: image)
+                    // Update UI
+                    await MainActor.run {
+                        noteDisplayState.currentTopic = topic
+                        noteDisplayState.currentSubtopic = subtopic
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.isShowingNote = true
+                                }
                             }
                         }
                     } catch {
@@ -537,6 +551,7 @@ struct DocumentManagerView: View {
         }
         
         isProcessingOCR = false
+        processingStatus = ""
     }
     
     private func processImageWithOCR(_ image: UIImage) async -> String? {
@@ -548,6 +563,8 @@ struct DocumentManagerView: View {
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.customWords = ["Swift", "SwiftUI", "Xcode", "iOS", "macOS", "UIKit", "AppKit"]
         
         do {
             try requestHandler.perform([request])
@@ -556,63 +573,56 @@ struct DocumentManagerView: View {
                 return nil
             }
             
-            let recognizedText = observations.compactMap { observation in
-                observation.topCandidates(1).first?.string
-            }.joined(separator: "\n")
+            // Sort observations by vertical position (top to bottom)
+            let sortedObservations = observations.sorted { obs1, obs2 in
+                let box1 = obs1.boundingBox
+                let box2 = obs2.boundingBox
+                return box1.origin.y > box2.origin.y
+            }
             
-            if recognizedText.isEmpty {
+            // Process text with improved formatting
+            var processedLines: [String] = []
+            var currentLine: [String] = []
+            var lastY: CGFloat = -1
+            let yThreshold: CGFloat = 0.05 // Threshold for considering text on the same line
+            
+            for observation in sortedObservations {
+                let text = observation.topCandidates(1).first?.string ?? ""
+                let box = observation.boundingBox
+                
+                if lastY == -1 {
+                    lastY = box.origin.y
+                    currentLine.append(text)
+                } else if abs(box.origin.y - lastY) < yThreshold {
+                    // Text is on the same line
+                    currentLine.append(text)
+                } else {
+                    // New line detected
+                    if !currentLine.isEmpty {
+                        processedLines.append(currentLine.joined(separator: " "))
+                        currentLine = [text]
+                        lastY = box.origin.y
+                    }
+                }
+            }
+            
+            // Add the last line
+            if !currentLine.isEmpty {
+                processedLines.append(currentLine.joined(separator: " "))
+            }
+            
+            // Join lines with proper spacing
+            let processedText = processedLines.joined(separator: "\n")
+            
+            if processedText.isEmpty {
                 print("OCR returned empty text")
                 return nil
             }
             
-            return recognizedText
-            } catch {
+            return processedText
+        } catch {
             print("OCR Error: \(error.localizedDescription)")
             return nil
-        }
-    }
-    
-    private func createNoteFromClassification(_ classification: TextClassificationResponse, image: UIImage? = nil) async throws {
-        // Find or create topic
-        var topic = dataManager.topics.first { $0.title == classification.topic }
-        if topic == nil {
-            topic = try await dataManager.addTopic(title: classification.topic)
-        }
-        guard let topic = topic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
-        
-        // Find or create subtopic
-        var subtopic = topic.subtopics.first { $0.title == classification.subtopic }
-        if subtopic == nil {
-            subtopic = try await dataManager.addSubtopic(to: topic, title: classification.subtopic)
-        }
-        guard let subtopic = subtopic else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
-        
-        // Save image if provided
-        var attachmentUrl: String? = nil
-        if let image = image {
-            let fileName = "\(UUID().uuidString).jpg"
-            let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
-            if let data = image.jpegData(compressionQuality: 0.8) {
-                try data.write(to: fileURL)
-                attachmentUrl = fileName
-            }
-        }
-        
-        // Create note
-        let note = try await dataManager.addNote(
-            to: subtopic,
-            in: topic,
-            title: classification.note_name,
-            content: "",  // We'll use the OCR text as content
-            attachmentUrls: attachmentUrl != nil ? [attachmentUrl!] : nil
-        )
-        
-        // Update UI on main thread
-        await MainActor.run {
-            noteDisplayState.currentTopic = topic
-            noteDisplayState.currentSubtopic = subtopic
-            noteDisplayState.currentNote = note
-            noteDisplayState.isShowingNote = true
         }
     }
     
@@ -637,11 +647,11 @@ struct DocumentManagerView: View {
                         throw AppError.dataError("Note not found")
                     }
                     
-                    await MainActor.run {
+        await MainActor.run {
                         noteDisplayState.currentTopic = topicObj
                         noteDisplayState.currentSubtopic = subtopicObj
-                        noteDisplayState.currentNote = note
-                        noteDisplayState.isShowingNote = true
+            noteDisplayState.currentNote = note
+            noteDisplayState.isShowingNote = true
                     }
                 } catch {
                     print("❌ Failed to open document: \(error.localizedDescription)")
@@ -662,7 +672,7 @@ struct DocumentManagerView: View {
         }
     }
     
-    private func saveUpload(title: String, type: String, imageURL: String?, documentURL: String?, category: String?, topic: String?, subtopic: String?) async throws {
+    private func saveUpload(title: String, type: String, imageURL: String?, documentURL: String?, category: String?, topic: String?, subtopic: String?, noteId: UUID) async throws {
         let upload = UploadRequest(
             title: title,
             type: type,
@@ -670,7 +680,8 @@ struct DocumentManagerView: View {
             document_url: documentURL,
             category: category,
             topic: topic,
-            subtopic: subtopic
+            subtopic: subtopic,
+            note_id: noteId
         )
         
         let newUpload = try await dataManager.createUpload(upload)
@@ -708,13 +719,13 @@ struct DocumentCard: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 160, height: 160)
+                    .frame(width: 180, height: 160)
                     .clipped()
             } else {
                         Image(systemName: "doc.fill")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 160, height: 160)
+                    .frame(width: 180, height: 160)
                             .foregroundColor(.appAccent1)
             }
             
@@ -738,8 +749,8 @@ struct DocumentCard: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .frame(width: 160)
-        .background(Color.appCardBackground)
+        .frame(width: 180)
+        .background(Color.clear)
         .cornerRadius(12)
         .shadow(color: Color.appShadow, radius: 8, x: 0, y: 4)
     }

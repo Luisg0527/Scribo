@@ -38,6 +38,7 @@ struct UploadRequest: Codable {
     let category: String?
     let topic: String?
     let subtopic: String?
+    let note_id: UUID
 }
 
 class DataManager: ObservableObject {

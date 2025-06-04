@@ -11,8 +11,8 @@ struct LaunchScreenView: View {
             // Animated gradient background
             LinearGradient(
                 gradient: Gradient(colors: [
-                    isDarkMode ? Color(red: 0.1, green: 0.1, blue: 0.2) : Color(red: 0.95, green: 0.95, blue: 0.97),
-                    isDarkMode ? Color(red: 0.2, green: 0.2, blue: 0.3) : Color(red: 0.9, green: 0.9, blue: 0.95)
+                    isDarkMode ? Color(red: 0.95, green: 0.95, blue: 0.97) : Color(red: 0.1, green: 0.1, blue: 0.2),
+                    isDarkMode ? Color(red: 0.9, green: 0.9, blue: 0.95) : Color(red: 0.2, green: 0.2, blue: 0.3)
                 ]),
                 startPoint: animateBackground ? .topLeading : .bottomLeading,
                 endPoint: animateBackground ? .bottomTrailing : .topTrailing

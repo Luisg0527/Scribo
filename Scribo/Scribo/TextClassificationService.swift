@@ -22,7 +22,7 @@ enum ClassificationError: Error {
 
 class TextClassificationService {
     // Configuration
-    static let serverURL = ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "http://10.22.149.108:8000/classify"
+    static let serverURL = ProcessInfo.processInfo.environment["CLASSIFICATION_SERVER_URL"] ?? "http://192.168.68.120:8000/classify"
     static let apiKey = ProcessInfo.processInfo.environment["CLASSIFICATION_API_KEY"] ?? "dev-secret-12345"
     
     private let serverURL: String
@@ -41,8 +41,11 @@ class TextClassificationService {
             throw ClassificationError.invalidURL
         }
         
+        // Preprocess text to improve classification
+        let preprocessedText = preprocessText(text)
+        
         let payload = ClassificationRequest(
-            text: text,
+            text: preprocessedText,
             labels: ClassificationLabels.allLabels
         )
         
@@ -79,7 +82,10 @@ class TextClassificationService {
                 do {
                     let decoder = JSONDecoder()
                     let result = try decoder.decode(TextClassificationResponse.self, from: data)
-                    return result
+                    
+                    // Post-process classification results
+                    let processedResult = postProcessClassification(result)
+                    return processedResult
                 } catch {
                     print("Decoding error: \(error)")
                     print("Response data: \(String(data: data, encoding: .utf8) ?? "none")")
@@ -103,5 +109,60 @@ class TextClassificationService {
         } catch {
             throw ClassificationError.networkError(error)
         }
+    }
+    
+    private func preprocessText(_ text: String) -> String {
+        // Remove extra whitespace
+        let cleanedText = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Remove common technical terms that might bias classification
+        let technicalTerms = ["swift", "swiftui", "ios", "xcode", "code", "programming", "developer"]
+        var processedText = cleanedText
+        for term in technicalTerms {
+            processedText = processedText.replacingOccurrences(of: term, with: "", options: [.caseInsensitive])
+        }
+        
+        return processedText
+    }
+    
+    private func postProcessClassification(_ result: TextClassificationResponse) -> TextClassificationResponse {
+        // If the top classification is Language/Translation/Speaking, check if there's a better match
+        if result.topic == "Language" || result.subtopic == "Translation" || result.subtopic == "Speaking" {
+            // Look for other high-scoring categories
+            let sortedScores = result.raw_scores.sorted { $0.value > $1.value }
+            if sortedScores.count > 1 {
+                let secondBest = sortedScores[1]
+                // If second best score is close to the best score (within 20%), use it instead
+                if secondBest.value > sortedScores[0].value * 0.8 {
+                    return TextClassificationResponse(
+                        topic: secondBest.key,
+                        subtopic: result.subtopic,
+                        note_name: result.note_name,
+                        raw_scores: result.raw_scores
+                    )
+                }
+            }
+        }
+        return result
+    }
+    
+    static func generateNoteName(from text: String, maxWords: Int = 5) -> String {
+        // Remove special characters and extra whitespace
+        let cleanText = text.replacingOccurrences(of: "[^a-zA-Z0-9\\s]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Split into words and filter out common words
+        let words = cleanText.components(separatedBy: " ")
+        let commonWords = Set(["the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "with", "by", "about", "as", "of", "from"])
+        let filteredWords = words.filter { !commonWords.contains($0.lowercased()) }
+        
+        // Take first maxWords and capitalize each
+        let selectedWords = Array(filteredWords.prefix(maxWords))
+        let capitalizedWords = selectedWords.map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+        
+        // Join with spaces
+        return capitalizedWords.joined(separator: " ")
     }
 } 

@@ -454,32 +454,55 @@ struct NotebookView: View {
 
                 // Hierarchical Tree
                 List {
-                    ForEach(filteredTopics) { topic in
-                        TopicRow(
-                            topic: topic,
-                            selectedTopic: $selectedTopic,
-                            selectedSubtopic: $selectedSubtopic,
-                            selectedNote: $selectedNote,
-                            isPresented: $isPresented,
-                            dataManager: dataManager,
-                            subtopicToDelete: $subtopicToDelete,
-                            noteToDelete: $noteToDelete,
-                            isExpanded: expandedTopics.contains(topic.id),
-                            onExpandChange: { expanded, topicId in
-                                if expanded {
-                                    expandedTopics.insert(topicId)
-                                } else {
-                                    expandedTopics.remove(topicId)
-                                }
-                            },
-                            expandedSubtopics: $expandedSubtopics,
-                            searchText: searchState.searchText,
-                            isShowingNewTopicSheet: $isShowingNewTopicSheet,
-                            isShowingEditTopicSheet: $isShowingEditTopicSheet,
-                            topicToDelete: $topicToDelete,
-                            isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
-                            isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
-                        )
+                    if filteredTopics.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "note.text.badge.plus")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray.opacity(0.5))
+                                .padding(.bottom, 8)
+                            
+                            Text("Start Organizing!")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.gray.opacity(0.7))
+                            
+                            Text("Create topics and add notes to organize your thoughts and ideas.")
+                                .font(.body)
+                                .foregroundColor(.gray.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 80)
+                        .listRowBackground(Color.clear)
+                    } else {
+                        ForEach(filteredTopics) { topic in
+                            TopicRow(
+                                topic: topic,
+                                selectedTopic: $selectedTopic,
+                                selectedSubtopic: $selectedSubtopic,
+                                selectedNote: $selectedNote,
+                                isPresented: $isPresented,
+                                dataManager: dataManager,
+                                subtopicToDelete: $subtopicToDelete,
+                                noteToDelete: $noteToDelete,
+                                isExpanded: expandedTopics.contains(topic.id),
+                                onExpandChange: { expanded, topicId in
+                                    if expanded {
+                                        expandedTopics.insert(topicId)
+                                    } else {
+                                        expandedTopics.remove(topicId)
+                                    }
+                                },
+                                expandedSubtopics: $expandedSubtopics,
+                                searchText: searchState.searchText,
+                                isShowingNewTopicSheet: $isShowingNewTopicSheet,
+                                isShowingEditTopicSheet: $isShowingEditTopicSheet,
+                                topicToDelete: $topicToDelete,
+                                isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
+                                isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
+                            )
+                        }
                     }
                 }
                 .listStyle(PlainListStyle())

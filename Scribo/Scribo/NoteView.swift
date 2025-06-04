@@ -99,17 +99,32 @@ struct NoteView: View {
                             .onChange(of: editedTitle) { _, _ in hasChanges = true }
                     }
 
-                    TextEditor(text: $editedContent)
-                        .font(.body)
-                        .frame(minHeight: 100)
-                        .padding(12)
-                        .background(Color(.clear))
-                        .cornerRadius(12)
-                        .onChange(of: editedContent) { _, _ in hasChanges = true }
+                    ZStack(alignment: .topLeading) {
+                        // Placeholder
+                        if editedContent.isEmpty {
+                            Text("Enter your text here...")
+                                .foregroundColor(.gray)
+                                .padding(.top, 0)
+                                .padding(.leading, 16)
+                                .background(Color.clear)
+                                
+                        }
+
+                        // TextEditor
+                        TextEditor(text: $editedContent)
+                            .font(.body)
+                            .frame(minHeight: 100)
+                            .padding(12)
+                            .background(Color.clear)
+                            .cornerRadius(12)
+                            .onChange(of: editedContent) { _, _ in
+                                hasChanges = true
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                }
-                .padding(.top)
+                .padding(.top)                
             }
 
             // Bottom Bar
