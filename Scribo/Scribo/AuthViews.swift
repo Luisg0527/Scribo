@@ -32,6 +32,10 @@ struct LoginMethodView: View {
     @State private var showLogin = false
     @State private var showSignUp = false
     @State private var animateBackground = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     var body: some View {
         Group {
@@ -181,10 +185,7 @@ struct LoginMethodView: View {
                                 
                                 HStack(spacing: 16) {
                                     Button(action: {
-                                        // Present Terms of Use
-                                        let termsView = TermsOfUse()
-                                        let hostingController = UIHostingController(rootView: termsView)
-                                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                                        showTermsOfUse = true
                                     }) {
                                         Text("Terms of Use")
                                             .font(.system(size: 13))
@@ -196,10 +197,7 @@ struct LoginMethodView: View {
                                         .foregroundColor(.white.opacity(0.5))
                                     
                                     Button(action: {
-                                        // Present Privacy Policy
-                                        let privacyView = PrivacyPolicy()
-                                        let hostingController = UIHostingController(rootView: privacyView)
-                                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                                        showPrivacyPolicy = true
                                     }) {
                                         Text("Privacy Policy")
                                             .font(.system(size: 13))
@@ -211,6 +209,33 @@ struct LoginMethodView: View {
                         }
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showTermsOfUse) {
+            NavigationView {
+                TermsOfUse()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showTermsOfUse = false
+                    })
+            }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationView {
+                PrivacyPolicy()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showPrivacyPolicy = false
+                    })
+            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: authManager.error) { oldValue, newValue in
+            if let error = newValue {
+                errorMessage = error
+                showError = true
             }
         }
     }
@@ -228,6 +253,8 @@ struct LoginView: View {
     @Binding var showLogin: Bool
     @State private var showPassword = false
     @State private var isLoading = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     var body: some View {
         Group {
@@ -408,10 +435,7 @@ struct LoginView: View {
                         // Terms and Privacy
                         HStack(spacing: 16) {
                             Button(action: {
-                                // Present Terms of Use
-                                let termsView = TermsOfUse()
-                                let hostingController = UIHostingController(rootView: termsView)
-                                UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                                showTermsOfUse = true
                             }) {
                                 Text("Terms of Use")
                                     .font(.system(size: 15))
@@ -421,10 +445,7 @@ struct LoginView: View {
                                 .font(.system(size: 15))
                                 .foregroundColor(.white)
                             Button(action: {
-                                // Present Privacy Policy
-                                let privacyView = PrivacyPolicy()
-                                let hostingController = UIHostingController(rootView: privacyView)
-                                UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                                showPrivacyPolicy = true
                             }) {
                                 Text("Privacy Policy")
                                     .font(.system(size: 15))
@@ -463,6 +484,8 @@ struct SignUpView: View {
     @State private var showPassword = false
     @State private var showConfirmPassword = false
     @State private var isLoading = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     var body: some View {
         ZStack {
@@ -676,10 +699,7 @@ struct SignUpView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Present Terms of Use
-                        let termsView = TermsOfUse()
-                        let hostingController = UIHostingController(rootView: termsView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showTermsOfUse = true
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -689,10 +709,7 @@ struct SignUpView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Present Privacy Policy
-                        let privacyView = PrivacyPolicy()
-                        let hostingController = UIHostingController(rootView: privacyView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showPrivacyPolicy = true
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))
@@ -713,6 +730,22 @@ struct SignUpView: View {
                 showError = true
             }
         }
+        .sheet(isPresented: $showTermsOfUse) {
+            NavigationView {
+                TermsOfUse()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showTermsOfUse = false
+                    })
+            }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationView {
+                PrivacyPolicy()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showPrivacyPolicy = false
+                    })
+            }
+        }
     }
 }
 
@@ -723,6 +756,8 @@ struct ForgotPasswordView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     @Binding var showForgotPassword: Bool
     
     var body: some View {
@@ -835,10 +870,7 @@ struct ForgotPasswordView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Present Terms of Use
-                        let termsView = TermsOfUse()
-                        let hostingController = UIHostingController(rootView: termsView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showTermsOfUse = true
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -848,10 +880,7 @@ struct ForgotPasswordView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Present Privacy Policy
-                        let privacyView = PrivacyPolicy()
-                        let hostingController = UIHostingController(rootView: privacyView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showPrivacyPolicy = true
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))
@@ -879,6 +908,22 @@ struct ForgotPasswordView: View {
                 showError = true
             }
         }
+        .sheet(isPresented: $showTermsOfUse) {
+            NavigationView {
+                TermsOfUse()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showTermsOfUse = false
+                    })
+            }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationView {
+                PrivacyPolicy()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showPrivacyPolicy = false
+                    })
+            }
+        }
     }
 }
 
@@ -892,6 +937,8 @@ struct NewPasswordView: View {
     @State private var showSuccess = false
     @State private var showPassword = false
     @State private var showConfirmPassword = false
+    @State private var showTermsOfUse = false
+    @State private var showPrivacyPolicy = false
     
     var body: some View {
         ZStack {
@@ -1024,10 +1071,7 @@ struct NewPasswordView: View {
                 // Terms and Privacy
                 HStack(spacing: 16) {
                     Button(action: {
-                        // Present Terms of Use
-                        let termsView = TermsOfUse()
-                        let hostingController = UIHostingController(rootView: termsView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showTermsOfUse = true
                     }) {
                         Text("Terms of Use")
                             .font(.system(size: 15))
@@ -1037,10 +1081,7 @@ struct NewPasswordView: View {
                         .font(.system(size: 15))
                         .foregroundColor(.white)
                     Button(action: {
-                        // Present Privacy Policy
-                        let privacyView = PrivacyPolicy()
-                        let hostingController = UIHostingController(rootView: privacyView)
-                        UIApplication.shared.windows.first?.rootViewController?.present(hostingController, animated: true)
+                        showPrivacyPolicy = true
                     }) {
                         Text("Privacy Policy")
                             .font(.system(size: 15))
@@ -1062,6 +1103,22 @@ struct NewPasswordView: View {
             }
         } message: {
             Text("Your password has been updated successfully.")
+        }
+        .sheet(isPresented: $showTermsOfUse) {
+            NavigationView {
+                TermsOfUse()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showTermsOfUse = false
+                    })
+            }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            NavigationView {
+                PrivacyPolicy()
+                    .navigationBarItems(trailing: Button("Done") {
+                        showPrivacyPolicy = false
+                    })
+            }
         }
     }
 }

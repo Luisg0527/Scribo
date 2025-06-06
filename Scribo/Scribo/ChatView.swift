@@ -23,7 +23,7 @@ enum DocumentType: String {
 }
 
 // MARK: - Document Item
-struct DocumentItem: Identifiable {
+struct DocumentItem: Identifiable, Equatable {
     let id: UUID
     let title: String
     let type: DocumentType
@@ -33,6 +33,11 @@ struct DocumentItem: Identifiable {
     var category: String?
     var topic: String?
     var subtopic: String?
+    var noteId: UUID?
+    
+    static func == (lhs: DocumentItem, rhs: DocumentItem) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 // MARK: - Upload Model
@@ -105,6 +110,17 @@ struct DocumentManagerView: View {
     @State private var isRefreshing = false
     @State private var selectedTopicId: UUID?
     @State private var showSubtopicPicker = false
+    @State private var documentToDelete: DocumentItem?
+    @State private var showingDeleteAlert = false
+    @State private var batchClassification: TextClassificationResponse?
+    @State private var batchTopic: String?
+    @State private var batchSubtopic: String?
+    @State private var isProcessingBatch = false
+    @State private var expandedNotes: Set<UUID> = []
+    @State private var noteName: String = ""
+    @State private var hasLoadedInitialData = false
+    @State private var isCreatingNewTopic: Bool = false
+
     
     var filteredDocuments: [DocumentItem] {
         documents.filter { document in
@@ -115,6 +131,65 @@ struct DocumentManagerView: View {
             let matchesFilter = selectedFilter == nil || document.type == selectedFilter
             
             return matchesSearch && matchesFilter
+        }
+    }
+    
+    var groupedDocuments: [(UUID, String, [DocumentItem])] {
+        var groups: [UUID: (String, [DocumentItem])] = [:]
+        
+        for document in documents {
+            if let noteId = document.noteId {
+                if groups[noteId] == nil {
+                    groups[noteId] = (document.title, [])
+                }
+                groups[noteId]?.1.append(document)
+            }
+        }
+        
+        return groups.map { ($0.key, $0.value.0, $0.value.1) }
+            .sorted { $0.1 < $1.1 }
+    }
+    
+    private func documentGridContent() -> some View {
+        LazyVGrid(columns: [
+            GridItem(.fixed(160), spacing: 36),
+            GridItem(.fixed(160), spacing: 36)
+        ], spacing: 16) {
+            ForEach(groupedDocuments, id: \.0) { noteId, noteTitle, documents in
+                documentGroupView(noteId: noteId, noteTitle: noteTitle, documents: documents)
+            }
+        }
+        .padding()
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedNotes)
+    }
+    
+    private func documentGroupView(noteId: UUID, noteTitle: String, documents: [DocumentItem]) -> some View {
+        ForEach(documents) { document in
+            if documents.count == 1 {
+                documentCard(for: document, in: documents, noteId: noteId)
+            } else if expandedNotes.contains(noteId) || documents.first?.id == document.id {
+                documentCard(for: document, in: documents, noteId: noteId)
+            }
+        }
+    }
+    
+    private func documentCard(for document: DocumentItem, in documents: [DocumentItem], noteId: UUID) -> some View {
+        DocumentCard(document: document) {
+            documentToDelete = document
+            showingDeleteAlert = true
+        }
+        .onTapGesture {
+            if documents.count > 1 && documents.first?.id == document.id {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if expandedNotes.contains(noteId) {
+                        expandedNotes.remove(noteId)
+                    } else {
+                        expandedNotes.insert(noteId)
+                    }
+                }
+            } else {
+                handleDocumentTap(document)
+            }
         }
     }
     
@@ -159,23 +234,30 @@ struct DocumentManagerView: View {
                         Task {
                             await loadExistingDocuments()
                             await loadUploads()
+                            await MainActor.run {
+                                expandedNotes.removeAll()  // Reset expansion state on refresh
+                                isRefreshing = false
+                            }
                         }
                     } content: {
                         if isLoadingDocuments {
                             ProgressView("Loading documents...")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .padding(.top, 40)
+                                .accessibilityLabel("Loading documents")
                         } else if filteredDocuments.isEmpty {
                             VStack(spacing: 16) {
                                 Image(systemName: "doc.text.magnifyingglass")
                                     .font(.system(size: 40))
                                     .foregroundColor(.gray.opacity(0.5))
                                     .padding(.bottom, 8)
+                                    .accessibilityHidden(true)
                                 
                                 Text("Ready to Organize!")
                                     .font(.title2)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.gray.opacity(0.7))
+                                    .accessibilityAddTraits(.isHeader)
                                 
                                 Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
                                     .font(.body)
@@ -186,18 +268,7 @@ struct DocumentManagerView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(.top, 80)
                         } else {
-                            LazyVGrid(columns: [
-                                GridItem(.fixed(160), spacing: 36),
-                                GridItem(.fixed(160), spacing: 36)
-                            ], spacing: 16) {
-                                ForEach(filteredDocuments) { document in
-                                    DocumentCard(document: document)
-                                        .onTapGesture {
-                                            handleDocumentTap(document)
-                                        }
-                                }
-                            }
-                            .padding()
+                            documentGridContent()
                         }
                     }
                 }
@@ -205,8 +276,34 @@ struct DocumentManagerView: View {
                     isRefreshing = true
                     await loadExistingDocuments()
                     await loadUploads()
-                    isRefreshing = false
+                    await MainActor.run {
+                        expandedNotes.removeAll()  // Reset expansion state on refresh
+                        isRefreshing = false
+                    }
                 }
+                .task {
+                    if !hasLoadedInitialData {
+                        await loadExistingDocuments()
+                        await loadUploads()
+                        await MainActor.run {
+                            expandedNotes.removeAll()  // Reset expansion state on first load
+                            hasLoadedInitialData = true
+                        }
+                    }
+                }
+                .onChange(of: noteDisplayState.isShowingNote) { oldValue, newValue in
+                    if !newValue {
+                        Task {
+                            await loadExistingDocuments()
+                            await loadUploads()
+                            await MainActor.run {
+                                expandedNotes.removeAll()  // Reset expansion state when returning from note
+                            }
+                        }
+                    }
+                }
+                .accessibilityLabel("Document list")
+                .accessibilityHint("Pull down to refresh")
                 
                 // Bottom Bar
                 HStack {
@@ -214,18 +311,29 @@ struct DocumentManagerView: View {
                         Button(action: { isShowingScanner = true }) {
                             Label("Scan", systemImage: "doc.viewfinder")
                         }
+                        .accessibilityLabel("Scan document")
+                        
                         Button(action: { isShowingCamera = true }) {
                             Label("Camera", systemImage: "camera.fill")
                         }
+                        .accessibilityLabel("Take photo")
+                        
                         Button(action: { isPhotoPickerPresented = true }) {
                             Label("Photo", systemImage: "photo.fill")
                         }
+                        .accessibilityLabel("Choose from photo library")
                         
+                        Button(action: { isDocumentPickerPresented = true }) {
+                            Label("Document", systemImage: "doc.fill")
+                        }
+                        .accessibilityLabel("Choose from files")
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 24))
                             .foregroundColor(.appAccent1)
                     }
+                    .accessibilityLabel("Add new item")
+                    .accessibilityHint("Double tap to show options for adding new items")
                     .padding(.horizontal, 14)
                     .padding(.top, 3)
                     
@@ -239,46 +347,45 @@ struct DocumentManagerView: View {
             if isProcessingOCR {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
-                            .overlay(
+                    .overlay(
                         VStack(spacing: 16) {
-                                ProgressView()
+                            ProgressView()
                                 .scaleEffect(1.5)
                                 .tint(.white)
-                    
+                                .accessibilityLabel("Processing")
+                            
                             Text(processingStatus)
                                 .font(.headline)
-                            .foregroundColor(.white)
+                                .foregroundColor(.white)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
+                                .accessibilityLabel("Processing status: \(processingStatus)")
                         }
                     )
             }
         }
         .background(Color.appBackground)
-        .task {
-            await loadExistingDocuments()
-            await loadUploads()
-        }
-        .onChange(of: noteDisplayState.isShowingNote) { oldValue, newValue in
-            if !newValue {
-                Task {
-                    await loadExistingDocuments()
-                    await loadUploads()
-                }
-            }
-        }
         .sheet(isPresented: $isDocumentPickerPresented) {
             DocumentPicker(selectedDocument: $selectedDocument)
         }
         .photosPicker(isPresented: $isPhotoPickerPresented,
                      selection: $selectedPhotos,
-                     maxSelectionCount: 1,
+                     maxSelectionCount: 10,
                      matching: .images)
         .onChange(of: selectedPhotos) { oldValue, newValue in
             Task {
-                if let photo = newValue.first {
+                for photo in newValue {
                     await handleSelectedPhoto(photo)
                 }
+                // Clear selection after processing
+                selectedPhotos.removeAll()
+            }
+        }
+        .onChange(of: isDarkMode) { oldValue, newValue in
+            // Reload view when dark mode changes
+            Task {
+                await loadExistingDocuments()
+                await loadUploads()
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
@@ -287,6 +394,7 @@ struct DocumentManagerView: View {
                     handleCameraImage(image)
                 }
             }
+
         }
         .sheet(isPresented: $isShowingScanner) {
             DocumentScannerView { scannedImage in
@@ -310,85 +418,174 @@ struct DocumentManagerView: View {
         } message: {
             Text(alertMessage)
         }
-        .alert("Confirm Topic", isPresented: $showTopicConfirmation) {
-            Button("Edit") {
-                showTopicPicker = true
-            }
-            Button("Confirm") {
-                Task {
-                    await confirmAndCreateDocument()
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                pendingClassification = nil
-                pendingImage = nil
-                pendingType = nil
-                selectedTopic = nil
-                selectedSubtopic = nil
-                selectedTopicId = nil
-            }
-        } message: {
-            if let topic = selectedTopic, let subtopic = selectedSubtopic {
-                Text("Would you like to categorize this as:\nTopic: \(topic)\nSubtopic: \(subtopic)")
-            }
-        }
-        .sheet(isPresented: $showTopicPicker) {
+        .sheet(isPresented: $showTopicConfirmation) {
             NavigationView {
                 Form {
-                    Section(header: Text("Select Existing Topic")) {
+                    Section(header: Text("Confirm Note Details")
+                                .font(.headline)
+                                .foregroundColor(.secondary)) {
+                        if let topic = selectedTopic, let subtopic = selectedSubtopic {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Topic")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.gray)
+                                Text(topic)
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                
+                                Divider()
+                                
+                                Text("Subtopic")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.gray)
+                                Text(subtopic)
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Note Name")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.gray)
+                            TextField("Enter note name", text: $noteName)
+                                .padding(10)
+                                .background(Color(UIColor.secondarySystemBackground))
+                                .cornerRadius(8)
+                                .disableAutocorrection(true)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
+                    Section {
+                        Button(action: {
+                            if noteName.trimmingCharacters(in: .whitespaces).isEmpty {
+                                alertMessage = "Please provide a name for your note."
+                                showAlert = true
+                            } else {
+                                Task {
+                                    await confirmAndCreateDocument()
+                                }
+                                showTopicConfirmation = false
+                            }
+                        }) {
+                            Text("Confirm")
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .listRowBackground(Color.accentColor)
+                        .buttonStyle(.plain)
+                        .cornerRadius(8)
+                        
+                        Button("Cancel", role: .cancel) {
+                            pendingClassification = nil
+                            pendingImage = nil
+                            pendingType = nil
+                            selectedTopic = nil
+                            selectedSubtopic = nil
+                            selectedTopicId = nil
+                            showTopicConfirmation = false
+                        }
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .navigationTitle("Confirm Topic")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+     .sheet(isPresented: $showTopicPicker) {
+        NavigationView {
+            Form {
+                Section(header: Text("Note Information")) {
+                    TextField("Note Name", text: $noteName)
+                        .font(.headline)
+                }
+                
+                Section(header: Text("Topic")) {
+                    Picker("Choose Action", selection: $isCreatingNewTopic) {
+                        Text("Select Existing Topic").tag(false)
+                        Text("Create New Topic").tag(true)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    
+                    if isCreatingNewTopic {
+                        TextField("New Topic Name", text: $newTopicName)
+                    } else {
                         ForEach(dataManager.topics, id: \.id) { topic in
-                            Button(action: {
-                                selectedTopicId = topic.id
+                            Button {
+                                selectedTopicId = (selectedTopicId == topic.id) ? nil : topic.id
                                 selectedTopic = topic.title
-                                showSubtopicPicker = true
-                            }) {
+                                selectedSubtopic = nil
+                            } label: {
                                 HStack {
                                     Text(topic.title)
                                     Spacer()
-                                    if selectedTopic == topic.title {
+                                    if selectedTopicId == topic.id {
                                         Image(systemName: "checkmark")
                                     }
                                 }
                             }
                         }
                     }
-                    
-                    Section(header: Text("Create New Topic")) {
-                        TextField("New Topic", text: $newTopicName)
-                            .onChange(of: newTopicName) { oldValue, newValue in
-                                if !newValue.isEmpty {
-                                    selectedTopic = nil
-                                    selectedSubtopic = nil
-                                    selectedTopicId = nil
+                }
+                
+                if !isCreatingNewTopic {
+                    if let topicId = selectedTopicId,
+                    let topic = dataManager.topics.first(where: { $0.id == topicId }) {
+                        Section(header: Text("Subtopic")) {
+                            ForEach(topic.subtopics, id: \.id) { subtopic in
+                                Button {
+                                    selectedSubtopic = (selectedSubtopic == subtopic.title) ? nil : subtopic.title
+                                } label: {
+                                    HStack {
+                                        Text(subtopic.title)
+                                        Spacer()
+                                        if selectedSubtopic == subtopic.title {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
                                 }
                             }
-                        TextField("New Subtopic", text: $newSubtopicName)
-                            .onChange(of: newSubtopicName) { oldValue, newValue in
-                                if !newValue.isEmpty {
-                                    selectedTopic = nil
-                                    selectedSubtopic = nil
-                                    selectedTopicId = nil
-                                }
-                            }
-                        Button("Create New Topic & Subtopic") {
-                            if !newTopicName.isEmpty && !newSubtopicName.isEmpty {
-                                selectedTopic = newTopicName
-                                selectedSubtopic = newSubtopicName
-                                showTopicPicker = false
-                                Task {
-                                    await confirmAndCreateDocument()
-                                }
+                            if selectedSubtopic == nil {
+                                TextField("Or Create New Subtopic", text: $newSubtopicName)
                             }
                         }
-                        .disabled(newTopicName.isEmpty || newSubtopicName.isEmpty)
+                    }
+                } else {
+                    Section(header: Text("Subtopic")) {
+                        TextField("New Subtopic Name", text: $newSubtopicName)
                     }
                 }
-                .navigationTitle("Select Topic")
-                .navigationBarItems(trailing: Button("Cancel") {
-                    showTopicPicker = false
-                })
+
+                Section {
+                    Button("Confirm") {
+                        if isCreatingNewTopic {
+                            selectedTopic = newTopicName
+                        }
+                        if selectedSubtopic == nil && !newSubtopicName.isEmpty {
+                            selectedSubtopic = newSubtopicName
+                        }
+                        showTopicPicker = false
+                        Task {
+                            await confirmAndCreateDocument()
+                        }
+                    }
+                    .disabled(noteName.isEmpty || (isCreatingNewTopic ? newTopicName.isEmpty : selectedTopicId == nil) || (selectedSubtopic == nil && newSubtopicName.isEmpty))
+                }
             }
+            .navigationTitle("Select Topic")
+            .navigationBarItems(trailing: Button("Cancel") {
+                showTopicPicker = false
+            })
         }
+    }
+
         .sheet(isPresented: $showSubtopicPicker) {
             NavigationView {
                 Form {
@@ -437,18 +634,36 @@ struct DocumentManagerView: View {
                 })
             }
         }
+        .alert("Delete Document", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) {
+                documentToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let document = documentToDelete {
+                    Task {
+                        await deleteDocument(document)
+                    }
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete this document? This action cannot be undone.")
+        }
     }
     
     private func loadExistingDocuments() async {
         isLoadingDocuments = true
         do {
-            // Clear existing documents
+            // Clear existing documents and expanded notes
             await MainActor.run {
                 documents.removeAll()
+                expandedNotes.removeAll()  // Reset expansion state when reloading
             }
             
             let dateFormatter = ISO8601DateFormatter()
             dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            
+            // Create a Set to track unique document identifiers
+            var processedDocumentIds = Set<String>()
             
             // Get all topics and their notes
             for topic in dataManager.topics {
@@ -457,6 +672,12 @@ struct DocumentManagerView: View {
                         // Check if note has attachments
                         if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
                             for url in attachmentUrls {
+                                // Create a unique identifier for this document
+                                let documentId = "\(note.id)-\(url)"
+                                
+                                // Skip if we've already processed this document
+                                guard !processedDocumentIds.contains(documentId) else { continue }
+                                
                                 let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(url)
                                 if let data = try? Data(contentsOf: fileURL),
                                    let image = UIImage(data: data) {
@@ -469,10 +690,12 @@ struct DocumentManagerView: View {
                                         documentURL: fileURL,
                                         category: "\(topic.title) > \(subtopic.title)",
                                         topic: topic.title,
-                                        subtopic: subtopic.title
+                                        subtopic: subtopic.title,
+                                        noteId: note.id
                                     )
                                     await MainActor.run {
                                         documents.append(document)
+                                        processedDocumentIds.insert(documentId)
                                     }
                                 }
                             }
@@ -485,6 +708,12 @@ struct DocumentManagerView: View {
             let uploads = try await dataManager.getUploads()
             for upload in uploads {
                 if let imageUrl = upload.image_url {
+                    // Create a unique identifier for this upload
+                    let documentId = "\(upload.id)-\(imageUrl)"
+                    
+                    // Skip if we've already processed this document
+                    guard !processedDocumentIds.contains(documentId) else { continue }
+                    
                     let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(imageUrl)
                     if let data = try? Data(contentsOf: fileURL),
                        let image = UIImage(data: data) {
@@ -497,10 +726,12 @@ struct DocumentManagerView: View {
                             documentURL: fileURL,
                             category: upload.category,
                             topic: upload.topic,
-                            subtopic: upload.subtopic
+                            subtopic: upload.subtopic,
+                            noteId: upload.note_id
                         )
-                await MainActor.run {
+                        await MainActor.run {
                             documents.append(document)
+                            processedDocumentIds.insert(documentId)
                         }
                     }
                 }
@@ -518,10 +749,16 @@ struct DocumentManagerView: View {
         do {
             if let data = try await photo.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                await processAndCategorizeImage(image, type: .photo)
+                if batchClassification == nil {
+                    // First photo in batch - get classification
+                    await processAndCategorizeImage(image, type: .photo)
+                } else {
+                    // Subsequent photos - use existing classification
+                    await processImageWithExistingClassification(image, type: .photo)
+                }
             }
         } catch {
-            print("❌ Failed to load photo: \(error.localizedDescription)")
+            print("Failed to load photo: \(error.localizedDescription)")
             await MainActor.run {
                 alertManager.showError(AppError.dataError("Failed to load photo: \(error.localizedDescription)"))
             }
@@ -556,27 +793,123 @@ struct DocumentManagerView: View {
                 if let text = await processImageWithOCR(image) {
                     // Classify the text
                     processingStatus = "Categorizing content..."
-                    let classification = try await classificationService.classifyText(text)
-                    
-                    // Store pending data for confirmation
-                    await MainActor.run {
-                        pendingClassification = classification
-                        pendingImage = image
-                        pendingType = type
-                        selectedTopic = classification.topic
-                        selectedSubtopic = classification.subtopic
-                        showTopicConfirmation = true
+                    do {
+                        let classification = try await classificationService.classifyText(text)
+                        
+                        // Store pending data for confirmation
+                        await MainActor.run {
+                            pendingClassification = classification
+                            pendingImage = image
+                            pendingType = type
+                            selectedTopic = classification.topic
+                            selectedSubtopic = classification.subtopic
+                            noteName = ""  // Clear note name to let user input it
+                            showTopicConfirmation = true
+                        }
+                    } catch {
+                        // Classification failed - offer manual note creation
+                        await MainActor.run {
+                            pendingImage = image
+                            pendingType = type
+                            showTopicPicker = true
+                        }
                     }
                 } else {
-                    // Show warning to user when OCR fails
+                    // OCR failed - offer manual note creation
                     await MainActor.run {
-                        alertMessage = "We couldn't extract any text from this image. Please try with a clearer image or add a description manually."
-                        showAlert = true
+                        pendingImage = image
+                        pendingType = type
+                        showTopicPicker = true
                     }
                 }
             }
         } catch {
             print("❌ Failed to process image: \(error.localizedDescription)")
+            await MainActor.run {
+                alertMessage = "Failed to process image: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+        
+        isProcessingOCR = false
+        processingStatus = ""
+    }
+    
+    private func processImageWithExistingClassification(_ image: UIImage, type: DocumentType) async {
+        isProcessingOCR = true
+        processingStatus = "Processing image..."
+        
+        do {
+            // Save image first
+            let fileName = "\(UUID().uuidString).jpg"
+            let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
+            if let data = image.jpegData(compressionQuality: 0.8) {
+                try data.write(to: fileURL)
+                
+                // Create document item for UI
+                let document = DocumentItem(
+                    id: UUID(),
+                    title: batchClassification?.note_name ?? "Untitled",
+                    type: type,
+                    date: Date(),
+                    image: image,
+                    documentURL: fileURL,
+                    category: "\(batchTopic ?? "") > \(batchSubtopic ?? "")",
+                    topic: batchTopic,
+                    subtopic: batchSubtopic,
+                    noteId: nil  // Will be set after note creation
+                )
+                
+                // Add to documents array
+                await MainActor.run {
+                    documents.insert(document, at: 0)
+                }
+                
+                // Find or create topic and subtopic
+                if let topic = batchTopic, let subtopic = batchSubtopic {
+                    var topicObj = dataManager.topics.first { $0.title == topic }
+                    if topicObj == nil {
+                        topicObj = try await dataManager.addTopic(title: topic)
+                    }
+                    guard let topicObj = topicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find topic"]) }
+                    
+                    var subtopicObj = topicObj.subtopics.first { $0.title == subtopic }
+                    if subtopicObj == nil {
+                        subtopicObj = try await dataManager.addSubtopic(to: topicObj, title: subtopic)
+                    }
+                    guard let subtopicObj = subtopicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
+                    
+                    // Create note with the image
+                    let note = try await dataManager.addNote(
+                        to: subtopicObj,
+                        in: topicObj,
+                        title: batchClassification?.note_name ?? "Untitled",
+                        content: "",
+                        attachmentUrls: [fileName]
+                    )
+                    
+                    // Update document with note ID
+                    await MainActor.run {
+                        if let index = documents.firstIndex(where: { $0.id == document.id }) {
+                            documents[index].noteId = note.id
+                        }
+                    }
+                    
+                    // Create upload with note_id
+                    try await saveUpload(
+                        title: batchClassification?.note_name ?? "Untitled",
+                        type: type.rawValue,
+                        imageURL: fileName,
+                        documentURL: nil,
+                        category: "\(topic) > \(subtopic)",
+                        topic: topic,
+                        subtopic: subtopic,
+                        noteId: note.id
+                    )
+                }
+            }
+        } catch {
+            print("Failed to process image: \(error.localizedDescription)")
             await MainActor.run {
                 alertMessage = "Failed to process image: \(error.localizedDescription)"
                 showAlert = true
@@ -596,23 +929,40 @@ struct DocumentManagerView: View {
             return
         }
         
+        // Ensure user has provided a note name
+        guard !noteName.isEmpty else {
+            await MainActor.run {
+                alertMessage = "Please provide a name for your note"
+                showAlert = true
+            }
+            return
+        }
+        
         do {
             let fileName = "\(UUID().uuidString).jpg"
             let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
             if let data = image.jpegData(compressionQuality: 0.8) {
                 try data.write(to: fileURL)
                 
+                // Store classification for batch processing
+                await MainActor.run {
+                    batchClassification = classification
+                    batchTopic = topic
+                    batchSubtopic = subtopic
+                }
+                
                 // Create document item for UI
                 let document = DocumentItem(
                     id: UUID(),
-                    title: classification.note_name,
+                    title: noteName,  // Use user-provided note name
                     type: type,
                     date: Date(),
                     image: image,
                     documentURL: fileURL,
                     category: "\(topic) > \(subtopic)",
                     topic: topic,
-                    subtopic: subtopic
+                    subtopic: subtopic,
+                    noteId: nil
                 )
                 
                 // Add to documents array
@@ -638,14 +988,21 @@ struct DocumentManagerView: View {
                 let note = try await dataManager.addNote(
                     to: subtopicObj,
                     in: topicObj,
-                    title: classification.note_name,
+                    title: noteName,  // Use user-provided note name
                     content: "",
                     attachmentUrls: [fileName]
                 )
                 
+                // Update document with note ID
+                await MainActor.run {
+                    if let index = documents.firstIndex(where: { $0.id == document.id }) {
+                        documents[index].noteId = note.id
+                    }
+                }
+                
                 // Create upload with note_id
                 try await saveUpload(
-                    title: classification.note_name,
+                    title: noteName,  // Use user-provided note name
                     type: type.rawValue,
                     imageURL: fileName,
                     documentURL: nil,
@@ -654,24 +1011,16 @@ struct DocumentManagerView: View {
                     subtopic: subtopic,
                     noteId: note.id
                 )
-                
-                // Update UI
-                await MainActor.run {
-                    noteDisplayState.currentTopic = topicObj
-                    noteDisplayState.currentSubtopic = subtopicObj
-                    noteDisplayState.currentNote = note
-                    noteDisplayState.isShowingNote = true
-                }
             }
         } catch {
-            print("❌ Failed to create document: \(error.localizedDescription)")
+            print("Failed to create document: \(error.localizedDescription)")
             await MainActor.run {
                 alertMessage = "Failed to create document: \(error.localizedDescription)"
                 showAlert = true
             }
         }
         
-        // Clear pending data
+        // Clear pending data but keep batch data
         await MainActor.run {
             pendingClassification = nil
             pendingImage = nil
@@ -681,6 +1030,7 @@ struct DocumentManagerView: View {
             selectedTopicId = nil
             newTopicName = ""
             newSubtopicName = ""
+            noteName = ""
             showTopicConfirmation = false
             showTopicPicker = false
             showSubtopicPicker = false
@@ -780,11 +1130,11 @@ struct DocumentManagerView: View {
                         throw AppError.dataError("Note not found")
                     }
                     
-        await MainActor.run {
+                    await MainActor.run {
                         noteDisplayState.currentTopic = topicObj
                         noteDisplayState.currentSubtopic = subtopicObj
-            noteDisplayState.currentNote = note
-            noteDisplayState.isShowingNote = true
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.isShowingNote = true
                     }
                 } catch {
                     print("❌ Failed to open document: \(error.localizedDescription)")
@@ -822,6 +1172,56 @@ struct DocumentManagerView: View {
             uploads.insert(newUpload, at: 0)
         }
     }
+    
+    private func deleteDocument(_ document: DocumentItem) async {
+        do {
+            // Find the note in the database
+            if let topic = document.topic,
+               let subtopic = document.subtopic {
+                // Find the topic in the existing topics
+                guard let topicObj = dataManager.topics.first(where: { $0.title == topic }) else {
+                    throw AppError.dataError("Topic not found")
+                }
+                
+                // Find the subtopic in the topic's subtopics
+                guard let subtopicObj = topicObj.subtopics.first(where: { $0.title == subtopic }) else {
+                    throw AppError.dataError("Subtopic not found")
+                }
+                
+                // Find the note in the subtopic's notes
+                guard let note = subtopicObj.notes.first(where: { $0.title == document.title }) else {
+                    throw AppError.dataError("Note not found")
+                }
+                
+                // Delete the note
+                try await dataManager.deleteNote(note, from: subtopicObj, from: topicObj)
+                
+                // Remove from local documents array
+                await MainActor.run {
+                    if let index = documents.firstIndex(where: { $0.id == document.id }) {
+                        documents.remove(at: index)
+                    }
+                }
+                
+                // Show success message
+                await MainActor.run {
+                    alertMessage = "Document deleted successfully"
+                    showAlert = true
+                }
+            }
+        } catch {
+            print("❌ Failed to delete document: \(error.localizedDescription)")
+            await MainActor.run {
+                alertMessage = "Failed to delete document: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+        
+        // Clear the document to delete
+        await MainActor.run {
+            documentToDelete = nil
+        }
+    }
 }
 
 // MARK: - Supporting Views
@@ -845,6 +1245,8 @@ struct FilterPill: View {
 
 struct DocumentCard: View {
     let document: DocumentItem
+    let onDelete: () -> Void
+    @State private var showingDeleteAlert = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -855,11 +1257,11 @@ struct DocumentCard: View {
                     .frame(width: 180, height: 160)
                     .clipped()
             } else {
-                        Image(systemName: "doc.fill")
+                Image(systemName: "doc.fill")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 180, height: 160)
-                            .foregroundColor(.appAccent1)
+                    .foregroundColor(.appAccent1)
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -883,9 +1285,24 @@ struct DocumentCard: View {
             .padding(.bottom, 8)
         }
         .frame(width: 180)
-        .background(Color.clear)
+        .background(Color.appCardBackground)
         .cornerRadius(12)
         .shadow(color: Color.appShadow, radius: 8, x: 0, y: 4)
+        .contextMenu {
+            Button(role: .destructive) {
+                showingDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .alert("Delete Document", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                onDelete()
+            }
+        } message: {
+            Text("Are you sure you want to delete this document? This action cannot be undone.")
+        }
     }
 }
 

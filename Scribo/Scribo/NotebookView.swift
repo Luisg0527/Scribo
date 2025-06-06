@@ -223,6 +223,13 @@ struct SubtopicPreviewView: View {
                             }
                         ) {
                             NoteCardView(note: note)
+                                .contextMenu {
+                                    Button(role: .destructive, action: {
+                                        noteToDelete = (topic, subtopic, note)
+                                    }) {
+                                        Label("Delete Note", systemImage: "trash")
+                                    }
+                                }
                         }
                     }
                 }
@@ -243,6 +250,22 @@ struct SubtopicPreviewView: View {
         }
         .onAppear {
             noteDisplayState.currentNote = nil
+        }
+        .alert("Delete Note", isPresented: .init(
+            get: { noteToDelete != nil },
+            set: { if !$0 { noteToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                noteToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let (topic, subtopic, note) = noteToDelete {
+                    dataManager.deleteNote(note, from: subtopic, from: topic)
+                }
+                noteToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this note?")
         }
     }
 }
@@ -297,6 +320,7 @@ struct NoteCardView: View {
                 .font(.headline)
                 .foregroundColor(.primary)
                 .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(width: 160, alignment: .leading)
             
             // Note preview
@@ -304,6 +328,7 @@ struct NoteCardView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .lineLimit(2)
+                .multilineTextAlignment(.leading)
                 .frame(width: 160, alignment: .leading)
             
             // Date
@@ -434,8 +459,11 @@ struct NotebookView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
+                        .accessibilityHidden(true)
                     TextField("Search notes...", text: $searchState.searchText)
                         .textFieldStyle(PlainTextFieldStyle())
+                        .accessibilityLabel("Search notes")
+                        .accessibilityHint("Double tap to enter search text")
                     if !searchState.searchText.isEmpty {
                         Button(action: {
                             searchState.searchText = ""
@@ -444,6 +472,8 @@ struct NotebookView: View {
                                 .font(.system(size: 20))
                                 .foregroundColor(.gray)
                         }
+                        .accessibilityLabel("Clear search")
+                        .accessibilityHint("Double tap to clear search text")
                     }
                 }
                 .padding(8)
@@ -455,26 +485,7 @@ struct NotebookView: View {
                 // Hierarchical Tree
                 List {
                     if filteredTopics.isEmpty {
-                        VStack(spacing: 16) {
-                            Image(systemName: "note.text.badge.plus")
-                                .font(.system(size: 40))
-                                .foregroundColor(.gray.opacity(0.5))
-                                .padding(.bottom, 8)
-                            
-                            Text("Start Organizing!")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.gray.opacity(0.7))
-                            
-                            Text("Create topics and add notes to organize your thoughts and ideas.")
-                                .font(.body)
-                                .foregroundColor(.gray.opacity(0.6))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.top, 80)
-                        .listRowBackground(Color.clear)
+                        Text("")
                     } else {
                         ForEach(filteredTopics) { topic in
                             TopicRow(
@@ -826,8 +837,11 @@ struct NoteRow: View {
         HStack {
             Image(systemName: "note.text")
                 .foregroundColor(.appAccent2)
+                .accessibilityHidden(true)
             HighlightedText(text: note.title, searchText: searchState.searchText)
                 .font(.subheadline)
+                .accessibilityLabel("Note: \(note.title)")
+                .accessibilityHint("Double tap to open note")
             Spacer()
         }
         .padding(.vertical, 4)
@@ -854,6 +868,8 @@ struct NoteRow: View {
             }) {
                 Label("Delete Note", systemImage: "trash")
             }
+            .accessibilityLabel("Delete note")
+            .accessibilityHint("Double tap to delete this note")
         }
     }
 }
@@ -962,6 +978,9 @@ struct NewTopicView: View {
                     content: noteContent
                 )
                 
+                // Reload topics to ensure we have the latest data
+                await dataManager.loadTopics()
+                
                 await MainActor.run {
                     noteDisplayState.currentTopic = newTopic
                     noteDisplayState.currentSubtopic = newSubtopic
@@ -970,6 +989,8 @@ struct NewTopicView: View {
                     dismiss()
                 }
             } else {
+                // Reload topics to ensure we have the latest data
+                await dataManager.loadTopics()
                 await MainActor.run {
                     dismiss()
                 }

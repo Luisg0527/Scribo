@@ -92,21 +92,29 @@ class TextClassificationService {
                     throw ClassificationError.decodingError(error)
                 }
             case 401:
+                print("❌ Unauthorized: Invalid API key")
                 throw ClassificationError.serverError("Unauthorized: Invalid API key")
             case 403:
+                print("❌ Forbidden: Access denied")
                 throw ClassificationError.serverError("Forbidden: Access denied")
             case 404:
+                print("❌ Not found: The requested resource does not exist")
                 throw ClassificationError.serverError("Not found: The requested resource does not exist")
             case 422:
+                print("❌ Invalid request format: \(String(data: data, encoding: .utf8) ?? "unknown error")")
                 throw ClassificationError.serverError("Invalid request format: \(String(data: data, encoding: .utf8) ?? "unknown error")")
             case 500:
+                print("❌ Internal server error")
                 throw ClassificationError.serverError("Internal server error")
             default:
+                print("❌ Unexpected status code: \(httpResponse.statusCode)")
                 throw ClassificationError.invalidResponse(httpResponse.statusCode)
             }
         } catch let error as ClassificationError {
+            print("❌ Classification error: \(error)")
             throw error
         } catch {
+            print("❌ Network error: \(error)")
             throw ClassificationError.networkError(error)
         }
     }

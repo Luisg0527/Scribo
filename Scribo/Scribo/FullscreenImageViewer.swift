@@ -8,29 +8,35 @@ struct FullscreenImageViewer: View {
     @State private var showOverlay = true
     @State private var isShowingGallery = false
     @State private var selectedIndex: Int = 0
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
+            Color.black.ignoresSafeArea()
+            
             ZoomableScrollView {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("Image \(currentIndex + 1) of \(allImages.count)")
             }
-            .background(Color.black)
             .ignoresSafeArea()
             .onTapGesture {
-                withAnimation { showOverlay.toggle() }
+                withAnimation(.easeInOut(duration: 0.2)) { 
+                    showOverlay.toggle() 
+                }
             }
 
             if showOverlay {
                 VStack {
                     HStack {
                         Button("Done") {
-                            isPresented = false
+                            dismiss()
                         }
                         .padding()
                         .foregroundColor(.white)
+                        .accessibilityLabel("Close image viewer")
 
                         Spacer()
 
@@ -42,6 +48,8 @@ struct FullscreenImageViewer: View {
                                 .padding()
                                 .foregroundColor(.white)
                         }
+                        .accessibilityLabel("Share image")
+                        .accessibilityHint("Double tap to share this image")
 
                         Button {
                             selectedIndex = currentIndex
@@ -52,6 +60,8 @@ struct FullscreenImageViewer: View {
                                 .padding(.trailing)
                                 .foregroundColor(.white)
                         }
+                        .accessibilityLabel("Show gallery")
+                        .accessibilityHint("Double tap to view all images in a grid")
                     }
                     .background(Color.black.opacity(0.6))
                     Spacer()
@@ -59,7 +69,7 @@ struct FullscreenImageViewer: View {
                 .transition(.opacity)
             }
         }
-        .fullScreenCover(isPresented: $isShowingGallery) {
+        .sheet(isPresented: $isShowingGallery) {
             ImageGalleryGridView(
                 images: allImages,
                 selectedIndex: $selectedIndex,
@@ -69,11 +79,24 @@ struct FullscreenImageViewer: View {
     }
 
     private func shareImage(_ image: UIImage) {
-        let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = scene.windows.first?.rootViewController {
-            root.present(av, animated: true)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else {
+            return
         }
+        
+        let activityViewController = UIActivityViewController(
+            activityItems: [image],
+            applicationActivities: nil
+        )
+        
+        if let popoverController = activityViewController.popoverPresentationController {
+            popoverController.sourceView = window
+            popoverController.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            popoverController.permittedArrowDirections = []
+        }
+        
+        rootViewController.present(activityViewController, animated: true)
     }
 }
 

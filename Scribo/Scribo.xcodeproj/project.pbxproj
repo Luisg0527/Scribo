@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 31920CE72DF24BF100DB0186 /* GoogleMobileAds */; };
 		31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 31ABE0E12DDBD24500515F83 /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -69,6 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */,
 				31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -139,6 +141,7 @@
 			name = Scribo;
 			packageProductDependencies = (
 				31ABE0E12DDBD24500515F83 /* Supabase */,
+				31920CE72DF24BF100DB0186 /* GoogleMobileAds */,
 			);
 			productName = Scribo;
 			productReference = BF00E8D82CA1038100CCC3B5 /* Scribo.app */;
@@ -225,6 +228,7 @@
 			packageReferences = (
 				31ABE0C32DDBC1A300515F83 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				317D88782DEA7E4D008C054B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				314A9FA12DF249860003AC6D /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF00E8D92CA1038100CCC3B5 /* Products */;
@@ -424,6 +428,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Scribo/ScriboDebug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";
@@ -435,6 +440,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scribo needs access to your camera to take photos for your notes.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Scribo needs access to your local network to discover and connect to the classification server.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to save your photos";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Scribo needs access to your photo library to add photos to your notes.\"";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -471,6 +477,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scribo needs access to your camera to take photos for your notes.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Scribo needs access to your local network to discover and connect to the classification server.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We need access to save your photos";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Scribo needs access to your photo library to add photos to your notes.\"";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -601,6 +608,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		314A9FA12DF249860003AC6D /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.5.0;
+			};
+		};
 		317D88782DEA7E4D008C054B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
@@ -620,6 +635,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		31920CE72DF24BF100DB0186 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GoogleMobileAds;
+		};
 		31ABE0E12DDBD24500515F83 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 31ABE0C32DDBC1A300515F83 /* XCRemoteSwiftPackageReference "supabase-swift" */;

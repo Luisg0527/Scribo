@@ -44,6 +44,7 @@ struct UploadRequest: Codable {
 class DataManager: ObservableObject {
     @Published var topics: [Topic] = []
     private let supabase = SupabaseConfig.shared.client
+    private let notificationManager = NotificationManager.shared
     
     init() {
         Task {
@@ -197,34 +198,31 @@ class DataManager: ObservableObject {
     func deleteSubtopic(_ subtopic: Subtopic, from topic: Topic) {
         Task {
             do {
-                // Get the current user's ID from the session
-                let session = try await supabase.auth.session
-                let userId = session.user.id
-                
-                // First delete all notes associated with this subtopic
-                try await supabase
-                    .from("notes")
-                    .delete()
-                    .eq("subtopic_id", value: subtopic.id.uuidString)
-                    .eq("user_id", value: userId.uuidString)
-                    .execute()
+                // First delete all notes in the subtopic
+                for note in subtopic.notes {
+                    try await supabase
+                        .from("notes")
+                        .delete()
+                        .eq("id", value: note.id)
+                        .execute()
+                }
                 
                 // Then delete the subtopic
                 try await supabase
                     .from("subtopics")
                     .delete()
-                    .eq("id", value: subtopic.id.uuidString)
-                    .eq("user_id", value: userId.uuidString)
+                    .eq("id", value: subtopic.id)
                     .execute()
                 
                 // Update local state
                 await MainActor.run {
-                    if let index = topics.firstIndex(where: { $0.id == topic.id }) {
-                        topics[index].subtopics.removeAll { $0.id == subtopic.id }
+                    if let topicIndex = topics.firstIndex(where: { $0.id == topic.id }) {
+                        topics[topicIndex].subtopics.removeAll { $0.id == subtopic.id }
                     }
                 }
             } catch {
                 print("Error deleting subtopic: \(error)")
+                throw error
             }
         }
     }
@@ -268,6 +266,11 @@ class DataManager: ObservableObject {
                let subtopicIndex = topics[index].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
                 topics[index].subtopics[subtopicIndex].notes.append(note)
             }
+            notificationManager.playSound(.success)
+            notificationManager.scheduleNotification(
+                title: "New Note Created",
+                body: "Your note '\(title)' has been created successfully"
+            )
         }
         
         // Add to recent notes
@@ -343,16 +346,22 @@ class DataManager: ObservableObject {
                        let subtopicIndex = topics[topicIndex].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
                         topics[topicIndex].subtopics[subtopicIndex].notes.removeAll { $0.id == note.id }
                     }
+                    notificationManager.playSound(.delete)
+                    notificationManager.scheduleNotification(
+                        title: "Note Deleted",
+                        body: "Your note '\(note.title)' has been deleted"
+                    )
                 }
             } catch {
                 print("Error deleting note: \(error)")
+                notificationManager.playSound(.error)
             }
         }
     }
     
     // MARK: - Loading Data
     @MainActor
-    private func loadTopics() async {
+    func loadTopics() async {
         do {
             let response = try await supabase
                 .from("topics")

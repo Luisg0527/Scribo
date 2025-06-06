@@ -146,6 +146,14 @@ struct SidebarView: View {
     @AppStorage("hapticsEnabled") private var hapticsEnabled = true
     @State private var isLoadingProfileImage = false
     @StateObject private var alertManager = AlertManager()
+    @State private var isShowingNewNoteSheet = false
+    @State private var newNoteTitle = ""
+    @State private var newNoteContent = ""
+    @State private var selectedTopic: Topic?
+    @State private var selectedSubtopic: Subtopic?
+    @State private var isShowingTopicSelection = false
+    @State private var isShowingSubtopicSelection = false
+    @State private var isShowingNoteDetails = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -203,12 +211,7 @@ struct SidebarView: View {
                             Spacer()
                             
                             Button(action: {
-                                Task {
-                                    do {
-                                        let alert = createNewNoteAlert()
-                                        presentAlert(alert)
-                                    }
-                                }
+                                isShowingTopicSelection = true
                             }) {
                                 Image(systemName: "plus.circle.fill")
                                     .foregroundColor(.appAccent1)
@@ -304,7 +307,7 @@ struct SidebarView: View {
                         // Force UI update
                         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                             windowScene.windows.forEach { window in
-                                window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
+                                window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
                             }
                         }
                     }
@@ -323,7 +326,7 @@ struct SidebarView: View {
         }
         .frame(width: 280)
         .background(Color.appCardBackground)
-        .preferredColorScheme(isDarkMode ? .light : .dark)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear {
             Task {
                 await loadProfileImage()
@@ -332,7 +335,7 @@ struct SidebarView: View {
             // Set initial color scheme
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
+                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
                 }
             }
         }
@@ -340,6 +343,119 @@ struct SidebarView: View {
             if newValue {
                 Task {
                     await loadRecentNotes()
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingTopicSelection) {
+            NavigationView {
+                VStack {
+                    Text("New Note")
+                        .font(.headline)
+                        .padding(.top)
+                    
+                    Text("Select topic and subtopic")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .padding(.bottom)
+                    
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach(dataManager.topics) { topic in
+                                Button(action: {
+                                    selectedTopic = topic
+                                    isShowingTopicSelection = false
+                                    isShowingSubtopicSelection = true
+                                }) {
+                                    Text(topic.title)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.appCardBackground)
+                                        .cornerRadius(10)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+                .navigationBarItems(trailing: Button("Cancel") {
+                    isShowingTopicSelection = false
+                })
+            }
+        }
+        .sheet(isPresented: $isShowingSubtopicSelection) {
+            if let topic = selectedTopic {
+                NavigationView {
+                    VStack {
+                        Text("Select Subtopic")
+                            .font(.headline)
+                            .padding(.top)
+                        
+                        Text("Choose a subtopic for your note")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                            .padding(.bottom)
+                        
+                        ScrollView {
+                            VStack(spacing: 12) {
+                                ForEach(topic.subtopics) { subtopic in
+                                    Button(action: {
+                                        selectedSubtopic = subtopic
+                                        isShowingSubtopicSelection = false
+                                        isShowingNoteDetails = true
+                                    }) {
+                                        Text(subtopic.title)
+                                            .frame(maxWidth: .infinity)
+                                            .padding()
+                                            .background(Color.appCardBackground)
+                                            .cornerRadius(10)
+                                    }
+                                }
+                            }
+                            .padding()
+                        }
+                    }
+                    .navigationBarItems(trailing: Button("Cancel") {
+                        isShowingSubtopicSelection = false
+                    })
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingNoteDetails) {
+            if let topic = selectedTopic, let subtopic = selectedSubtopic {
+                NavigationView {
+                    VStack {
+                        Text("New Note")
+                            .font(.headline)
+                            .padding(.top)
+                        
+                        TextField("Title", text: $newNoteTitle)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .padding()
+                        
+                        TextEditor(text: $newNoteContent)
+                            .frame(height: 100)
+                            .padding()
+                            .background(Color.appCardBackground)
+                            .cornerRadius(10)
+                            .padding()
+                        
+                        HStack {
+                            Button("Cancel") {
+                                isShowingNoteDetails = false
+                                resetNoteCreation()
+                            }
+                            
+                            Button("Create") {
+                                handleNoteCreation(topic: topic, subtopic: subtopic)
+                            }
+                            .disabled(newNoteTitle.isEmpty)
+                        }
+                        .padding()
+                    }
+                    .navigationBarItems(trailing: Button("Cancel") {
+                        isShowingNoteDetails = false
+                        resetNoteCreation()
+                    })
                 }
             }
         }
@@ -430,87 +546,22 @@ struct SidebarView: View {
         }
     }
     
-    private func createNewNoteAlert() -> UIAlertController {
-        let alert = UIAlertController(
-            title: "New Note",
-            message: "Select topic and subtopic",
-            preferredStyle: .actionSheet
-        )
-        
-        // Add topic selection actions
-        for topic in dataManager.topics {
-            let topicAction = UIAlertAction(title: topic.title, style: .default) { _ in
-                self.showSubtopicSelection(for: topic)
-            }
-            alert.addAction(topicAction)
-        }
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        return alert
+    private func resetNoteCreation() {
+        newNoteTitle = ""
+        newNoteContent = ""
+        selectedTopic = nil
+        selectedSubtopic = nil
     }
     
-    private func showSubtopicSelection(for topic: Topic) {
-        let alert = UIAlertController(
-            title: "Select Subtopic",
-            message: "Choose a subtopic for your note",
-            preferredStyle: .actionSheet
-        )
-        
-        // Add subtopic selection actions
-        for subtopic in topic.subtopics {
-            let subtopicAction = UIAlertAction(title: subtopic.title, style: .default) { _ in
-                self.showNoteDetailsInput(topic: topic, subtopic: subtopic)
-            }
-            alert.addAction(subtopicAction)
-        }
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let viewController = windowScene.windows.first?.rootViewController {
-            viewController.present(alert, animated: true)
-        }
-    }
-    
-    private func showNoteDetailsInput(topic: Topic, subtopic: Subtopic) {
-        let alert = UIAlertController(
-            title: "New Note",
-            message: "Enter note details",
-            preferredStyle: .alert
-        )
-        
-        alert.addTextField { textField in
-            textField.placeholder = "Title"
-        }
-        
-        alert.addTextField { textField in
-            textField.placeholder = "Content"
-        }
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Create", style: .default) { _ in
-            self.handleNoteCreation(alert, topic: topic, subtopic: subtopic)
-        })
-        
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let viewController = windowScene.windows.first?.rootViewController {
-            viewController.present(alert, animated: true)
-        }
-    }
-    
-    private func handleNoteCreation(_ alert: UIAlertController, topic: Topic, subtopic: Subtopic) {
-        guard let title = alert.textFields?[0].text,
-              let content = alert.textFields?[1].text,
-              !title.isEmpty else { return }
-        
+    private func handleNoteCreation(topic: Topic, subtopic: Subtopic) {
         Task {
             do {
                 // Create a new note using addNote
                 let newNote = try await dataManager.addNote(
                     to: subtopic,
                     in: topic,
-                    title: title,
-                    content: content
+                    title: newNoteTitle,
+                    content: newNoteContent
                 )
                 
                 // Add to recent notes
@@ -522,6 +573,8 @@ struct SidebarView: View {
                     noteDisplayState.currentTopic = topic
                     noteDisplayState.currentSubtopic = subtopic
                     isShowing = false
+                    isShowingNoteDetails = false
+                    resetNoteCreation()
                 }
             } catch {
                 print("❌ Failed to create note: \(error.localizedDescription)")
@@ -529,13 +582,6 @@ struct SidebarView: View {
                     alertManager.showError(AppError.dataError("Failed to create note: \(error.localizedDescription)"))
                 }
             }
-        }
-    }
-    
-    private func presentAlert(_ alert: UIAlertController) {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let viewController = windowScene.windows.first?.rootViewController {
-            viewController.present(alert, animated: true)
         }
     }
 }
@@ -591,7 +637,7 @@ struct ContentView: View {
                 }
             }
         }
-        .preferredColorScheme(isDarkMode ? .light : .dark)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
         .onChange(of: isDarkMode) { oldValue, newValue in
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
@@ -603,7 +649,7 @@ struct ContentView: View {
             // Set initial color scheme
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
                 windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = isDarkMode ? .light : .dark
+                    window.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
                 }
             }
         }
@@ -651,7 +697,7 @@ struct ContentView: View {
                 
                 sidebarOverlay
             }
-            .preferredColorScheme(isDarkMode ? .light : .dark)
+            .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
     
@@ -765,12 +811,18 @@ struct ProfileSheetView: View {
     @State private var feedbackText = ""
     @StateObject private var dataManager = DataManager()
     @State private var fullName = ""
-    @State private var selectedItem: PhotosPickerItem?
     @State private var avatarImage: UIImage?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var email = ""
     @StateObject private var alertManager = AlertManager()
+    @State private var showingAvatarPicker = false
+    @StateObject private var notificationManager = NotificationManager.shared
+    
+    let defaultAvatars = [
+        "avatar1", "avatar2", "avatar3",
+        "avatar4", "avatar5", "avatar6"
+    ]
     
     var body: some View {
         NavigationView {
@@ -793,24 +845,12 @@ struct ProfileSheetView: View {
                                 .foregroundColor(.gray)
                                 .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
                         }
-                        PhotosPicker(selection: $selectedItem, matching: .images) {
-                            Text("Change Photo")
+                        Button(action: {
+                            showingAvatarPicker = true
+                        }) {
+                            Text("Change Avatar")
                                 .font(.subheadline)
                                 .foregroundColor(.appAccent1)
-                        }
-                        .onChange(of: selectedItem) { oldValue, newValue in
-                            Task {
-                                if let data = try? await newValue?.loadTransferable(type: Data.self),
-                                   let image = UIImage(data: data) {
-                                    await MainActor.run {
-                                        avatarImage = image
-                                        // Automatically save the profile when image changes
-                                        Task {
-                                            await saveProfile()
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -854,6 +894,23 @@ struct ProfileSheetView: View {
                     }
                 }
                 
+                Section(header: Text("Notifications & Sounds")) {
+                    Toggle("Enable Notifications", isOn: Binding(
+                        get: { notificationManager.isAuthorized },
+                        set: { _ in notificationManager.toggleNotifications() }
+                    ))
+                    .onChange(of: notificationManager.isAuthorized) { oldValue, newValue in
+                        if newValue {
+                            notificationManager.requestAuthorization()
+                        }
+                    }
+                    
+                    Toggle("Sound Effects", isOn: Binding(
+                        get: { notificationManager.soundEffectsEnabled },
+                        set: { _ in notificationManager.toggleSoundEffects() }
+                    ))
+                }
+                
                 Section(header: Text("Suggestions")) {
                     NavigationLink(destination: FeedbackView()) {
                         Label("Submit Feedback", systemImage: "paperplane")
@@ -873,6 +930,12 @@ struct ProfileSheetView: View {
                         Text("Privacy Policy")
                         Spacer()
                         Link("View", destination: URL(string: "https://yourapp.com/privacy")!)
+                    }
+                    NavigationLink(destination: LicenseView()) {
+                        HStack {
+                            Image(systemName: "doc.plaintext")
+                            Text("Licenses")
+                        }
                     }
                 }
                 
@@ -902,13 +965,10 @@ struct ProfileSheetView: View {
                     }
                 }
             }
-            .onChange(of: selectedItem) { oldValue, newValue in
+            .sheet(isPresented: $showingAvatarPicker) {
+                AvatarPickerView(selectedAvatar: $avatarImage, isPresented: $showingAvatarPicker) { selectedImage in
                 Task {
-                    if let data = try? await newValue?.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
-                        await MainActor.run {
-                            avatarImage = image
-                        }
+                        await saveProfile()
                     }
                 }
             }
@@ -993,5 +1053,139 @@ struct ProfileSheetView: View {
                 alertManager.showError(AppError.dataError("Failed to update email: \(error.localizedDescription)"))
             }
         }
+    }
+}
+
+struct AvatarPickerView: View {
+    @Binding var selectedAvatar: UIImage?
+    @Binding var isPresented: Bool
+    let onSelect: (UIImage) -> Void
+    
+    let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+    
+    let defaultAvatars = [
+        "avatar1", "avatar2", "avatar3",
+        "avatar4", "avatar5", "avatar6"
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 20) {
+                    ForEach(defaultAvatars, id: \.self) { avatarName in
+                        Button(action: {
+                            if let image = UIImage(named: avatarName) {
+                                selectedAvatar = image
+                                onSelect(image)
+                                isPresented = false
+                            }
+                        }) {
+                            Image(avatarName)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
+                                .shadow(color: Color.black.opacity(0.1), radius: 4)
+                        }
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Choose Avatar")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct LicenseView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("IMPORTANT NOTICE")
+                    .font(.headline)
+                    .foregroundColor(.red)
+                
+                Text("This license only applies if you downloaded this vector as an unsubscribed user. If you are a premium user (ie, you pay a subscription) you are bound to the license terms described in the accompanying file \"License premium.txt\".")
+                    .padding(.bottom)
+                
+                Text("Attribution Requirements")
+                    .font(.headline)
+                
+                Text("You must attribute the image to its author:")
+                    .font(.subheadline)
+                
+                Text("In order to use a vector or a part of it, you must attribute it to Freepik, so we will be able to continue creating new graphic resources every day.")
+                    .padding(.bottom)
+                
+                Text("How to attribute it?")
+                    .font(.headline)
+                
+                Group {
+                    Text("For websites:")
+                        .font(.subheadline)
+                    Text("Please, copy this code on your website to accredit the author:")
+                    Text("<a href=\"http://www.freepik.com\">Designed by Freepik</a>")
+                        .font(.system(.body, design: .monospaced))
+                        .padding(.bottom)
+                    
+                    Text("For printing:")
+                        .font(.subheadline)
+                    Text("Paste this text on the final work so the authorship is known.")
+                    Text("For example, in the acknowledgements chapter of a book:")
+                    Text("\"Designed by Freepik\"")
+                        .italic()
+                        .padding(.bottom)
+                }
+                
+                Text("Usage Rights")
+                    .font(.headline)
+                
+                Text("You are free to use this image:")
+                    .font(.subheadline)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("• For both personal and commercial projects and to modify it.")
+                    Text("• In a website or presentation template or application or as part of your design.")
+                }
+                .padding(.bottom)
+                
+                Text("Restrictions")
+                    .font(.headline)
+                
+                Text("You are not allowed to:")
+                    .font(.subheadline)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("• Sub-license, resell or rent it.")
+                    Text("• Include it in any online or offline archive or database.")
+                }
+                .padding(.bottom)
+                
+                Text("Full Terms")
+                    .font(.headline)
+                
+                Text("The full terms of the license are described in section 7 of the Freepik terms of use, available online in the following link:")
+                
+                Link("http://www.freepik.com/terms_of_use", destination: URL(string: "http://www.freepik.com/terms_of_use")!)
+                    .padding(.bottom)
+                
+                Text("The terms described in the above link have precedence over the terms described in the present document. In case of disagreement, the Freepik Terms of Use will prevail.")
+            }
+            .padding()
+        }
+        .navigationTitle("Licenses")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

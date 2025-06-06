@@ -1,12 +1,20 @@
 import SwiftUI
+import GoogleMobileAds
 
 @main
 struct ScriboApp: App {
     @StateObject private var noteDisplayState = NoteDisplayState()
     @StateObject private var authManager = AuthManager()
+    @StateObject private var notificationManager = NotificationManager.shared
     @AppStorage("isDarkMode") private var isDarkMode = false
     @State private var isLoading = true
     @State private var isAuthChecked = false
+
+    init() {
+        MobileAds.shared.start(completionHandler: nil)
+        // Register custom fonts
+        FontManager.registerFonts()
+    }
 
     var body: some Scene {
         WindowGroup {
