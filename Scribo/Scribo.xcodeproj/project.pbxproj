@@ -7,11 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3131727D2DF8DA2B007615C8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3131727C2DF8DA2B007615C8 /* WidgetKit.framework */; };
+		3131727F2DF8DA2B007615C8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3131727E2DF8DA2B007615C8 /* SwiftUI.framework */; };
+		313172902DF8DA2C007615C8 /* ScriboWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 31920CE72DF24BF100DB0186 /* GoogleMobileAds */; };
 		31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 31ABE0E12DDBD24500515F83 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		3131728E2DF8DA2C007615C8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BF00E8D02CA1038100CCC3B5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3131727A2DF8DA2B007615C8;
+			remoteInfo = ScriboWidgetExtension;
+		};
 		BF00E8E92CA1038200CCC3B5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BF00E8D02CA1038100CCC3B5 /* Project object */;
@@ -28,13 +38,37 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		313172912DF8DA2C007615C8 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				313172902DF8DA2C007615C8 /* ScriboWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScriboWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3131727C2DF8DA2B007615C8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		3131727E2DF8DA2B007615C8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		BF00E8D82CA1038100CCC3B5 /* Scribo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scribo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF00E8E82CA1038200CCC3B5 /* ScriboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScriboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF00E8F22CA1038200CCC3B5 /* ScriboUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScriboUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		313172952DF8DA2C007615C8 /* Exceptions for "ScriboWidget" folder in "ScriboWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3131727A2DF8DA2B007615C8 /* ScriboWidgetExtension */;
+		};
 		31B404282DD7C06F00BFCA45 /* Exceptions for "Scribo" folder in "Scribo" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -45,6 +79,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		313172802DF8DA2B007615C8 /* ScriboWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				313172952DF8DA2C007615C8 /* Exceptions for "ScriboWidget" folder in "ScriboWidgetExtension" target */,
+			);
+			path = ScriboWidget;
+			sourceTree = "<group>";
+		};
 		BF00E8DA2CA1038100CCC3B5 /* Scribo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -66,6 +108,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		313172782DF8DA2B007615C8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3131727F2DF8DA2B007615C8 /* SwiftUI.framework in Frameworks */,
+				3131727D2DF8DA2B007615C8 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF00E8D52CA1038100CCC3B5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -95,6 +146,8 @@
 		31ABE0E02DDBD24500515F83 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				3131727C2DF8DA2B007615C8 /* WidgetKit.framework */,
+				3131727E2DF8DA2B007615C8 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -105,6 +158,7 @@
 				BF00E8DA2CA1038100CCC3B5 /* Scribo */,
 				BF00E8EB2CA1038200CCC3B5 /* ScriboTests */,
 				BF00E8F52CA1038200CCC3B5 /* ScriboUITests */,
+				313172802DF8DA2B007615C8 /* ScriboWidget */,
 				31ABE0E02DDBD24500515F83 /* Frameworks */,
 				BF00E8D92CA1038100CCC3B5 /* Products */,
 			);
@@ -116,6 +170,7 @@
 				BF00E8D82CA1038100CCC3B5 /* Scribo.app */,
 				BF00E8E82CA1038200CCC3B5 /* ScriboTests.xctest */,
 				BF00E8F22CA1038200CCC3B5 /* ScriboUITests.xctest */,
+				3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -123,6 +178,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3131727A2DF8DA2B007615C8 /* ScriboWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 313172942DF8DA2C007615C8 /* Build configuration list for PBXNativeTarget "ScriboWidgetExtension" */;
+			buildPhases = (
+				313172772DF8DA2B007615C8 /* Sources */,
+				313172782DF8DA2B007615C8 /* Frameworks */,
+				313172792DF8DA2B007615C8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				313172802DF8DA2B007615C8 /* ScriboWidget */,
+			);
+			name = ScriboWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = ScriboWidgetExtension;
+			productReference = 3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		BF00E8D72CA1038100CCC3B5 /* Scribo */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF00E8FC2CA1038200CCC3B5 /* Build configuration list for PBXNativeTarget "Scribo" */;
@@ -130,10 +207,12 @@
 				BF00E8D42CA1038100CCC3B5 /* Sources */,
 				BF00E8D52CA1038100CCC3B5 /* Frameworks */,
 				BF00E8D62CA1038100CCC3B5 /* Resources */,
+				313172912DF8DA2C007615C8 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				3131728F2DF8DA2C007615C8 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BF00E8DA2CA1038100CCC3B5 /* Scribo */,
@@ -200,9 +279,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1600;
+				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					3131727A2DF8DA2B007615C8 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 					BF00E8D72CA1038100CCC3B5 = {
 						CreatedOnToolsVersion = 16.0;
 					};
@@ -238,11 +320,19 @@
 				BF00E8D72CA1038100CCC3B5 /* Scribo */,
 				BF00E8E72CA1038200CCC3B5 /* ScriboTests */,
 				BF00E8F12CA1038200CCC3B5 /* ScriboUITests */,
+				3131727A2DF8DA2B007615C8 /* ScriboWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		313172792DF8DA2B007615C8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF00E8D62CA1038100CCC3B5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -267,6 +357,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		313172772DF8DA2B007615C8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF00E8D42CA1038100CCC3B5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -291,6 +388,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		3131728F2DF8DA2C007615C8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3131727A2DF8DA2B007615C8 /* ScriboWidgetExtension */;
+			targetProxy = 3131728E2DF8DA2C007615C8 /* PBXContainerItemProxy */;
+		};
 		BF00E8EA2CA1038200CCC3B5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BF00E8D72CA1038100CCC3B5 /* Scribo */;
@@ -304,6 +406,62 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		313172922DF8DA2C007615C8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScriboWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScriboWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.scribos.scribowidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		313172932DF8DA2C007615C8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScriboWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ScriboWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.scribos.scribowidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		BF00E8FA2CA1038200CCC3B5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -453,7 +611,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.Scribo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.scribos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -490,7 +648,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.Scribo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.scribos;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -504,6 +662,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
@@ -522,6 +681,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
@@ -539,6 +699,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.ScriboUITests;
@@ -555,6 +716,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = T4U3LQTNHW;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dauntless.ScriboUITests;
@@ -569,6 +731,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		313172942DF8DA2C007615C8 /* Build configuration list for PBXNativeTarget "ScriboWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				313172922DF8DA2C007615C8 /* Debug */,
+				313172932DF8DA2C007615C8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BF00E8D32CA1038100CCC3B5 /* Build configuration list for PBXProject "Scribo" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -11,10 +11,10 @@ struct LaunchScreenView: View {
             // Animated gradient background
             LinearGradient(
                 gradient: Gradient(colors: [
-                    //isDarkMode ? Color(red: 0.95, green: 0.95, blue: 0.97) : Color(red: 0.1, green: 0.1, blue: 0.2),
+                    //isDarkMode ? Color() : Color(red: 0.1, green: 0.1, blue: 0.2),
                     //isDarkMode ? Color(red: 0.9, green: 0.9, blue: 0.95) : Color(red: 0.2, green: 0.2, blue: 0.3)
-                    Color(.systemBackground),
-                    Color(.secondarySystemBackground)
+                    Color(red: 0.1, green: 0.1, blue: 0.2),
+
                 ]),
                 startPoint: animateBackground ? .topLeading : .bottomLeading,
                 endPoint: animateBackground ? .bottomTrailing : .topTrailing
@@ -31,12 +31,6 @@ struct LaunchScreenView: View {
                     .scaleEffect(isAnimating ? 1.0 : 0.8)
                     .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
                     .accessibilityHidden(true)
-                
-                Text("Scribo")
-                    .font(.soleilBold(size: 40))
-                    .foregroundColor(.primary)
-                    .opacity(isAnimating ? 1.0 : 0.0)
-                    .animation(.easeIn(duration: 0.8), value: isAnimating)
             }
         }
         .onAppear {

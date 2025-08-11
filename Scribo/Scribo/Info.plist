@@ -8,7 +8,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.dauntless.Scribo</string>
+			<string>com.dauntless.scribos</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>scribo</string>
@@ -28,5 +28,7 @@
 	<array>
 		<string>_scribo-classification._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos for your notes.</string>
 </dict>
 </plist>

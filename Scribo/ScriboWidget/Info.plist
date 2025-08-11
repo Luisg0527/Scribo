@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+	<key>CFBundleDisplayName</key>
+	<string>Camera</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.dauntless.Scribo.ScriboWidget</string>
+	<key>NSExtensionAttributes</key>
+	<dict>
+		<key>NSExtensionPointVersion</key>
+		<string>1.0</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+		<key>NSExtensionPointSupportedFamilies</key>
+		<array>
+			<string>accessoryCircular</string>
+		</array>
+		<key>NSExtensionPointSupportedWidgetFamilies</key>
+		<array>
+			<string>accessoryCircular</string>
+		</array>
+		<key>NSExtensionPointSupportedWidgetKinds</key>
+		<array>
+			<string>com.apple.widgetkit.quickaction</string>
+		</array>
+	</dict>
+</dict>
+</plist>

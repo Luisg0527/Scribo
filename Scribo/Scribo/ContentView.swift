@@ -88,13 +88,15 @@ struct EditableField: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
+                .foregroundColor(.featureCalloutText)
             Text(title)
+                .foregroundColor(.featureCalloutText)
             Spacer()
             if isEditing {
                 TextField(title, text: $inputText)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(8)
-                    .background(colorScheme == .dark ? Color(.systemGray6) : Color(.systemGray6))
+                    .background(Color.featureCalloutButtonBackground)
                     .cornerRadius(8)
                     .frame(width: 200)
                     .onSubmit {
@@ -113,7 +115,7 @@ struct EditableField: View {
             } else {
                 HStack {
                     Text(text.isEmpty ? "Not set" : text)
-                        .foregroundColor(text.isEmpty ? .gray.opacity(0.6) : .gray)
+                        .foregroundColor(text.isEmpty ? .featureCalloutText.opacity(0.6) : .featureCalloutText)
                     if isLoading {
                         ProgressView()
                             .scaleEffect(0.8)
@@ -139,8 +141,8 @@ struct SidebarView: View {
     @ObservedObject var authManager: AuthManager
     @StateObject private var dataManager = DataManager()
     @State private var profileImage: UIImage?
-    @State private var isLoadingRecentNotes = false
-    @State private var showGhostBlocks = true
+    @State private var isLoadingRecentNotes = true
+    @State private var shimmerAnimation = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isProfileSheetPresented = false
     @AppStorage("hapticsEnabled") private var hapticsEnabled = true
@@ -175,23 +177,23 @@ struct SidebarView: View {
                     } else {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 40))
-                            .foregroundColor(.appAccent1)
+                            .foregroundColor(.featureCalloutAccent)
                     }
                     VStack(alignment: .leading) {
                         Text("Profile")
                             .font(.headline)
-                            .foregroundColor(.appText)
+                            .foregroundColor(.featureCalloutText)
                         Text("View your profile")
                             .font(.subheadline)
-                            .foregroundColor(.appText.opacity(0.7))
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                     }
                     Spacer()
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.featureCalloutText.opacity(0.5))
                 }
                 .padding()
-                .background(Color.appHeaderBackground)
+                .background(Color.featureCalloutBackground2)
             }
             .sheet(isPresented: $isProfileSheetPresented) {
                 ProfileSheetView(isPresented: $isProfileSheetPresented, authManager: authManager)
@@ -203,10 +205,10 @@ struct SidebarView: View {
                     // Recent Notes Section
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
-                        Text("Recent Notes")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.appText)
+                            Text("Recent Notes")
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.featureCalloutText)
                             
                             Spacer()
                             
@@ -214,30 +216,43 @@ struct SidebarView: View {
                                 isShowingTopicSelection = true
                             }) {
                                 Image(systemName: "plus.circle.fill")
-                                    .foregroundColor(.appAccent1)
+                                    .foregroundColor(.featureCalloutAccent)
                             }
                         }
-                            .padding(.horizontal)
-                            .padding(.vertical, 16)
+                        .padding(.horizontal)
+                        .padding(.vertical, 16)
                         
-                        if showGhostBlocks {
-                            ForEach(0..<3) { _ in
+                        Group {
+                            if isLoadingRecentNotes || recentNotes.isEmpty {
+                            VStack(spacing: 0) {
+                                // Ghost date group header
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Rectangle()
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(width: 120, height: 16)
-                                            .cornerRadius(4)
-                                        Rectangle()
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(width: 80, height: 12)
-                                            .cornerRadius(4)
-                                    }
+                                    Rectangle()
+                                        .fill(Color.featureCalloutText.opacity(0.4))
+                                        .frame(width: 80, height: 14)
+                                        .cornerRadius(4)
                                     Spacer()
                                 }
                                 .padding(.horizontal)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 8)
+                                
+                                // Ghost note items
+                                ForEach(0..<3, id: \.self) { index in
+                                    HStack {
+                                        Rectangle()
+                                            .fill(Color.featureCalloutText.opacity(0.3))
+                                            .frame(width: CGFloat.random(in: 120...200), height: 16)
+                                            .cornerRadius(4)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal)
+                                    .cornerRadius(8)
+                                    .padding(.vertical, 12)
+                                }
                             }
+                            .opacity(shimmerAnimation ? 0.5 : 0.8)
+                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: shimmerAnimation)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         } else if !recentNotes.isEmpty {
                             let groupedNotes = Dictionary(grouping: recentNotes) { note in
                                 let calendar = Calendar.current
@@ -276,7 +291,7 @@ struct SidebarView: View {
                                     Text(dateGroup)
                                         .font(.subheadline)
                                         .fontWeight(.bold)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.featureCalloutText.opacity(0.7))
                                         .padding(.horizontal)
                                         .padding(.vertical, 8)
                                     
@@ -285,13 +300,18 @@ struct SidebarView: View {
                                     }
                                 }
                             }
+                            .transition(.opacity.combined(with: .scale(scale: 1.05)))
                         } else {
                             Text("No recent notes")
                                 .font(.subheadline)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.featureCalloutText.opacity(0.7))
                                 .padding(.horizontal)
                                 .padding(.vertical, 12)
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
+                        }
+                        .animation(.easeInOut(duration: 0.3), value: isLoadingRecentNotes)
+                        .animation(.easeInOut(duration: 0.3), value: recentNotes.count)
                     }
                     .padding(.top, 3.0)
                 }
@@ -314,7 +334,7 @@ struct SidebarView: View {
                 }) {
                     Image(systemName: isDarkMode ? "sun.max.fill" : "moon.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.appAccent1)
+                        .foregroundColor(.featureCalloutAccent)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.trailing, 20)
                         .padding(.vertical, 16)
@@ -322,12 +342,15 @@ struct SidebarView: View {
                         .rotationEffect(.degrees(isDarkMode ? 180 : 0))
                 }
             }
-            .background(Color.appCardBackground.opacity(0.8))
+            .background(Color.featureCalloutBackground2)
         }
         .frame(width: 280)
-        .background(Color.appCardBackground)
+        .background(Color.featureCalloutBackground2)
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear {
+            // Start shimmer animation
+            shimmerAnimation = true
+            
             Task {
                 await loadProfileImage()
                 await loadRecentNotes()
@@ -355,7 +378,7 @@ struct SidebarView: View {
                     
                     Text("Select topic and subtopic")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.featureCalloutText.opacity(0.7))
                         .padding(.bottom)
                     
                     ScrollView {
@@ -369,7 +392,7 @@ struct SidebarView: View {
                                     Text(topic.title)
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.appCardBackground)
+                                        .background(Color.featureCalloutBackground)
                                         .cornerRadius(10)
                                 }
                             }
@@ -392,7 +415,7 @@ struct SidebarView: View {
                         
                         Text("Choose a subtopic for your note")
                             .font(.subheadline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                             .padding(.bottom)
                         
                         ScrollView {
@@ -406,7 +429,7 @@ struct SidebarView: View {
                                         Text(subtopic.title)
                                             .frame(maxWidth: .infinity)
                                             .padding()
-                                            .background(Color.appCardBackground)
+                                            .background(Color.featureCalloutBackground)
                                             .cornerRadius(10)
                                     }
                                 }
@@ -435,7 +458,7 @@ struct SidebarView: View {
                         TextEditor(text: $newNoteContent)
                             .frame(height: 100)
                             .padding()
-                            .background(Color.appCardBackground)
+                            .background(Color.featureCalloutBackground)
                             .cornerRadius(10)
                             .padding()
                         
@@ -463,9 +486,8 @@ struct SidebarView: View {
     
     private func loadRecentNotes() async {
         isLoadingRecentNotes = true
-        showGhostBlocks = true
         
-        // Ensure ghost blocks show for at least 1 second
+        // Ensure ghost blocks show for at least 0.5 seconds
         try? await Task.sleep(nanoseconds: 0_500_000_000)
         
         do {
@@ -477,7 +499,6 @@ struct SidebarView: View {
         }
         
         isLoadingRecentNotes = false
-        showGhostBlocks = false
     }
     
     private func loadProfileImage() async {
@@ -536,13 +557,15 @@ struct SidebarView: View {
         }) {
             HStack {
                 Text(note.title)
-                    .foregroundColor(.appText)
+                    .foregroundColor(.featureCalloutText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer()
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
+            .background(Color.featureCalloutBackground2)
+            .cornerRadius(8)
         }
     }
     
@@ -633,7 +656,7 @@ struct ContentView: View {
                 if !alertManager.alertRecoverySuggestion.isEmpty {
                     Text(alertManager.alertRecoverySuggestion)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.featureCalloutText.opacity(0.7))
                 }
             }
         }
@@ -684,7 +707,7 @@ struct ContentView: View {
     private var mainView: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.appBackground
+                Color.featureCalloutBackground
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -733,7 +756,7 @@ struct ContentView: View {
     private var sidebarOverlay: some View {
         Group {
             if isSidebarShowing {
-                Color.black.opacity(0.3)
+                Color(hex: "1b1a21").opacity(0.7)
                     .ignoresSafeArea()
                     .onTapGesture {
                         isSidebarShowing = false
@@ -742,7 +765,6 @@ struct ContentView: View {
                 HStack {
                     SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
                         .transition(.move(edge: .leading))
-                    
                     Spacer()
                 }
             }
@@ -756,8 +778,7 @@ struct ContentView: View {
                 Spacer()
                 navigationButton
             }
-            .background(Color.appHeaderBackground)
-            .shadow(color: .appShadow, radius: 8, x: 0, y: 4)
+            .background(Color(hex: "2b2a31"))
         }
     }
     
@@ -769,7 +790,7 @@ struct ContentView: View {
         }) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 20))
-                .foregroundColor(.appAccent1)
+                .foregroundColor(.featureCalloutAccent)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
@@ -777,19 +798,18 @@ struct ContentView: View {
     
     private var navigationButton: some View {
         Group {
-                Button(action: {
-                    showNotebook = true
-                }) {
-                    Image(systemName: "note.text")
-                        .font(.system(size: 20))
-                        .foregroundColor(.appAccent1)
-                }
-                .padding(.horizontal, 24)
-                .padding(.vertical,16)
+            Button(action: {
+                showNotebook = true
+            }) {
+                Image(systemName: "note.text")
+                    .font(.system(size: 20))
+                    .foregroundColor(.featureCalloutAccent)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical,16)
         }
     }
-
+}
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
@@ -836,21 +856,20 @@ struct ProfileSheetView: View {
                                 .scaledToFill()
                                 .frame(width: 100, height: 100)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
-                                .shadow(color: Color.black.opacity(0.1), radius: 8)
+                                .overlay(Circle().stroke(Color.featureCalloutAccent, lineWidth: 2))
                         } else {
                             Image(systemName: "person.circle.fill")
                                 .resizable()
                                 .frame(width: 100, height: 100)
-                                .foregroundColor(.gray)
-                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
+                                .foregroundColor(.featureCalloutText.opacity(0.5))
+                                .overlay(Circle().stroke(Color.featureCalloutAccent, lineWidth: 2))
                         }
                         Button(action: {
                             showingAvatarPicker = true
                         }) {
                             Text("Change Avatar")
                                 .font(.subheadline)
-                                .foregroundColor(.appAccent1)
+                                .foregroundColor(.featureCalloutAccent)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -858,7 +877,7 @@ struct ProfileSheetView: View {
                 }
                 
                 // Account Info Section
-                Section(header: Text("Account")) {
+                Section(header: Text("Account").foregroundColor(.featureCalloutText)) {
                     EditableField(
                         icon: "person",
                         title: "Full Name",
@@ -873,28 +892,35 @@ struct ProfileSheetView: View {
                     )
                 }
                 
-                Section(header: Text("Preferences")) {
+                Section(header: Text("Preferences").foregroundColor(.featureCalloutText)) {
                     Picker("Language", selection: $selectedLanguage) {
                         Text("English").tag("English")
                         Text("Spanish").tag("Spanish")
                     }
+                    .foregroundColor(.featureCalloutText)
+                    
                     HStack {
                         Image(systemName: "moon")
+                            .foregroundColor(.featureCalloutText)
                         Text("Dark Mode")
+                            .foregroundColor(.featureCalloutText)
                         Spacer()
                         Toggle("", isOn: $isDarkMode)
                             .labelsHidden()
                     }
+                    
                     HStack {
                         Image(systemName: "iphone.gen3")
+                            .foregroundColor(.featureCalloutText)
                         Text("Haptic Feedback")
+                            .foregroundColor(.featureCalloutText)
                         Spacer()
                         Toggle("", isOn: $hapticsEnabled)
                             .labelsHidden()
                     }
                 }
                 
-                Section(header: Text("Notifications & Sounds")) {
+                Section(header: Text("Notifications & Sounds").foregroundColor(.featureCalloutText)) {
                     Toggle("Enable Notifications", isOn: Binding(
                         get: { notificationManager.isAuthorized },
                         set: { _ in notificationManager.toggleNotifications() }
@@ -909,32 +935,43 @@ struct ProfileSheetView: View {
                         get: { notificationManager.soundEffectsEnabled },
                         set: { _ in notificationManager.toggleSoundEffects() }
                     ))
+                    .foregroundColor(.featureCalloutText)
                 }
                 
-                Section(header: Text("Suggestions")) {
+                Section(header: Text("Suggestions").foregroundColor(.featureCalloutText)) {
                     NavigationLink(destination: FeedbackView()) {
                         Label("Submit Feedback", systemImage: "paperplane")
+                            .foregroundColor(.featureCalloutText)
                     }
                 }
                 
-                Section(header: Text("About")) {
+                Section(header: Text("About").foregroundColor(.featureCalloutText)) {
                     HStack {
                         Image(systemName: "info.circle")
+                            .foregroundColor(.featureCalloutText)
                         Text("Version")
+                            .foregroundColor(.featureCalloutText)
                         Spacer()
                         Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
-                            .foregroundColor(.gray)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                     }
+                    
                     HStack {
                         Image(systemName: "doc.text")
+                            .foregroundColor(.featureCalloutText)
                         Text("Privacy Policy")
+                            .foregroundColor(.featureCalloutText)
                         Spacer()
                         Link("View", destination: URL(string: "https://yourapp.com/privacy")!)
+                            .foregroundColor(.featureCalloutAccent)
                     }
+                    
                     NavigationLink(destination: LicenseView()) {
                         HStack {
                             Image(systemName: "doc.plaintext")
+                                .foregroundColor(.featureCalloutText)
                             Text("Licenses")
+                                .foregroundColor(.featureCalloutText)
                         }
                     }
                 }
@@ -948,7 +985,7 @@ struct ProfileSheetView: View {
                         HStack {
                             Spacer()
                             Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
-                                .foregroundColor(.gray)
+                                .foregroundColor(.featureCalloutText.opacity(0.7))
                             Spacer()
                         }
                     }
@@ -961,7 +998,7 @@ struct ProfileSheetView: View {
                     Button(action: { isPresented = false }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title2)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                     }
                 }
             }
@@ -983,7 +1020,7 @@ struct ProfileSheetView: View {
                     if !alertManager.alertRecoverySuggestion.isEmpty {
                         Text(alertManager.alertRecoverySuggestion)
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                     }
                 }
             }
@@ -1089,8 +1126,8 @@ struct AvatarPickerView: View {
                                 .scaledToFill()
                                 .frame(width: 100, height: 100)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.appAccent1, lineWidth: 2))
-                                .shadow(color: Color.black.opacity(0.1), radius: 4)
+                                .overlay(Circle().stroke(Color.featureCalloutAccent, lineWidth: 2))
+                                .shadow(color: Color.featureCalloutBorder.opacity(0.2), radius: 4)
                         }
                     }
                 }
@@ -1103,6 +1140,7 @@ struct AvatarPickerView: View {
                     Button("Cancel") {
                         isPresented = false
                     }
+                    .foregroundColor(.featureCalloutAccent)
                 }
             }
         }
@@ -1115,18 +1153,22 @@ struct LicenseView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("IMPORTANT NOTICE")
                     .font(.headline)
-                    .foregroundColor(.red)
+                    .foregroundColor(.featureCalloutAccent)
                 
                 Text("This license only applies if you downloaded this vector as an unsubscribed user. If you are a premium user (ie, you pay a subscription) you are bound to the license terms described in the accompanying file \"License premium.txt\".")
+                    .foregroundColor(.featureCalloutText)
                     .padding(.bottom)
                 
                 Text("Attribution Requirements")
                     .font(.headline)
+                    .foregroundColor(.featureCalloutText)
                 
                 Text("You must attribute the image to its author:")
                     .font(.subheadline)
+                    .foregroundColor(.featureCalloutText)
                 
                 Text("In order to use a vector or a part of it, you must attribute it to Freepik, so we will be able to continue creating new graphic resources every day.")
+                    .foregroundColor(.featureCalloutText)
                     .padding(.bottom)
                 
                 Text("How to attribute it?")
@@ -1179,6 +1221,7 @@ struct LicenseView: View {
                 Text("The full terms of the license are described in section 7 of the Freepik terms of use, available online in the following link:")
                 
                 Link("http://www.freepik.com/terms_of_use", destination: URL(string: "http://www.freepik.com/terms_of_use")!)
+                    .foregroundColor(.featureCalloutAccent)
                     .padding(.bottom)
                 
                 Text("The terms described in the above link have precedence over the terms described in the present document. In case of disagreement, the Freepik Terms of Use will prevail.")

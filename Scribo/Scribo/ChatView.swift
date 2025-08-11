@@ -193,18 +193,32 @@ struct DocumentManagerView: View {
         }
     }
     
+    private var searchBarView: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.featureCalloutText.opacity(0.7))
+            TextField("Search uploads...", text: $searchText)
+                .textFieldStyle(PlainTextFieldStyle())
+                .foregroundColor(.featureCalloutText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.featureCalloutBackground2)
+        .cornerRadius(10)
+        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+    
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // Search and Filter Bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    TextField("Search uploads...", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                }
-                .padding()
-                .background(Color.appCardBackground)
+                searchBarView
                 
                 // Filter Pills
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -225,8 +239,8 @@ struct DocumentManagerView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
                 }
-                .background(Color.appHeaderBackground)
-                .foregroundColor(.appText)
+                .background(Color(hex: "2b2a31"))
+                .foregroundColor(.featureCalloutText)
                 
                 // Document Grid
                 ScrollView {
@@ -244,24 +258,25 @@ struct DocumentManagerView: View {
                             ProgressView("Loading documents...")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .padding(.top, 40)
+                                .foregroundColor(.featureCalloutText)
                                 .accessibilityLabel("Loading documents")
                         } else if filteredDocuments.isEmpty {
                             VStack(spacing: 16) {
                                 Image(systemName: "doc.text.magnifyingglass")
                                     .font(.system(size: 40))
-                                    .foregroundColor(.gray.opacity(0.5))
+                                    .foregroundColor(.featureCalloutText.opacity(0.5))
                                     .padding(.bottom, 8)
                                     .accessibilityHidden(true)
                                 
                                 Text("Ready to Organize!")
                                     .font(.title2)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(.gray.opacity(0.7))
+                                    .foregroundColor(.featureCalloutText)
                                     .accessibilityAddTraits(.isHeader)
                                 
                                 Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
                                     .font(.body)
-                                    .foregroundColor(.gray.opacity(0.6))
+                                    .foregroundColor(.featureCalloutText.opacity(0.7))
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 32)
                             }
@@ -306,57 +321,77 @@ struct DocumentManagerView: View {
                 .accessibilityHint("Pull down to refresh")
                 
                 // Bottom Bar
-                HStack {
-                    Menu {
-                        Button(action: { isShowingScanner = true }) {
-                            Label("Scan", systemImage: "doc.viewfinder")
-                        }
-                        .accessibilityLabel("Scan document")
-                        
-                        Button(action: { isShowingCamera = true }) {
-                            Label("Camera", systemImage: "camera.fill")
-                        }
-                        .accessibilityLabel("Take photo")
-                        
-                        Button(action: { isPhotoPickerPresented = true }) {
-                            Label("Photo", systemImage: "photo.fill")
-                        }
-                        .accessibilityLabel("Choose from photo library")
-                        
-                        Button(action: { isDocumentPickerPresented = true }) {
-                            Label("Document", systemImage: "doc.fill")
-                        }
-                        .accessibilityLabel("Choose from files")
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.appAccent1)
-                    }
-                    .accessibilityLabel("Add new item")
-                    .accessibilityHint("Double tap to show options for adding new items")
-                    .padding(.horizontal, 14)
-                    .padding(.top, 3)
+                ZStack {
+                    // Background
+                    Color(hex: "2b2a31").opacity(0.8)
+                        .ignoresSafeArea()
                     
-                    Spacer()
+                    // Camera Button (Centered Circle)
+                    Button(action: { isShowingCamera = true }) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .frame(width: 64, height: 64)
+                            .background(
+                                Circle()
+                                    .fill(Color(hex: "63dafb"))
+                                    .shadow(color: Color(hex: "63dafb").opacity(0.3), radius: 8, x: 0, y: 4)
+                            )
+                    }
+                    .accessibilityLabel("Take photo")
+                    .accessibilityHint("Double tap to open camera")
+                    
+                    // Other Options Menu (Right aligned)
+                    HStack {
+                        Spacer()
+                        Menu {
+                            Button(action: { isShowingScanner = true }) {
+                                Label("Scan", systemImage: "doc.viewfinder")
+                            }
+                            .accessibilityLabel("Scan document")
+                            
+                            Button(action: { isPhotoPickerPresented = true }) {
+                                Label("Photo", systemImage: "photo.fill")
+                            }
+                            .accessibilityLabel("Choose from photo library")
+                            
+                            Button(action: { isDocumentPickerPresented = true }) {
+                                Label("Document", systemImage: "doc.fill")
+                            }
+                            .accessibilityLabel("Choose from files")
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    Circle()
+                                        .fill(Color(hex: "63dafb"))
+                                        .shadow(color: Color(hex: "63dafb").opacity(0.3), radius: 6, x: 0, y: 3)
+                                )
+                        }
+                        .accessibilityLabel("More options")
+                        .accessibilityHint("Double tap to show other upload options")
+                        .padding(.trailing)
+                    }
                 }
-                .padding()
-                .background(Color.appHeaderBackground.opacity(0.8))
+                .frame(height: 80)
             }
             
             // Processing Overlay
             if isProcessingOCR {
-                Color.black.opacity(0.4)
+                Color.featureCalloutBackground.opacity(0.4)
                     .ignoresSafeArea()
                     .overlay(
                         VStack(spacing: 16) {
                             ProgressView()
                                 .scaleEffect(1.5)
-                                .tint(.white)
+                                .tint(.featureCalloutAccent)
                                 .accessibilityLabel("Processing")
                             
                             Text(processingStatus)
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.featureCalloutText)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
                                 .accessibilityLabel("Processing status: \(processingStatus)")
@@ -364,7 +399,7 @@ struct DocumentManagerView: View {
                     )
             }
         }
-        .background(Color.appBackground)
+        .background(Color(hex: "2b2a31"))
         .sheet(isPresented: $isDocumentPickerPresented) {
             DocumentPicker(selectedDocument: $selectedDocument)
         }
@@ -1234,11 +1269,18 @@ struct FilterPill: View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? .featureCalloutAccent : .featureCalloutText.opacity(0.7))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.appAccent1 : Color.appCardBackground)
-                .foregroundColor(isSelected ? .white : .appText)
-                .cornerRadius(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(isSelected ? Color.featureCalloutButtonBackground : Color.featureCalloutBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(Color.featureCalloutBorder, lineWidth: 1)
+                        )
+                )
         }
     }
 }
@@ -1246,7 +1288,6 @@ struct FilterPill: View {
 struct DocumentCard: View {
     let document: DocumentItem
     let onDelete: () -> Void
-    @State private var showingDeleteAlert = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1254,54 +1295,60 @@ struct DocumentCard: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 180, height: 160)
+                    .frame(height: 120)
                     .clipped()
+                    .cornerRadius(8)
             } else {
-                Image(systemName: "doc.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 180, height: 160)
-                    .foregroundColor(.appAccent1)
+                Rectangle()
+                    .fill(Color.featureCalloutButtonBackground)
+                    .frame(height: 120)
+                    .cornerRadius(8)
+                    .overlay(
+                        Image(systemName: documentTypeIcon)
+                            .font(.system(size: 30))
+                            .foregroundColor(.featureCalloutText.opacity(0.5))
+                    )
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title)
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.appText)
+                    .foregroundColor(.featureCalloutText)
                     .lineLimit(1)
+                
+                Text(document.date, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.featureCalloutText.opacity(0.7))
                 
                 if let category = document.category {
                     Text(category)
                         .font(.caption)
-                        .foregroundColor(.appTextSecondary)
+                        .foregroundColor(.featureCalloutAccent)
                 }
-                
-                Text(document.date, style: .date)
-                    .font(.caption2)
-                    .foregroundColor(.appTextSecondary)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .frame(width: 180)
-        .background(Color.appCardBackground)
+        .background(Color.featureCalloutBackground2)
         .cornerRadius(12)
-        .shadow(color: Color.appShadow, radius: 8, x: 0, y: 4)
         .contextMenu {
-            Button(role: .destructive) {
-                showingDeleteAlert = true
-            } label: {
+            Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
             }
         }
-        .alert("Delete Document", isPresented: $showingDeleteAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onDelete()
-            }
-        } message: {
-            Text("Are you sure you want to delete this document? This action cannot be undone.")
+    }
+    
+    private var documentTypeIcon: String {
+        switch document.type {
+        case .photo:
+            return "photo.fill"
+        case .scanned:
+            return "doc.viewfinder"
+        case .document:
+            return "doc.fill"
+        case .camera:
+            return "camera.fill"
         }
     }
 }
