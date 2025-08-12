@@ -10,6 +10,7 @@
 		3131727D2DF8DA2B007615C8 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3131727C2DF8DA2B007615C8 /* WidgetKit.framework */; };
 		3131727F2DF8DA2B007615C8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3131727E2DF8DA2B007615C8 /* SwiftUI.framework */; };
 		313172902DF8DA2C007615C8 /* ScriboWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3158DFB62E4AFE9A00CA5D6B /* pleasant-done-notification.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3158DFB52E4AFE9A00CA5D6B /* pleasant-done-notification.wav */; };
 		31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 31920CE72DF24BF100DB0186 /* GoogleMobileAds */; };
 		31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 31ABE0E12DDBD24500515F83 /* Supabase */; };
 /* End PBXBuildFile section */
@@ -56,6 +57,7 @@
 		3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ScriboWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3131727C2DF8DA2B007615C8 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3131727E2DF8DA2B007615C8 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		3158DFB52E4AFE9A00CA5D6B /* pleasant-done-notification.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "pleasant-done-notification.wav"; sourceTree = "<group>"; };
 		BF00E8D82CA1038100CCC3B5 /* Scribo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scribo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF00E8E82CA1038200CCC3B5 /* ScriboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScriboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF00E8F22CA1038200CCC3B5 /* ScriboUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScriboUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -161,6 +163,7 @@
 				313172802DF8DA2B007615C8 /* ScriboWidget */,
 				31ABE0E02DDBD24500515F83 /* Frameworks */,
 				BF00E8D92CA1038100CCC3B5 /* Products */,
+				3158DFB52E4AFE9A00CA5D6B /* pleasant-done-notification.wav */,
 			);
 			sourceTree = "<group>";
 		};
@@ -337,6 +340,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3158DFB62E4AFE9A00CA5D6B /* pleasant-done-notification.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -624,6 +628,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Scribo/Scribo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Scribo/Preview Content\"";

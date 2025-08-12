@@ -1,0 +1,17 @@
+SOUND FILE LICENSE
+
+pleasant-done-notification.wav
+Author: nckn
+Source: https://freesound.org/s/256112/
+License: Attribution NonCommercial 4.0
+
+This sound file is used under the Creative Commons Attribution NonCommercial 4.0 International License.
+For more information about this license, visit: https://creativecommons.org/licenses/by-nc/4.0/
+
+Attribution Requirements:
+- Credit must be given to nckn
+- Link to the original source: https://freesound.org/s/256112/
+- This license allows for non-commercial use only
+
+Usage in Scribo:
+This sound is used as a completion notification sound to provide audio feedback to users when certain actions are completed successfully.

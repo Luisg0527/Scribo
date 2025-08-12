@@ -370,115 +370,345 @@ struct SidebarView: View {
             }
         }
         .sheet(isPresented: $isShowingTopicSelection) {
-            NavigationView {
-                VStack {
-                    Text("New Note")
-                        .font(.headline)
-                        .padding(.top)
+            ZStack {
+                // Animated gradient background
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.featureCalloutBackground,
+                        Color.featureCalloutBackground2
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    // Header with icon
+                    VStack(spacing: 12) {
+                        Image(systemName: "note.text.badge.plus")
+                            .font(.system(size: 40))
+                            .foregroundColor(.featureCalloutAccent)
+                            .padding(.top, 40)
+                        
+                        Text("Create New Note")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.featureCalloutText)
+                        
+                        Text("Choose a topic to organize your thoughts")
+                            .font(.subheadline)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
                     
-                    Text("Select topic and subtopic")
-                        .font(.subheadline)
-                        .foregroundColor(.featureCalloutText.opacity(0.7))
-                        .padding(.bottom)
-                    
+                    // Topics grid
                     ScrollView {
-                        VStack(spacing: 12) {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 16) {
                             ForEach(dataManager.topics) { topic in
                                 Button(action: {
                                     selectedTopic = topic
                                     isShowingTopicSelection = false
                                     isShowingSubtopicSelection = true
                                 }) {
-                                    Text(topic.title)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.featureCalloutBackground)
-                                        .cornerRadius(10)
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "folder.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(.featureCalloutAccent)
+                                        
+                                        Text(topic.title)
+                                            .font(.headline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.featureCalloutText)
+                                            .multilineTextAlignment(.center)
+                                        
+                                        Text("\(topic.subtopics.count) subtopics")
+                                            .font(.caption)
+                                            .foregroundColor(.featureCalloutText.opacity(0.6))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 20)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .fill(Color.featureCalloutBackground2)
+                                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+                                    )
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
-                        .padding()
+                        .padding(.horizontal, 20)
                     }
+                    
+                    Spacer()
                 }
-                .navigationBarItems(trailing: Button("Cancel") {
-                    isShowingTopicSelection = false
-                })
+                
+                // Close button
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            isShowingTopicSelection = false
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.featureCalloutText.opacity(0.6))
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.top, 20)
+                    }
+                    Spacer()
+                }
             }
         }
         .sheet(isPresented: $isShowingSubtopicSelection) {
             if let topic = selectedTopic {
-                NavigationView {
-                    VStack {
-                        Text("Select Subtopic")
-                            .font(.headline)
-                            .padding(.top)
+                ZStack {
+                    // Animated gradient background
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.featureCalloutBackground,
+                            Color.featureCalloutBackground2
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                    
+                    VStack(spacing: 24) {
+                        // Header with icon
+                        VStack(spacing: 12) {
+                            Image(systemName: "folder.fill.badge.person.crop")
+                                .font(.system(size: 40))
+                                .foregroundColor(.featureCalloutAccent)
+                                .padding(.top, 40)
+                            
+                            Text("Choose Subtopic")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.featureCalloutText)
+                            
+                            Text("Select a subtopic in '\(topic.title)'")
+                                .font(.subheadline)
+                                .foregroundColor(.featureCalloutText.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                        }
                         
-                        Text("Choose a subtopic for your note")
-                            .font(.subheadline)
-                            .foregroundColor(.featureCalloutText.opacity(0.7))
-                            .padding(.bottom)
-                        
+                        // Subtopics grid
                         ScrollView {
-                            VStack(spacing: 12) {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ], spacing: 16) {
                                 ForEach(topic.subtopics) { subtopic in
                                     Button(action: {
                                         selectedSubtopic = subtopic
                                         isShowingSubtopicSelection = false
                                         isShowingNoteDetails = true
                                     }) {
-                                        Text(subtopic.title)
-                                            .frame(maxWidth: .infinity)
-                                            .padding()
-                                            .background(Color.featureCalloutBackground)
-                                            .cornerRadius(10)
+                                        VStack(spacing: 12) {
+                                            Image(systemName: "folder.fill.badge.person.crop")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(.featureCalloutAccent)
+                                            
+                                            Text(subtopic.title)
+                                                .font(.headline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.featureCalloutText)
+                                                .multilineTextAlignment(.center)
+                                            
+                                            Text("\(subtopic.notes.count) notes")
+                                                .font(.caption)
+                                                .foregroundColor(.featureCalloutText.opacity(0.6))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 20)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(Color.featureCalloutBackground2)
+                                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+                                        )
                                     }
+                                    .buttonStyle(PlainButtonStyle())
                                 }
                             }
-                            .padding()
+                            .padding(.horizontal, 20)
                         }
+                        
+                        Spacer()
                     }
-                    .navigationBarItems(trailing: Button("Cancel") {
-                        isShowingSubtopicSelection = false
-                    })
+                    
+                    // Close button
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                isShowingSubtopicSelection = false
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.featureCalloutText.opacity(0.6))
+                            }
+                            .padding(.trailing, 20)
+                            .padding(.top, 20)
+                        }
+                        Spacer()
+                    }
                 }
             }
         }
         .sheet(isPresented: $isShowingNoteDetails) {
             if let topic = selectedTopic, let subtopic = selectedSubtopic {
-                NavigationView {
-                    VStack {
-                        Text("New Note")
-                            .font(.headline)
-                            .padding(.top)
+                ZStack {
+                    // Animated gradient background
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.featureCalloutBackground,
+                            Color.featureCalloutBackground2
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                    
+                    VStack(spacing: 24) {
+                        // Header with icon
+                        VStack(spacing: 12) {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 40))
+                                .foregroundColor(.featureCalloutAccent)
+                                .padding(.top, 40)
+                            
+                            Text("Create Your Note")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.featureCalloutText)
+                            
+                            Text("Add to '\(subtopic.title)' in '\(topic.title)'")
+                                .font(.subheadline)
+                                .foregroundColor(.featureCalloutText.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                        }
                         
-                        TextField("Title", text: $newNoteTitle)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .padding()
-                        
-                        TextEditor(text: $newNoteContent)
-                            .frame(height: 100)
-                            .padding()
-                            .background(Color.featureCalloutBackground)
-                            .cornerRadius(10)
-                            .padding()
-                        
-                        HStack {
-                            Button("Cancel") {
-                                isShowingNoteDetails = false
-                                resetNoteCreation()
+                        // Note creation form
+                        VStack(spacing: 20) {
+                            // Title field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Note Title")
+                                    .font(.headline)
+                                    .foregroundColor(.featureCalloutText)
+                                    .padding(.horizontal, 20)
+                                
+                                TextField("Enter title...", text: $newNoteTitle)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.featureCalloutBackground2)
+                                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .padding(.horizontal, 20)
                             }
                             
-                            Button("Create") {
+                            // Content field
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Note Content")
+                                    .font(.headline)
+                                    .foregroundColor(.featureCalloutText)
+                                    .padding(.horizontal, 20)
+                                
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.featureCalloutBackground2)
+                                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+                                        )
+                                    
+                                    ClearBackgroundTextEditor(text: $newNoteContent)
+                                        .frame(minHeight: 120)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Action buttons
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                isShowingNoteDetails = false
+                                resetNoteCreation()
+                            }) {
+                                Text("Cancel")
+                                    .font(.headline)
+                                    .foregroundColor(.featureCalloutText.opacity(0.7))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.featureCalloutBackground2)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            
+                            Button(action: {
                                 handleNoteCreation(topic: topic, subtopic: subtopic)
+                            }) {
+                                Text("Create Note")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(newNoteTitle.isEmpty ? Color.featureCalloutText.opacity(0.3) : Color.featureCalloutAccent)
+                                    )
                             }
                             .disabled(newNoteTitle.isEmpty)
                         }
-                        .padding()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
                     }
-                    .navigationBarItems(trailing: Button("Cancel") {
-                        isShowingNoteDetails = false
-                        resetNoteCreation()
-                    })
+                    
+                    // Close button
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                isShowingNoteDetails = false
+                                resetNoteCreation()
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.featureCalloutText.opacity(0.6))
+                            }
+                            .padding(.trailing, 20)
+                            .padding(.top, 20)
+                        }
+                        Spacer()
+                    }
                 }
             }
         }
@@ -598,6 +828,10 @@ struct SidebarView: View {
                     isShowing = false
                     isShowingNoteDetails = false
                     resetNoteCreation()
+                    
+                    // Play completion sound
+                    print("🎵 About to play completion sound for note creation")
+                    SoundManager.shared.playCompletionSound()
                 }
             } catch {
                 print("❌ Failed to create note: \(error.localizedDescription)")
@@ -690,6 +924,9 @@ struct ContentView: View {
                     Task {
                         await authManager.checkSession()
                     }
+                } else if url.host == "camera" {
+                    print("✅ Valid camera URL detected")
+                    // Camera handling is done in ScriboApp.swift
                 } else {
                     print("❌ Invalid URL host: \(url.host ?? "nil")")
                 }
@@ -756,11 +993,18 @@ struct ContentView: View {
     private var sidebarOverlay: some View {
         Group {
             if isSidebarShowing {
-                Color(hex: "1b1a21").opacity(0.7)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        isSidebarShowing = false
-                    }
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.black.opacity(0.8),
+                        Color.black.opacity(0.6)
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isSidebarShowing = false
+                }
                 
                 HStack {
                     SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
@@ -778,7 +1022,7 @@ struct ContentView: View {
                 Spacer()
                 navigationButton
             }
-            .background(Color(hex: "2b2a31"))
+            .background(Color.clear)
         }
     }
     

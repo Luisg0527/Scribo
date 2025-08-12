@@ -266,7 +266,7 @@ class DataManager: ObservableObject {
                let subtopicIndex = topics[index].subtopics.firstIndex(where: { $0.id == subtopic.id }) {
                 topics[index].subtopics[subtopicIndex].notes.append(note)
             }
-            notificationManager.playSound(.success)
+            SoundManager.shared.playCompletionSound()
             notificationManager.scheduleNotification(
                 title: "New Note Created",
                 body: "Your note '\(title)' has been created successfully"

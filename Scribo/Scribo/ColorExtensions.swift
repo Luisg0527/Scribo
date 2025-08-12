@@ -37,8 +37,56 @@ struct AppColors {
         colorScheme == .dark ? Color(hex: "42414d") : Color.white
     }
     
+    static func featureCalloutBackgroundWarm(for colorScheme: ColorScheme) -> LinearGradient {
+        if colorScheme == .light {
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(hex: "1b1a21"),
+                    Color(hex: "1f1e26").opacity(0.8),
+                    Color(hex: "1b1a21")
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(hex: "F8F9FA"),
+                    Color(hex: "F5F6F8").opacity(0.6),
+                    Color(hex: "F8F9FA")
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+    
     static func featureCalloutBackground(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? Color(hex: "2b2a31") : Color.white
+    }
+    
+    static func featureCalloutBackgroundGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        if colorScheme == .light {
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(hex: "1b1a21"),
+                    Color(hex: "1e1d25").opacity(0.7),
+                    Color(hex: "1b1a21")
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(hex: "F8F9FA"),
+                    Color(hex: "F6F7F9").opacity(0.5),
+                    Color(hex: "F8F9FA")
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
     
     static func featureCalloutText(for colorScheme: ColorScheme) -> Color {

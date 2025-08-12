@@ -17,6 +17,8 @@ struct ScriboApp: App {
         MobileAds.shared.start(completionHandler: nil)
         // Register custom fonts
         FontManager.registerFonts()
+        // Initialize sound manager
+        _ = SoundManager.shared
     }
 
     var body: some Scene {
@@ -48,7 +50,7 @@ struct ScriboApp: App {
                                 checkCameraPermission()
                             }
                         }
-                        .sheet(isPresented: $shouldShowCamera) {
+                        .fullScreenCover(isPresented: $shouldShowCamera) {
                             CameraView { image in
                                 if let image = image {
                                     // Handle the captured image

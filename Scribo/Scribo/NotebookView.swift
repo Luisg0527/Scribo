@@ -757,6 +757,7 @@ struct SubtopicRow: View {
     @EnvironmentObject var searchState: SearchState
     @State private var localIsExpanded: Bool = false
     @State private var isActive = false
+    @State private var isShowingNewNoteSheet = false
 
     var body: some View {
         DisclosureGroup(isExpanded: Binding(
@@ -808,6 +809,13 @@ struct SubtopicRow: View {
                 Button(action: {
                     selectedSubtopic = subtopic
                     selectedTopic = topic
+                    isShowingNewNoteSheet = true
+                }) {
+                    Label("Add Note", systemImage: "note.text.badge.plus")
+                }
+                Button(action: {
+                    selectedSubtopic = subtopic
+                    selectedTopic = topic
                     isShowingEditSubtopicSheet = true
                 }) {
                     Label("Edit Subtopic", systemImage: "pencil")
@@ -817,6 +825,11 @@ struct SubtopicRow: View {
                 }) {
                     Label("Delete Subtopic", systemImage: "trash")
                 }
+            }
+        }
+        .sheet(isPresented: $isShowingNewNoteSheet) {
+            if let selectedTopic = selectedTopic, let selectedSubtopic = selectedSubtopic {
+                NewNoteView(topic: selectedTopic, subtopic: selectedSubtopic, dataManager: dataManager)
             }
         }
     }
@@ -855,7 +868,6 @@ struct NoteRow: View {
                         noteDisplayState.currentTopic = topic
                         noteDisplayState.currentSubtopic = subtopic
                         noteDisplayState.isShowingNote = true
-                        isPresented = false
                     }
                 } catch {
                     print("Error updating recent notes: \(error)")
@@ -928,10 +940,6 @@ struct NewTopicView: View {
                     TextField("Topic Title", text: $title)
                 }
                 
-                Section {
-                    Toggle("Create Quick Note", isOn: $isQuickNote)
-                }
-                
                 if isQuickNote {
                     Section(header: Text("Quick Note Details")) {
                         TextField("Subtopic Title", text: $subtopicTitle)
@@ -939,6 +947,10 @@ struct NewTopicView: View {
                         TextEditor(text: $noteContent)
                             .frame(height: 100)
                     }
+                }
+                
+                Section {
+                    Toggle("Create Quick Note", isOn: $isQuickNote)
                 }
             }
             .navigationTitle("New Topic")
@@ -1102,6 +1114,9 @@ struct NewNoteView: View {
             _ = try await dataManager.addNote(to: subtopic, in: topic, title: title, content: content)
             await MainActor.run {
                 dismiss()
+                // Play completion sound
+                print("🎵 About to play completion sound for NewNoteView")
+                SoundManager.shared.playCompletionSound()
             }
         } catch {
             await MainActor.run {

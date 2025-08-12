@@ -211,6 +211,7 @@ struct DocumentManagerView: View {
                 .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal)
+        .padding(.top, 10)
         .padding(.vertical, 8)
     }
     
@@ -239,7 +240,7 @@ struct DocumentManagerView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
                 }
-                .background(Color(hex: "2b2a31"))
+                .background(AppColors.featureCalloutBackgroundWarm(for: isDarkMode ? .dark : .light))
                 .foregroundColor(.featureCalloutText)
                 
                 // Document Grid
@@ -323,7 +324,7 @@ struct DocumentManagerView: View {
                 // Bottom Bar
                 ZStack {
                     // Background
-                    Color(hex: "2b2a31").opacity(0.8)
+                    Color.clear
                         .ignoresSafeArea()
                     
                     // Camera Button (Centered Circle)
@@ -399,7 +400,7 @@ struct DocumentManagerView: View {
                     )
             }
         }
-        .background(Color(hex: "2b2a31"))
+        .background(AppColors.featureCalloutBackgroundWarm(for: isDarkMode ? .dark : .light))
         .sheet(isPresented: $isDocumentPickerPresented) {
             DocumentPicker(selectedDocument: $selectedDocument)
         }
@@ -1046,6 +1047,11 @@ struct DocumentManagerView: View {
                     subtopic: subtopic,
                     noteId: note.id
                 )
+                
+                // Play completion sound
+                await MainActor.run {
+                    SoundManager.shared.playCompletionSound()
+                }
             }
         } catch {
             print("Failed to create document: \(error.localizedDescription)")

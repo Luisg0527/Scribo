@@ -91,6 +91,7 @@ struct NoteView: View {
                 VStack(spacing: 16) {
                     topicHeaderView
                     imageGalleryView
+                    .padding(.top, -16)
                     textInputView
                 }
                 .padding(.top)
