@@ -1,0 +1,210 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "ScriboSubscriptions",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "1234567890",
+    "_developerTeamID" : "T4U3LQTNHW",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 748080000,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21482456",
+      "localizations" : [
+
+      ],
+      "name" : "Scribo Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "1234567890",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlock advanced AI features and unlimited notes",
+              "displayName" : "Scribo Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.dauntless.scribos.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Scribo Pro Monthly",
+          "subscriptionGroupID" : "21482456",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "49.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "1234567891",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlock advanced AI features and unlimited notes",
+              "displayName" : "Scribo Pro Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.dauntless.scribos.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Scribo Pro Yearly",
+          "subscriptionGroupID" : "21482456",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    },
+    {
+      "id" : "21482457",
+      "localizations" : [
+
+      ],
+      "name" : "Scribo Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "1234567892",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited access to all features with priority support",
+              "displayName" : "Scribo Premium Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.dauntless.scribos.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Scribo Premium Monthly",
+          "subscriptionGroupID" : "21482457",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "99.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "1234567893",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited access to all features with priority support",
+              "displayName" : "Scribo Premium Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.dauntless.scribos.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Scribo Premium Yearly",
+          "subscriptionGroupID" : "21482457",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

@@ -84,7 +84,7 @@ struct DocumentManagerView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var currentImageURL: String?
     @AppStorage("isDarkMode") private var isDarkMode = false
-    @StateObject private var dataManager = DataManager()
+    @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
     @State private var classificationService = TextClassificationService(
         serverURL: "http://192.168.68.120:8000/classify",

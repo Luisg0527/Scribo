@@ -42,11 +42,13 @@ struct UploadRequest: Codable {
 }
 
 class DataManager: ObservableObject {
+    static let shared = DataManager()
+    
     @Published var topics: [Topic] = []
     private let supabase = SupabaseConfig.shared.client
     private let notificationManager = NotificationManager.shared
     
-    init() {
+    private init() {
         Task {
             await loadTopics()
         }
@@ -530,6 +532,133 @@ class DataManager: ObservableObject {
             .execute()
         
         return try JSONDecoder().decode(Upload.self, from: response.data)
+    }
+    
+    // MARK: - Subscription Management
+    
+    func updateUserSubscription(tier: SubscriptionTier) async throws {
+        guard let session = try? await supabase.auth.session else {
+            throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        let updateData: [String: String] = [
+            "subscription_tier": tier.rawValue,
+            "subscription_expires_at": ISO8601DateFormatter().string(from: Date().addingTimeInterval(30 * 24 * 60 * 60)) // 30 days from now
+        ]
+        
+        try await supabase
+            .from("users")
+            .update(updateData)
+            .eq("auth_id", value: session.user.id)
+            .execute()
+        
+        print("✅ Updated user subscription to \(tier.displayName)")
+    }
+    
+    func getUserSubscriptionStatus() async throws -> (tier: SubscriptionTier, expiresAt: Date?) {
+        guard let session = try? await supabase.auth.session else {
+            throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        let response = try await supabase
+            .from("users")
+            .select("subscription_tier, subscription_expires_at")
+            .eq("auth_id", value: session.user.id)
+            .single()
+            .execute()
+        
+        // Parse the JSON data properly
+        let decoder = JSONDecoder()
+        let userData = try decoder.decode([String: String?].self, from: response.data)
+        
+        // Handle optional subscription tier
+        let tierString = (userData["subscription_tier"] as? String) ?? "free"
+        let tier = SubscriptionTier(rawValue: tierString) ?? .free
+        
+        // Handle optional expiration date
+        var expiresAt: Date?
+        if let expiresAtString = userData["subscription_expires_at"] as? String {
+            expiresAt = ISO8601DateFormatter().date(from: expiresAtString)
+        }
+        
+        return (tier: tier, expiresAt: expiresAt)
+    }
+    
+    func getNoteCount() async throws -> Int {
+        guard let session = try? await supabase.auth.session else {
+            throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        // Get all notes for the user and count them
+        let response = try await supabase
+            .from("notes")
+            .select("id")
+            .execute()
+        
+        // Parse the response to get the count
+        let decoder = JSONDecoder()
+        let notes = try decoder.decode([[String: String]].self, from: response.data)
+        return notes.count
+    }
+    
+    func getTopicCount() async throws -> Int {
+        guard let session = try? await supabase.auth.session else {
+            throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        // Get all topics for the user and count them
+        let response = try await supabase
+            .from("topics")
+            .select("id")
+            .eq("user_id", value: session.user.id)
+            .execute()
+        
+        // Parse the response to get the count
+        let decoder = JSONDecoder()
+        let topics = try decoder.decode([[String: String]].self, from: response.data)
+        return topics.count
+    }
+    
+    func getSubtopicCount() async throws -> Int {
+        guard let session = try? await supabase.auth.session else {
+            throw NSError(domain: "DataManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        // Get all subtopics for the user and count them
+        let response = try await supabase
+            .from("subtopics")
+            .select("id")
+            .eq("user_id", value: session.user.id)
+            .execute()
+        
+        // Parse the response to get the count
+        let decoder = JSONDecoder()
+        let subtopics = try decoder.decode([[String: String]].self, from: response.data)
+        return subtopics.count
+    }
+    
+    func canCreateNote() async throws -> Bool {
+        let noteCount = try await getNoteCount()
+        let subscriptionStatus = try await getUserSubscriptionStatus()
+        let limit = subscriptionStatus.tier.limits.maxNotes
+        
+        return limit == -1 || noteCount < limit
+    }
+    
+    func canCreateTopic() async throws -> Bool {
+        let topicCount = try await getTopicCount()
+        let subscriptionStatus = try await getUserSubscriptionStatus()
+        let limit = subscriptionStatus.tier.limits.maxTopics
+        
+        return limit == -1 || topicCount < limit
+    }
+    
+    func canCreateSubtopic() async throws -> Bool {
+        let subtopicCount = try await getSubtopicCount()
+        let subscriptionStatus = try await getUserSubscriptionStatus()
+        let limit = subscriptionStatus.tier.limits.maxSubtopics
+        
+        return limit == -1 || subtopicCount < limit
     }
 } 
  

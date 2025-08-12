@@ -139,7 +139,7 @@ struct SidebarView: View {
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @State private var recentNotes: [Note] = []
     @ObservedObject var authManager: AuthManager
-    @StateObject private var dataManager = DataManager()
+    @StateObject private var dataManager = DataManager.shared
     @State private var profileImage: UIImage?
     @State private var isLoadingRecentNotes = true
     @State private var shimmerAnimation = false
@@ -851,7 +851,7 @@ struct ContentView: View {
     @State private var isSidebarShowing: Bool = false
     @State private var showNotebook: Bool = false
     @AppStorage("isDarkMode") private var isDarkMode = true
-    @StateObject private var dataManager = DataManager()
+    @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
     
     var body: some View {
@@ -1073,7 +1073,7 @@ struct ProfileSheetView: View {
     @State private var selectedVoice = "Default"
     @State private var speechSpeed: Double = 1.0
     @State private var feedbackText = ""
-    @StateObject private var dataManager = DataManager()
+    @StateObject private var dataManager = DataManager.shared
     @State private var fullName = ""
     @State private var avatarImage: UIImage?
     @State private var isLoading = false

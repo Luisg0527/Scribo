@@ -400,7 +400,7 @@ struct NoteCardView: View {
 struct NotebookView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var searchState = SearchState()
-    @StateObject private var dataManager = DataManager()
+    @StateObject private var dataManager = DataManager.shared
     @Binding var isPresented: Bool
     @State private var selectedTopic: Topic?
     @State private var selectedSubtopic: Subtopic?
