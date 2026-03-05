@@ -21,24 +21,25 @@ struct SubtopicRecord: Codable {
 
 struct NoteRecord: Codable {
     let id: UUID
-    let subtopic_id: UUID
+    let workspace_id: UUID?
+    let user_id: UUID?
+    let subtopic_id: UUID?
     let title: String
     let content: String
-    let attachment_urls: [String]?
+    let created_by: UUID
     let created_at: String
     let updated_at: String
 }
 
-// MARK: - Upload Request
-struct UploadRequest: Codable {
-    let title: String
-    let type: String
-    let image_url: String?
-    let document_url: String?
-    let category: String?
-    let topic: String?
-    let subtopic: String?
+// MARK: - Note Attachments
+struct NoteAttachmentInsert: Encodable {
     let note_id: UUID
+    let uploaded_by: UUID?
+    let kind: String
+    let bucket: String
+    let storage_path: String
+    let mime_type: String?
+    let size_bytes: Int?
 }
 
 class DataManager: ObservableObject {
@@ -230,16 +231,18 @@ class DataManager: ObservableObject {
     }
     
     // MARK: - Notes
-    func addNote(to subtopic: Subtopic, in topic: Topic, title: String, content: String, attachmentUrls: [String]? = nil) async throws -> Note {
+    func addNote(to subtopic: Subtopic, in topic: Topic, title: String, content: String) async throws -> Note {
         let session = try await supabase.auth.session
         let userId = session.user.id
         
         let newNote = NoteRecord(
             id: UUID(),
+            workspace_id: nil,
+            user_id: userId,
             subtopic_id: subtopic.id,
             title: title,
             content: content,
-            attachment_urls: attachmentUrls,
+            created_by: userId,
             created_at: ISO8601DateFormatter().string(from: Date()),
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
@@ -256,9 +259,10 @@ class DataManager: ObservableObject {
         let note = Note(
             id: record.id,
             subtopic_id: record.subtopic_id,
+            workspace_id: record.workspace_id,
+            user_id: record.user_id,
             title: record.title,
             content: record.content,
-            attachment_urls: record.attachment_urls,
             created_at: record.created_at,
             updated_at: record.updated_at
         )
@@ -281,13 +285,18 @@ class DataManager: ObservableObject {
         return note
     }
     
-    func updateNote(_ note: Note, in subtopic: Subtopic, in topic: Topic, newTitle: String, newContent: String, newAttachmentUrls: [String]? = nil) async throws -> Note {
+    func updateNote(_ note: Note, in subtopic: Subtopic, in topic: Topic, newTitle: String, newContent: String) async throws -> Note {
+        let session = try await supabase.auth.session
+        let userId = session.user.id
+        
         let updateData = NoteRecord(
             id: note.id,
+            workspace_id: note.workspace_id,
+            user_id: note.user_id ?? userId,
             subtopic_id: note.subtopic_id,
             title: newTitle,
             content: newContent,
-            attachment_urls: newAttachmentUrls,
+            created_by: userId,
             created_at: note.created_at,
             updated_at: ISO8601DateFormatter().string(from: Date())
         )
@@ -297,27 +306,10 @@ class DataManager: ObservableObject {
             .update(updateData)
             .eq("id", value: note.id.uuidString)
             .select()
+            .single()
             .execute()
         
-        let records = try JSONDecoder().decode([NoteRecord].self, from: response.data)
-        guard let record = records.first else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No record returned"]) }
-        
-        let updatedNote = Note(
-            id: record.id,
-            subtopic_id: record.subtopic_id,
-            title: record.title,
-            content: record.content,
-            attachment_urls: record.attachment_urls,
-            created_at: record.created_at,
-            updated_at: record.updated_at
-        )
-        
-        // Update the updated_at_check in notes_view
-        try await supabase
-            .from("notes_view")
-            .update(["updated_at_check": ISO8601DateFormatter().string(from: Date())])
-            .eq("note_id", value: note.id)
-            .execute()
+        let updatedNote = try JSONDecoder().decode(Note.self, from: response.data)
         
         await MainActor.run {
             if let topicIndex = topics.firstIndex(where: { $0.id == topic.id }),
@@ -326,9 +318,6 @@ class DataManager: ObservableObject {
                 topics[topicIndex].subtopics[subtopicIndex].notes[noteIndex] = updatedNote
             }
         }
-        
-        // Add to recent notes
-        try await addRecentNote(noteId: note.id.uuidString)
         
         return updatedNote
     }
@@ -382,9 +371,10 @@ class DataManager: ObservableObject {
                         notes!subtopic_id (
                             id,
                             subtopic_id,
+                            workspace_id,
+                            user_id,
                             title,
                             content,
-                            attachment_urls,
                             created_at,
                             updated_at
                         )
@@ -428,9 +418,9 @@ class DataManager: ObservableObject {
         }
         
         try await supabase
-            .from("users")
+            .from("profiles")
             .update(updateData)
-            .eq("auth_id", value: userId)
+            .eq("id", value: userId)
             .execute()
     }
     
@@ -439,9 +429,9 @@ class DataManager: ObservableObject {
         let userId = session.user.id
         
         let response = try await supabase
-            .from("users")
+            .from("profiles")
             .select()
-            .eq("auth_id", value: userId)
+            .eq("id", value: userId)
             .single()
             .execute()
         
@@ -458,10 +448,10 @@ class DataManager: ObservableObject {
         }
         
         let recentResponse = try await supabase
-            .from("notes_view")
+            .from("note_reads")
             .select("note_id")
             .eq("user_id", value: session.user.id)
-            .order("viewed_at", ascending: false)
+            .order("last_viewed_at", ascending: false)
             .limit(5)
             .execute()
         
@@ -503,35 +493,52 @@ class DataManager: ObservableObject {
         let recentNote = [
             "user_id": session.user.id.uuidString,
             "note_id": noteId,
-            "viewed_at": ISO8601DateFormatter().string(from: Date())
+            "last_viewed_at": ISO8601DateFormatter().string(from: Date())
         ]
         
         try await supabase
-            .from("notes_view")
+            .from("note_reads")
             .upsert(recentNote, onConflict: "user_id,note_id")
             .execute()
     }
-    
-    // MARK: - Uploads
-    func getUploads() async throws -> [Upload] {
-        let response = try await supabase
-            .from("uploads")
-            .select()
-            .order("created_at", ascending: false)
-            .execute()
+
+    // MARK: - Note Attachments
+    func createAttachment(for noteId: UUID, storagePath: String, mimeType: String?, sizeBytes: Int?, kind: String) async throws -> NoteAttachment {
+        let session = try await supabase.auth.session
+        let userId = session.user.id
         
-        return try JSONDecoder().decode([Upload].self, from: response.data)
-    }
-    
-    func createUpload(_ upload: UploadRequest) async throws -> Upload {
+        let insert = NoteAttachmentInsert(
+            note_id: noteId,
+            uploaded_by: userId,
+            kind: kind,
+            bucket: "attachments",
+            storage_path: storagePath,
+            mime_type: mimeType,
+            size_bytes: sizeBytes
+        )
+        
         let response = try await supabase
-            .from("uploads")
-            .insert(upload)
+            .from("note_attachments")
+            .insert(insert)
             .select()
             .single()
             .execute()
         
-        return try JSONDecoder().decode(Upload.self, from: response.data)
+        return try JSONDecoder().decode(NoteAttachment.self, from: response.data)
+    }
+    
+    func getMyAttachments() async throws -> [NoteAttachment] {
+        let session = try await supabase.auth.session
+        let userId = session.user.id
+        
+        let response = try await supabase
+            .from("note_attachments")
+            .select()
+            .eq("uploaded_by", value: userId)
+            .order("created_at", ascending: false)
+            .execute()
+        
+        return try JSONDecoder().decode([NoteAttachment].self, from: response.data)
     }
     
     // MARK: - Subscription Management
@@ -547,9 +554,9 @@ class DataManager: ObservableObject {
         ]
         
         try await supabase
-            .from("users")
+            .from("profiles")
             .update(updateData)
-            .eq("auth_id", value: session.user.id)
+            .eq("id", value: session.user.id)
             .execute()
         
         print("✅ Updated user subscription to \(tier.displayName)")
@@ -561,9 +568,9 @@ class DataManager: ObservableObject {
         }
         
         let response = try await supabase
-            .from("users")
+            .from("profiles")
             .select("subscription_tier, subscription_expires_at")
-            .eq("auth_id", value: session.user.id)
+            .eq("id", value: session.user.id)
             .single()
             .execute()
         

@@ -1,0 +1,41 @@
+{
+  "" : {
+    "const-values" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.swiftconstvalues",
+    "dependencies" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.d",
+    "diagnostics" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.dia",
+    "emit-module-dependencies" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary-emit-module.dia",
+    "pch" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.swiftdeps"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/AppIntent.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/AppIntent.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/AppIntent.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/AppIntent.o"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/ScriboWidget.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidget.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidget.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidget.o"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/ScriboWidgetBundle.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetBundle.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetBundle.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetBundle.o"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/ScriboWidgetControl.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetControl.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetControl.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetControl.o"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/ScriboWidgetLiveActivity.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetLiveActivity.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetLiveActivity.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetLiveActivity.o"
+  },
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  }
+}

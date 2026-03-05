@@ -186,7 +186,7 @@ struct SubtopicPreviewView: View {
                     .textFieldStyle(PlainTextFieldStyle())
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .foregroundColor(.gray)
                     }
                 }
@@ -276,43 +276,17 @@ struct NoteCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image preview if available
-            if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
-                ZStack(alignment: .topTrailing) {
-                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrls[0])
-                    if let image = UIImage(contentsOfFile: fileURL.path) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 160, height: 124)
-                            .clipped()
-                            .cornerRadius(4)
-                    }
-                    
-                    if attachmentUrls.count > 1 {
-                        Text("\(attachmentUrls.count)")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(6)
-                            .background(Color.black.opacity(0.6))
-                            .clipShape(Circle())
-                            .padding(8)
-                    }
-                }
-                .frame(width: 160, height: 124)
-            } else {
-                ZStack {
-                    Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
-                        .frame(width: 160, height: 124)
-                        .cornerRadius(8)
-
-                    Image(systemName: "photo.on.rectangle")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 40, height: 40)
-                        .foregroundColor(.gray.opacity(0.6))
-                    }
+            // Placeholder image area (attachments are managed separately)
+            ZStack {
+                Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
+                    .frame(width: 160, height: 124)
+                    .cornerRadius(8)
+                
+                Image(systemName: "photo.on.rectangle")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .foregroundColor(.gray.opacity(0.6))
             }
             
             // Note title
@@ -468,7 +442,7 @@ struct NotebookView: View {
                         Button(action: {
                             searchState.searchText = ""
                         }) {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 20))
                                 .foregroundColor(.gray)
                         }
@@ -524,7 +498,7 @@ struct NotebookView: View {
                     Button(action: {
                         isPresented = false
                     }) {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .font(.system(size: 20))
                             .foregroundColor(.appAccent1)
                     }
@@ -893,17 +867,6 @@ struct NoteDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
-                    let fileURL = getDocumentsDirectory().appendingPathComponent(attachmentUrls[0])
-                    if let image = UIImage(contentsOfFile: fileURL.path) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .cornerRadius(12)
-                    }
-                }
-                
                 HighlightedText(text: note.title, searchText: searchState.searchText)
                     .font(.title)
                     .fontWeight(.bold)

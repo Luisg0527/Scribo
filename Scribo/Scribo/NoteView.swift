@@ -75,14 +75,6 @@ struct NoteView: View {
         self.isNewNote = note == nil
         self.dataManager = dataManager
         self._isFromChatView = State(initialValue: !isPresented.wrappedValue)
-
-        if let note = note, let attachmentUrls = note.attachment_urls {
-            let images = attachmentUrls.compactMap { url in
-                let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(url)
-                return UIImage(contentsOfFile: fileURL.path)
-            }
-            self._noteImages = State(initialValue: images)
-        }
     }
 
     var body: some View {
@@ -358,18 +350,13 @@ struct NoteView: View {
             guard let topic = noteDisplayState.currentTopic,
                   let subtopic = noteDisplayState.currentSubtopic else { return }
 
-            var attachmentUrls: [String] = []
-            for image in noteImages {
-                if let data = image.jpegData(compressionQuality: 0.8) {
-                    let fileName = UUID().uuidString + ".jpg"
-                    let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(fileName)
-                    try data.write(to: fileURL)
-                    attachmentUrls.append(fileName)
-                }
-            }
-
             if isNewNote {
-                let newNote = try await dataManager.addNote(to: subtopic, in: topic, title: editedTitle, content: editedContent, attachmentUrls: attachmentUrls)
+                let newNote = try await dataManager.addNote(
+                    to: subtopic,
+                    in: topic,
+                    title: editedTitle,
+                    content: editedContent
+                )
                 notificationManager.playSound(.success)
                 notificationManager.scheduleNotification(
                     title: "New Note Created",
@@ -379,15 +366,13 @@ struct NoteView: View {
                 var updatedNote = note
                 updatedNote.title = editedTitle
                 updatedNote.content = editedContent
-                updatedNote.attachment_urls = attachmentUrls
                 
                 _ = try await dataManager.updateNote(
                     updatedNote,
                     in: subtopic,
                     in: topic,
                     newTitle: editedTitle,
-                    newContent: editedContent,
-                    newAttachmentUrls: attachmentUrls
+                    newContent: editedContent
                 )
                 notificationManager.playSound(.save)
                 notificationManager.scheduleNotification(
@@ -413,26 +398,21 @@ struct NoteView: View {
                     hasChanges = true
                 }
                 
-                // Create upload record
+                // Create attachment record for this note
                 if let topic = noteDisplayState.currentTopic,
                    let subtopic = noteDisplayState.currentSubtopic,
                    let note = noteDisplayState.currentNote {
                     let fileName = "\(UUID().uuidString).jpg"
                     let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
                     try data.write(to: fileURL)
-                    
-                    let upload = UploadRequest(
-                        title: note.title,
-                        type: "photo",
-                        image_url: fileName,
-                        document_url: nil,
-                        category: "\(topic.title) > \(subtopic.title)",
-                        topic: topic.title,
-                        subtopic: subtopic.title,
-                        note_id: note.id
+                    let sizeBytes = data.count
+                    _ = try await dataManager.createAttachment(
+                        for: note.id,
+                        storagePath: fileName,
+                        mimeType: "image/jpeg",
+                        sizeBytes: sizeBytes,
+                        kind: "photo"
                     )
-                    
-                    try await dataManager.createUpload(upload)
                 }
             }
         } catch {
@@ -447,7 +427,7 @@ struct NoteView: View {
                 hasChanges = true
             }
             
-            // Create upload record
+            // Create attachment record for this note
             if let topic = noteDisplayState.currentTopic,
                let subtopic = noteDisplayState.currentSubtopic,
                let note = noteDisplayState.currentNote {
@@ -456,19 +436,14 @@ struct NoteView: View {
                     let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
                     if let data = image.jpegData(compressionQuality: 0.8) {
                         try data.write(to: fileURL)
-                        
-                        let upload = UploadRequest(
-                            title: note.title,
-                            type: "camera",
-                            image_url: fileName,
-                            document_url: nil,
-                            category: "\(topic.title) > \(subtopic.title)",
-                            topic: topic.title,
-                            subtopic: subtopic.title,
-                            note_id: note.id
+                        let sizeBytes = data.count
+                        _ = try await dataManager.createAttachment(
+                            for: note.id,
+                            storagePath: fileName,
+                            mimeType: "image/jpeg",
+                            sizeBytes: sizeBytes,
+                            kind: "camera"
                         )
-                        
-                        try await dataManager.createUpload(upload)
                     }
                 } catch {
                     print("❌ Failed to save camera image: \(error.localizedDescription)")
@@ -484,7 +459,7 @@ struct NoteView: View {
                 hasChanges = true
             }
             
-            // Create upload record
+            // Create attachment record for this note
             if let topic = noteDisplayState.currentTopic,
                let subtopic = noteDisplayState.currentSubtopic,
                let note = noteDisplayState.currentNote {
@@ -493,19 +468,14 @@ struct NoteView: View {
                     let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
                     if let data = image.jpegData(compressionQuality: 0.8) {
                         try data.write(to: fileURL)
-                        
-                        let upload = UploadRequest(
-                            title: note.title,
-                            type: "scanned",
-                            image_url: fileName,
-                            document_url: nil,
-                            category: "\(topic.title) > \(subtopic.title)",
-                            topic: topic.title,
-                            subtopic: subtopic.title,
-                            note_id: note.id
+                        let sizeBytes = data.count
+                        _ = try await dataManager.createAttachment(
+                            for: note.id,
+                            storagePath: fileName,
+                            mimeType: "image/jpeg",
+                            sizeBytes: sizeBytes,
+                            kind: "scanned"
                         )
-                        
-                        try await dataManager.createUpload(upload)
                     }
                 } catch {
                     print("❌ Failed to save scanned image: \(error.localizedDescription)")
@@ -515,34 +485,28 @@ struct NoteView: View {
     }
     
     private func processAndCategorizeImage(_ image: UIImage, type: DocumentType) async {
-        // Save image first
+        // Save image and create attachment record for this note
+        guard let note = noteDisplayState.currentNote,
+              let subtopic = noteDisplayState.currentSubtopic,
+              let topic = noteDisplayState.currentTopic else {
+            return
+        }
+        
         let fileName = "\(UUID().uuidString).jpg"
         let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
         if let data = image.jpegData(compressionQuality: 0.8) {
             try? data.write(to: fileURL)
+            let sizeBytes = data.count
+            _ = try? await dataManager.createAttachment(
+                for: note.id,
+                storagePath: fileName,
+                mimeType: "image/jpeg",
+                sizeBytes: sizeBytes,
+                kind: type.rawValue
+            )
             
-            // Add to note's attachments
-            if let note = noteDisplayState.currentNote {
-                var attachmentUrls = note.attachment_urls ?? []
-                attachmentUrls.append(fileName)
-                
-                // Update note in database
-                var updatedNote = note
-                updatedNote.attachment_urls = attachmentUrls
-                
-                try? await dataManager.updateNote(
-                    updatedNote,
-                    in: noteDisplayState.currentSubtopic!,
-                    in: noteDisplayState.currentTopic!,
-                    newTitle: note.title,
-                    newContent: note.content,
-                    newAttachmentUrls: attachmentUrls
-                )
-                
-                // Update local note
-                await MainActor.run {
-                    noteDisplayState.currentNote = updatedNote
-                }
+            await MainActor.run {
+                noteDisplayState.currentNote = note
             }
         }
     }

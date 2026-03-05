@@ -1,0 +1,4 @@
+module GoogleMobileAdsTarget {
+header "GoogleMobileAdsTarget-Swift.h"
+export *
+}

@@ -2,13 +2,15 @@ import Foundation
 import SwiftUI
 import Supabase
 
-// Temporary struct for user data insertion
+// Temporary struct for user data insertion into profiles
 private struct UserInsertData: Encodable {
     let id: String
     let full_name: String
     let avatar_url: String?
     let created_at: String
-    let auth_id: String
+    let updated_at: String
+    let subscription_tier: String?
+    let subscription_expires_at: String?
 }
 
 class AuthManager: ObservableObject {
@@ -63,13 +65,13 @@ class AuthManager: ObservableObject {
             print("🔑 Session user ID: \(session.user.id)")
             isAuthenticated = true
             
-            // Get user profile from users table
+            // Get user profile from profiles table
             print("🔍 Fetching user profile with ID: \(session.user.id)")
             do {
                 let response = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
-                    .eq("auth_id", value: session.user.id)
+                    .eq("id", value: session.user.id)
                     .single()
                     .execute()
                 
@@ -82,24 +84,26 @@ class AuthManager: ObservableObject {
                 // Create new user profile
                 let now = ISO8601DateFormatter().string(from: Date())
                 let userData = UserInsertData(
-                    id: UUID().uuidString,  // Generate new UUID for id
+                    id: session.user.id.uuidString,
                     full_name: "",
                     avatar_url: nil,
                     created_at: now,
-                    auth_id: session.user.id.uuidString  // Use auth user ID for auth_id
+                    updated_at: now,
+                    subscription_tier: nil,
+                    subscription_expires_at: nil
                 )
                 
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
-                    .from("users")
+                    .from("profiles")
                     .insert(userData)
                     .execute()
                 
                 // Fetch the newly created profile
                 let userResponse = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
-                    .eq("auth_id", value: session.user.id)
+                    .eq("id", value: session.user.id)
                     .single()
                     .execute()
                 
@@ -125,13 +129,13 @@ class AuthManager: ObservableObject {
             print("🔑 Sign in successful, user ID: \(response.user.id)")
             isAuthenticated = true
             
-            // Get user profile from users table
+            // Get user profile from profiles table
             print("🔍 Fetching user profile with ID: \(response.user.id)")
             do {
                 let userResponse = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
-                    .eq("auth_id", value: response.user.id)
+                    .eq("id", value: response.user.id)
                     .single()
                     .execute()
                 
@@ -144,24 +148,26 @@ class AuthManager: ObservableObject {
                 // Create new user profile
                 let now = ISO8601DateFormatter().string(from: Date())
                 let userData = UserInsertData(
-                    id: UUID().uuidString,  // Generate new UUID for id
+                    id: response.user.id.uuidString,
                     full_name: "",
                     avatar_url: nil,
                     created_at: now,
-                    auth_id: response.user.id.uuidString  // Use auth user ID for auth_id
+                    updated_at: now,
+                    subscription_tier: nil,
+                    subscription_expires_at: nil
                 )
                 
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
-                    .from("users")
+                    .from("profiles")
                     .insert(userData)
                     .execute()
                 
                 // Fetch the newly created profile
                 let userResponse = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
-                    .eq("auth_id", value: response.user.id)
+                    .eq("id", value: response.user.id)
                     .single()
                     .execute()
                 
@@ -187,28 +193,30 @@ class AuthManager: ObservableObject {
             print("🔑 Sign up successful, user ID: \(response.user.id)")
             isAuthenticated = true
             
-            // Create user profile in users table
+            // Create user profile in profiles table
             let now = ISO8601DateFormatter().string(from: Date())
             let userData = UserInsertData(
-                id: UUID().uuidString,  // Generate new UUID for id
+                id: response.user.id.uuidString,
                 full_name: "",
                 avatar_url: nil,
                 created_at: now,
-                auth_id: response.user.id.uuidString  // Use auth user ID for auth_id
+                updated_at: now,
+                subscription_tier: nil,
+                subscription_expires_at: nil
             )
             
             print("📝 Creating user profile with data: \(userData)")
             try await supabase
-                .from("users")
+                .from("profiles")
                 .insert(userData)
                 .execute()
             
             // Fetch the created user profile
             print("🔍 Fetching newly created user profile")
             let userResponse = try await supabase
-                .from("users")
+                .from("profiles")
                 .select()
-                .eq("auth_id", value: response.user.id)
+                .eq("id", value: response.user.id)
                 .single()
                 .execute()
             
@@ -354,11 +362,11 @@ class AuthManager: ObservableObject {
                 isAuthenticated = true
             }
             
-            // Get user profile from users table
+            // Get user profile from profiles table
             print("🔍 Fetching user profile...")
             do {
                 let userResponse = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
                     .eq("id", value: authSession.user.id)
                     .single()
@@ -383,23 +391,25 @@ class AuthManager: ObservableObject {
                 let avatarUrl = authSession.user.userMetadata["avatar_url"]?.stringValue
                 
                 let userData = UserInsertData(
-                    id: authSession.user.id.uuidString,  // Use auth user ID as the id
+                    id: authSession.user.id.uuidString,
                     full_name: fullName,
                     avatar_url: avatarUrl,
                     created_at: now,
-                    auth_id: authSession.user.id.uuidString
+                    updated_at: now,
+                    subscription_tier: nil,
+                    subscription_expires_at: nil
                 )
                 
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
-                    .from("users")
+                    .from("profiles")
                     .insert(userData)
                     .execute()
                 
                 // Fetch the newly created user profile
                 print("🔍 Fetching newly created user profile")
                 let userResponse = try await supabase
-                    .from("users")
+                    .from("profiles")
                     .select()
                     .eq("id", value: authSession.user.id)
                     .single()
@@ -439,11 +449,11 @@ class AuthManager: ObservableObject {
             // The response is already a session
             isAuthenticated = true
             
-            // Get user profile from users table
+            // Get user profile from profiles table
             let userResponse = try await supabase
-                .from("users")
+                .from("profiles")
                 .select()
-                .eq("auth_id", value: response.user.id)
+                .eq("id", value: response.user.id)
                 .single()
                 .execute()
             

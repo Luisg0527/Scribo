@@ -21,18 +21,18 @@ struct Subtopic: Identifiable, Codable {
 
 struct Note: Identifiable, Codable, Equatable {
     let id: UUID
-    let subtopic_id: UUID
+    let subtopic_id: UUID?
+    let workspace_id: UUID?
+    let user_id: UUID?
     var title: String
     var content: String
-    var attachment_urls: [String]?
     let created_at: String
     let updated_at: String
     
     static func == (lhs: Note, rhs: Note) -> Bool {
         lhs.id == rhs.id &&
         lhs.title == rhs.title &&
-        lhs.content == rhs.content &&
-        lhs.attachment_urls == rhs.attachment_urls
+        lhs.content == rhs.content
     }
 }
 
@@ -41,9 +41,29 @@ class User: Codable {
     var full_name: String
     var avatar_url: String?
     let created_at: String
-    let auth_id: UUID
-    var subscription_tier: SubscriptionTier?
+    let updated_at: String
+    var subscription_tier: String?
     var subscription_expires_at: String?
+}
+
+// MARK: - Attachments
+struct NoteAttachment: Identifiable, Codable {
+    let id: UUID
+    let note_id: UUID
+    let uploaded_by: UUID?
+    let kind: String
+    let bucket: String
+    let storage_path: String
+    let mime_type: String?
+    let size_bytes: Int?
+    let created_at: String
+    let updated_at: String
+}
+
+extension User {
+    var tierEnum: SubscriptionTier {
+        SubscriptionTier(rawValue: subscription_tier ?? "free") ?? .free
+    }
 }
 
 // MARK: - Subscription Models

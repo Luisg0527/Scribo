@@ -2,23 +2,27 @@ import SwiftUI
 
 struct AppColors {
     static func background(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "1b1a21") : Color(hex: "F5F5F7")
+        // Use system-style grouped backgrounds for a more Apple-like base
+        colorScheme == .dark ? Color(.systemBackground) : Color(.systemGroupedBackground)
     }
     
     static func cardBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "2b2a31") : Color(hex: "FFFFFF")
+        // Lighter, card-style surfaces similar to Settings / Notes
+        colorScheme == .dark ? Color(.secondarySystemBackground) : Color(.secondarySystemBackground)
     }
     
     static func headerBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "2b2a31") : Color(hex: "F0F0F0")
+        colorScheme == .dark ? Color(.tertiarySystemBackground) : Color(.tertiarySystemBackground)
     }
     
     static func accent1(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "fbfbfe") : Color(hex: "6A5ACD")
+        // Primary accent: warm Apple-like orange (similar to Reminders / MyMind)
+        colorScheme == .dark ? Color(hex: "FF9F0A") : Color(hex: "FF9500")
     }
     
     static func accent2(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "3e3b47") : Color(hex: "E5E5EA")
+        // Secondary accent / pill background: subtle, neutral gray
+        colorScheme == .dark ? Color(.systemGray5) : Color(.systemGray5)
     }
     
     static func text(for colorScheme: ColorScheme) -> Color {
@@ -34,16 +38,18 @@ struct AppColors {
     }
     
     static func featureCalloutBackground2(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "42414d") : Color.white
+        // Softer cards for special callouts
+        colorScheme == .dark ? Color(.secondarySystemBackground) : Color(.secondarySystemBackground)
     }
     
     static func featureCalloutBackgroundWarm(for colorScheme: ColorScheme) -> LinearGradient {
+        // Warm, subtle highlight strip (light: soft cream, dark: deep gray)
         if colorScheme == .light {
             return LinearGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "1b1a21"),
-                    Color(hex: "1f1e26").opacity(0.8),
-                    Color(hex: "1b1a21")
+                    Color(hex: "FFF9E6"),
+                    Color(hex: "FFF3C2"),
+                    Color(hex: "FFF9E6")
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -51,9 +57,9 @@ struct AppColors {
         } else {
             return LinearGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "F8F9FA"),
-                    Color(hex: "F5F6F8").opacity(0.6),
-                    Color(hex: "F8F9FA")
+                    Color(hex: "1C1C1E"),
+                    Color(hex: "2C2C2E"),
+                    Color(hex: "1C1C1E")
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -62,16 +68,18 @@ struct AppColors {
     }
     
     static func featureCalloutBackground(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "2b2a31") : Color.white
+        colorScheme == .dark ? Color(.secondarySystemBackground) : Color(.systemBackground)
     }
     
     static func featureCalloutBackgroundGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        // Light mode: very soft, almost-flat background with a hint of blue
+        // Dark mode: gentle dark gradient
         if colorScheme == .light {
             return LinearGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "1b1a21"),
-                    Color(hex: "1e1d25").opacity(0.7),
-                    Color(hex: "1b1a21")
+                    Color(hex: "F9FAFF"),
+                    Color(hex: "F4F6FF"),
+                    Color(hex: "F9FAFF")
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -79,9 +87,9 @@ struct AppColors {
         } else {
             return LinearGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "F8F9FA"),
-                    Color(hex: "F6F7F9").opacity(0.5),
-                    Color(hex: "F8F9FA")
+                    Color(hex: "1C1C1E"),
+                    Color(hex: "232329"),
+                    Color(hex: "1C1C1E")
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -90,15 +98,16 @@ struct AppColors {
     }
     
     static func featureCalloutText(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "fbfbfe") : Color(hex: "15141A")
+        colorScheme == .dark ? Color(.label) : Color(.label)
     }
     
     static func featureCalloutBorder(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "3e3b47") : Color(hex: "CFCFD8")
+        colorScheme == .dark ? Color(.separator) : Color(.separator)
     }
     
     static func featureCalloutAccent(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color(hex: "fbfbfe") : Color(hex: "0061E0")
+        // Use the same blue accent for special callouts
+        accent1(for: colorScheme)
     }
     
     static func featureCalloutButtonBackground(for colorScheme: ColorScheme) -> Color {

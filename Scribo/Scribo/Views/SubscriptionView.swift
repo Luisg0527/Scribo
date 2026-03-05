@@ -175,7 +175,7 @@ struct SubscriptionView: View {
                 HStack {
                     Spacer()
                     Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .font(.title)
                             .foregroundColor(.white.opacity(0.8))
                     }

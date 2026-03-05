@@ -1,0 +1,56 @@
+{
+  "" : {
+    "const-values" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary.swiftconstvalues",
+    "dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary.d",
+    "diagnostics" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary.dia",
+    "emit-module-dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary-emit-module.dia",
+    "pch" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgREST-primary.swiftdeps"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/Defaults.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Defaults.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Defaults.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Defaults.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/Deprecated.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Deprecated.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Deprecated.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Deprecated.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestBuilder.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestBuilder.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestBuilder.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestBuilder.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestClient.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestClient.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestClient.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestClient.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestFilterBuilder.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterBuilder.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterBuilder.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterBuilder.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestFilterValue.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterValue.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterValue.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestFilterValue.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestQueryBuilder.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestQueryBuilder.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestQueryBuilder.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestQueryBuilder.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/PostgrestTransformBuilder.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestTransformBuilder.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestTransformBuilder.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/PostgrestTransformBuilder.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/PostgREST/Types.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Types.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Types.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/PostgREST.build/Objects-normal/arm64/Types.o"
+  }
+}

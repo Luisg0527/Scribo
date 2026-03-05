@@ -17,11 +17,16 @@
 		<key>ScriboWidgetExtension.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>1</integer>
+			<integer>0</integer>
 		</dict>
 	</dict>
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
+		<key>3131727A2DF8DA2B007615C8</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
 		<key>BF00E8D72CA1038100CCC3B5</key>
 		<dict>
 			<key>primary</key>

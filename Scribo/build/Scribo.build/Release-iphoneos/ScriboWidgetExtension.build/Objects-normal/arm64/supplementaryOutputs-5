@@ -1,0 +1,12 @@
+{
+  "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/ScriboWidget/AppIntent.swift" : {
+    "abi-baseline-json" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension.abi.json",
+    "const-values" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.swiftconstvalues",
+    "dependencies" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.d",
+    "diagnostics" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-primary.dia",
+    "objc-header" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension-Swift.h",
+    "swiftdoc" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension.swiftdoc",
+    "swiftmodule" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension.swiftmodule",
+    "swiftsourceinfo" : "/Users/santipa/Desktop/Web Projects/XcodeApps/ScriboRepo/Scribo/Scribo/build/Scribo.build/Release-iphoneos/ScriboWidgetExtension.build/Objects-normal/arm64/ScriboWidgetExtension.swiftsourceinfo"
+  }
+}

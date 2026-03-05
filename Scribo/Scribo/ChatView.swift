@@ -40,39 +40,11 @@ struct DocumentItem: Identifiable, Equatable {
     }
 }
 
-// MARK: - Upload Model
-struct Upload: Identifiable, Codable {
-    let id: UUID
-    let title: String
-    let type: String
-    let image_url: String?
-    let document_url: String?
-    let category: String?
-    let topic: String?
-    let subtopic: String?
-    let created_at: String
-    let updated_at: String
-    let note_id: UUID
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case type
-        case image_url
-        case document_url
-        case category
-        case topic
-        case subtopic
-        case created_at
-        case updated_at
-        case note_id
-    }
-}
-
 // MARK: - Document Manager View
 struct DocumentManagerView: View {
+    @Binding var showNotebook: Bool
+    var onOpenMenu: () -> Void = {}
     @State private var documents: [DocumentItem] = []
-    @State private var uploads: [Upload] = []
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var selectedDocument: URL?
@@ -120,6 +92,7 @@ struct DocumentManagerView: View {
     @State private var noteName: String = ""
     @State private var hasLoadedInitialData = false
     @State private var isCreatingNewTopic: Bool = false
+    @FocusState private var isSearchFocused: Bool
 
     
     var filteredDocuments: [DocumentItem] {
@@ -151,15 +124,20 @@ struct DocumentManagerView: View {
     }
     
     private func documentGridContent() -> some View {
-        LazyVGrid(columns: [
-            GridItem(.fixed(160), spacing: 36),
-            GridItem(.fixed(160), spacing: 36)
-        ], spacing: 16) {
+        // airy 2-column grid
+        let columns = [
+            GridItem(.flexible(minimum: 170), spacing: 20),
+            GridItem(.flexible(minimum: 170), spacing: 20)
+        ]
+        
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
             ForEach(groupedDocuments, id: \.0) { noteId, noteTitle, documents in
                 documentGroupView(noteId: noteId, noteTitle: noteTitle, documents: documents)
             }
         }
-        .padding()
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedNotes)
     }
     
@@ -193,62 +171,122 @@ struct DocumentManagerView: View {
         }
     }
     
-    private var searchBarView: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.featureCalloutText.opacity(0.7))
-            TextField("Search uploads...", text: $searchText)
-                .textFieldStyle(PlainTextFieldStyle())
-                .foregroundColor(.featureCalloutText)
+    private static let searchBarHeight: CGFloat = 52
+    private static let searchBarBackground = Color(hex: "C6C6CB")
+    private static let iconFocusDuration: Double = 0.2
+    
+    /// Top bar: search bar (hamburger inside) + plus outside; when focused, bar goes full width and tap away dismisses
+    private var topBarView: some View {
+        HStack(alignment: .center, spacing: 8) {
+            // Search bar with hamburger inside; same animation in and out
+            HStack(spacing: 8) {
+                Button(action: onOpenMenu) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.featureCalloutText.opacity(0.9))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .opacity(isSearchFocused ? 0 : 1)
+                .frame(width: isSearchFocused ? 0 : 44, height: Self.searchBarHeight)
+                .clipped()
+                .allowsHitTesting(!isSearchFocused)
+                .animation(.easeInOut(duration: Self.iconFocusDuration), value: isSearchFocused)
+                
+                TextField("Search my notes...", text: $searchText)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .foregroundColor(.featureCalloutText)
+                    .multilineTextAlignment(isSearchFocused ? .leading : .center)
+                    .focused($isSearchFocused)
+            }
+            .padding(.leading, isSearchFocused ? 12 : 6)
+            .padding(.trailing, 12)
+            .frame(height: Self.searchBarHeight)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Self.searchBarBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Self.searchBarBackground.opacity(0.5), lineWidth: 0.5)
+            )
+            .animation(.easeInOut(duration: Self.iconFocusDuration), value: isSearchFocused)
+            .zIndex(1)
+            
+            Menu {
+                Button(action: { isShowingScanner = true }) {
+                    Label("Scan", systemImage: "doc.viewfinder")
+                }
+                .accessibilityLabel("Scan document")
+                Button(action: { isPhotoPickerPresented = true }) {
+                    Label("Photo", systemImage: "photo.fill")
+                }
+                .accessibilityLabel("Choose from photo library")
+                Button(action: { isDocumentPickerPresented = true }) {
+                    Label("Document", systemImage: "doc.fill")
+                }
+                .accessibilityLabel("Choose from files")
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 50, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.appAccent1)
+                    )
+                    .contentShape(Rectangle())
+                    .zIndex(0)
+            }
+            .accessibilityLabel("Add upload")
+            .opacity(isSearchFocused ? 0 : 1)
+            .frame(width: isSearchFocused ? 0 : 50, height: Self.searchBarHeight)
+            .clipped()
+            .allowsHitTesting(!isSearchFocused)
+            .animation(.easeInOut(duration: Self.iconFocusDuration), value: isSearchFocused)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.featureCalloutBackground2)
-        .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.featureCalloutBorder.opacity(0.3), lineWidth: 1)
-        )
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
     }
     
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // Search and Filter Bar
-                searchBarView
+                // One line: hamburger + search + plus
+                topBarView
                 
-                // Filter Pills
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        FilterPill(title: "All", isSelected: selectedFilter == nil) {
-                            selectedFilter = nil
+                // Content area: tap outside search bar to dismiss focus
+                ZStack(alignment: .top) {
+                    VStack(spacing: 0) {
+                        // Filter Pills
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                FilterPill(title: "All", isSelected: selectedFilter == nil) {
+                                    selectedFilter = nil
+                                }
+                                FilterPill(title: "Photos", isSelected: selectedFilter == .photo) {
+                                    selectedFilter = .photo
+                                }
+                                FilterPill(title: "Scanned", isSelected: selectedFilter == .scanned) {
+                                    selectedFilter = .scanned
+                                }
+                                FilterPill(title: "Documents", isSelected: selectedFilter == .document) {
+                                    selectedFilter = .document
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
                         }
-                        FilterPill(title: "Photos", isSelected: selectedFilter == .photo) {
-                            selectedFilter = .photo
-                        }
-                        FilterPill(title: "Scanned", isSelected: selectedFilter == .scanned) {
-                            selectedFilter = .scanned
-                        }
-                        FilterPill(title: "Documents", isSelected: selectedFilter == .document) {
-                            selectedFilter = .document
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                }
-                .background(AppColors.featureCalloutBackgroundWarm(for: isDarkMode ? .dark : .light))
-                .foregroundColor(.featureCalloutText)
-                
-                // Document Grid
-                ScrollView {
+                        .background(Color.clear)
+                        .foregroundColor(.featureCalloutText)
+                        
+                        // Document Grid
+                        ScrollView {
                     RefreshableView(isRefreshing: $isRefreshing) {
                         Task {
                             await loadExistingDocuments()
-                            await loadUploads()
                             await MainActor.run {
                                 expandedNotes.removeAll()  // Reset expansion state on refresh
                                 isRefreshing = false
@@ -291,7 +329,6 @@ struct DocumentManagerView: View {
                 .refreshable {
                     isRefreshing = true
                     await loadExistingDocuments()
-                    await loadUploads()
                     await MainActor.run {
                         expandedNotes.removeAll()  // Reset expansion state on refresh
                         isRefreshing = false
@@ -300,7 +337,6 @@ struct DocumentManagerView: View {
                 .task {
                     if !hasLoadedInitialData {
                         await loadExistingDocuments()
-                        await loadUploads()
                         await MainActor.run {
                             expandedNotes.removeAll()  // Reset expansion state on first load
                             hasLoadedInitialData = true
@@ -311,7 +347,6 @@ struct DocumentManagerView: View {
                     if !newValue {
                         Task {
                             await loadExistingDocuments()
-                            await loadUploads()
                             await MainActor.run {
                                 expandedNotes.removeAll()  // Reset expansion state when returning from note
                             }
@@ -320,31 +355,23 @@ struct DocumentManagerView: View {
                 }
                 .accessibilityLabel("Document list")
                 .accessibilityHint("Pull down to refresh")
+                    }
+                    
+                    // Tap away to dismiss search focus
+                    if isSearchFocused {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { isSearchFocused = false }
+                    }
+                }
                 
-                // Bottom Bar
+                // Bottom Bar – three aligned buttons: + (left), camera (center), magnifying glass (right)
                 ZStack {
-                    // Background
                     Color.clear
                         .ignoresSafeArea()
                     
-                    // Camera Button (Centered Circle)
-                    Button(action: { isShowingCamera = true }) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .frame(width: 64, height: 64)
-                            .background(
-                                Circle()
-                                    .fill(Color(hex: "63dafb"))
-                                    .shadow(color: Color(hex: "63dafb").opacity(0.3), radius: 8, x: 0, y: 4)
-                            )
-                    }
-                    .accessibilityLabel("Take photo")
-                    .accessibilityHint("Double tap to open camera")
-                    
-                    // Other Options Menu (Right aligned)
-                    HStack {
-                        Spacer()
+                    HStack(alignment: .center, spacing: 0) {
+                        // + Menu (bottom left)
                         Menu {
                             Button(action: { isShowingScanner = true }) {
                                 Label("Scan", systemImage: "doc.viewfinder")
@@ -367,14 +394,51 @@ struct DocumentManagerView: View {
                                 .frame(width: 44, height: 44)
                                 .background(
                                     Circle()
-                                        .fill(Color(hex: "63dafb"))
-                                        .shadow(color: Color(hex: "63dafb").opacity(0.3), radius: 6, x: 0, y: 3)
+                                        .fill(Color.appAccent1)
+                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 8, x: 0, y: 4)
                                 )
                         }
                         .accessibilityLabel("More options")
                         .accessibilityHint("Double tap to show other upload options")
-                        .padding(.trailing)
+                        .frame(width: 44, height: 44, alignment: .center)
+                        
+                        Spacer(minLength: 16)
+                        
+                        // Camera (center)
+                        Button(action: { isShowingCamera = true }) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                                .frame(width: 64, height: 64)
+                                .background(
+                                    Circle()
+                                        .fill(Color.appAccent1)
+                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 10, x: 0, y: 6)
+                                )
+                        }
+                        .accessibilityLabel("Take photo")
+                        .accessibilityHint("Double tap to open camera")
+                        .frame(width: 64, height: 64, alignment: .center)
+                        
+                        Spacer(minLength: 16)
+                        
+                        // Magnifying glass / Notebook (bottom right)
+                        Button(action: { showNotebook = true }) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    Circle()
+                                        .fill(Color.appAccent1)
+                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 8, x: 0, y: 4)
+                                )
+                        }
+                        .accessibilityLabel("Open notebook")
+                        .accessibilityHint("Double tap to open your notebook")
+                        .frame(width: 44, height: 44, alignment: .center)
                     }
+                    .padding(.horizontal, 24)
                 }
                 .frame(height: 80)
             }
@@ -400,7 +464,8 @@ struct DocumentManagerView: View {
                     )
             }
         }
-        .background(AppColors.featureCalloutBackgroundWarm(for: isDarkMode ? .dark : .light))
+        // Use the global app background instead of a strong gradient
+        .background(Color.appBackground)
         .sheet(isPresented: $isDocumentPickerPresented) {
             DocumentPicker(selectedDocument: $selectedDocument)
         }
@@ -421,7 +486,6 @@ struct DocumentManagerView: View {
             // Reload view when dark mode changes
             Task {
                 await loadExistingDocuments()
-                await loadUploads()
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
@@ -701,74 +765,55 @@ struct DocumentManagerView: View {
             // Create a Set to track unique document identifiers
             var processedDocumentIds = Set<String>()
             
-            // Get all topics and their notes
-            for topic in dataManager.topics {
-                for subtopic in topic.subtopics {
-                    for note in subtopic.notes {
-                        // Check if note has attachments
-                        if let attachmentUrls = note.attachment_urls, !attachmentUrls.isEmpty {
-                            for url in attachmentUrls {
-                                // Create a unique identifier for this document
-                                let documentId = "\(note.id)-\(url)"
-                                
-                                // Skip if we've already processed this document
-                                guard !processedDocumentIds.contains(documentId) else { continue }
-                                
-                                let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(url)
-                                if let data = try? Data(contentsOf: fileURL),
-                                   let image = UIImage(data: data) {
-                                    let document = DocumentItem(
-                                        id: UUID(),
-                                        title: note.title,
-                                        type: .photo,
-                                        date: dateFormatter.date(from: note.created_at) ?? Date(),
-                                        image: image,
-                                        documentURL: fileURL,
-                                        category: "\(topic.title) > \(subtopic.title)",
-                                        topic: topic.title,
-                                        subtopic: subtopic.title,
-                                        noteId: note.id
-                                    )
-                                    await MainActor.run {
-                                        documents.append(document)
-                                        processedDocumentIds.insert(documentId)
-                                    }
-                                }
+            // Load attachments from note_attachments for the current user
+            let attachments = try await dataManager.getMyAttachments()
+            
+            for attachment in attachments {
+                // Find the topic/subtopic/note hierarchy for this attachment's note
+                var foundTopic: Topic?
+                var foundSubtopic: Subtopic?
+                var foundNote: Note?
+                
+                outerLoop: for topic in dataManager.topics {
+                    for subtopic in topic.subtopics {
+                        for note in subtopic.notes {
+                            if note.id == attachment.note_id {
+                                foundTopic = topic
+                                foundSubtopic = subtopic
+                                foundNote = note
+                                break outerLoop
                             }
                         }
                     }
                 }
-            }
-            
-            // Also load from uploads table
-            let uploads = try await dataManager.getUploads()
-            for upload in uploads {
-                if let imageUrl = upload.image_url {
-                    // Create a unique identifier for this upload
-                    let documentId = "\(upload.id)-\(imageUrl)"
-                    
-                    // Skip if we've already processed this document
-                    guard !processedDocumentIds.contains(documentId) else { continue }
-                    
-                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(imageUrl)
-                    if let data = try? Data(contentsOf: fileURL),
-                       let image = UIImage(data: data) {
-                        let document = DocumentItem(
-                            id: UUID(),
-                            title: upload.title,
-                            type: DocumentType(rawValue: upload.type) ?? .photo,
-                            date: dateFormatter.date(from: upload.created_at) ?? Date(),
-                            image: image,
-                            documentURL: fileURL,
-                            category: upload.category,
-                            topic: upload.topic,
-                            subtopic: upload.subtopic,
-                            noteId: upload.note_id
-                        )
-                        await MainActor.run {
-                            documents.append(document)
-                            processedDocumentIds.insert(documentId)
-                        }
+                
+                guard let topic = foundTopic,
+                      let subtopic = foundSubtopic,
+                      let note = foundNote else {
+                    continue
+                }
+                
+                let documentId = "\(note.id)-\(attachment.id)"
+                guard !processedDocumentIds.contains(documentId) else { continue }
+                
+                let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(attachment.storage_path)
+                if let data = try? Data(contentsOf: fileURL),
+                   let image = UIImage(data: data) {
+                    let document = DocumentItem(
+                        id: UUID(),
+                        title: note.title,
+                        type: .photo,
+                        date: dateFormatter.date(from: note.created_at) ?? Date(),
+                        image: image,
+                        documentURL: fileURL,
+                        category: "\(topic.title) > \(subtopic.title)",
+                        topic: topic.title,
+                        subtopic: subtopic.title,
+                        noteId: note.id
+                    )
+                    await MainActor.run {
+                        documents.append(document)
+                        processedDocumentIds.insert(documentId)
                     }
                 }
             }
@@ -915,13 +960,22 @@ struct DocumentManagerView: View {
                     }
                     guard let subtopicObj = subtopicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
                     
-                    // Create note with the image
+                    // Create note
                     let note = try await dataManager.addNote(
                         to: subtopicObj,
                         in: topicObj,
                         title: batchClassification?.note_name ?? "Untitled",
-                        content: "",
-                        attachmentUrls: [fileName]
+                        content: ""
+                    )
+                    
+                    // Create attachment record for this note
+                    let dataSize = (image.jpegData(compressionQuality: 0.8))?.count
+                    _ = try await dataManager.createAttachment(
+                        for: note.id,
+                        storagePath: fileName,
+                        mimeType: "image/jpeg",
+                        sizeBytes: dataSize,
+                        kind: type.rawValue
                     )
                     
                     // Update document with note ID
@@ -930,18 +984,7 @@ struct DocumentManagerView: View {
                             documents[index].noteId = note.id
                         }
                     }
-                    
-                    // Create upload with note_id
-                    try await saveUpload(
-                        title: batchClassification?.note_name ?? "Untitled",
-                        type: type.rawValue,
-                        imageURL: fileName,
-                        documentURL: nil,
-                        category: "\(topic) > \(subtopic)",
-                        topic: topic,
-                        subtopic: subtopic,
-                        noteId: note.id
-                    )
+                    // (Attachments are now handled via note_attachments; no uploads row)
                 }
             }
         } catch {
@@ -1020,13 +1063,22 @@ struct DocumentManagerView: View {
                 }
                 guard let subtopicObj = subtopicObj else { throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create or find subtopic"]) }
                 
-                // Create note with the image
+                // Create note
                 let note = try await dataManager.addNote(
                     to: subtopicObj,
                     in: topicObj,
                     title: noteName,  // Use user-provided note name
-                    content: "",
-                    attachmentUrls: [fileName]
+                    content: ""
+                )
+                
+                // Create attachment record for this note
+                let dataSize = (image.jpegData(compressionQuality: 0.8))?.count
+                _ = try await dataManager.createAttachment(
+                    for: note.id,
+                    storagePath: fileName,
+                    mimeType: "image/jpeg",
+                    sizeBytes: dataSize,
+                    kind: type.rawValue
                 )
                 
                 // Update document with note ID
@@ -1036,17 +1088,7 @@ struct DocumentManagerView: View {
                     }
                 }
                 
-                // Create upload with note_id
-                try await saveUpload(
-                    title: noteName,  // Use user-provided note name
-                    type: type.rawValue,
-                    imageURL: fileName,
-                    documentURL: nil,
-                    category: "\(topic) > \(subtopic)",
-                    topic: topic,
-                    subtopic: subtopic,
-                    noteId: note.id
-                )
+                // (Attachments are now handled via note_attachments; no uploads row)
                 
                 // Play completion sound
                 await MainActor.run {
@@ -1184,36 +1226,7 @@ struct DocumentManagerView: View {
             }
         }
     }
-    
-    private func loadUploads() async {
-        do {
-            let response = try await dataManager.getUploads()
-            await MainActor.run {
-                self.uploads = response
-            }
-        } catch {
-            print("❌ Failed to load uploads: \(error.localizedDescription)")
-        }
-    }
-    
-    private func saveUpload(title: String, type: String, imageURL: String?, documentURL: String?, category: String?, topic: String?, subtopic: String?, noteId: UUID) async throws {
-        let upload = UploadRequest(
-            title: title,
-            type: type,
-            image_url: imageURL,
-            document_url: documentURL,
-            category: category,
-            topic: topic,
-            subtopic: subtopic,
-            note_id: noteId
-        )
-        
-        let newUpload = try await dataManager.createUpload(upload)
-        await MainActor.run {
-            uploads.insert(newUpload, at: 0)
-        }
-    }
-    
+
     private func deleteDocument(_ document: DocumentItem) async {
         do {
             // Find the note in the database
@@ -1276,15 +1289,15 @@ struct FilterPill: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? .featureCalloutAccent : .featureCalloutText.opacity(0.7))
+                .foregroundColor(isSelected ? Color.black.opacity(0.9) : .featureCalloutText.opacity(0.7))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? Color.featureCalloutButtonBackground : Color.featureCalloutBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.featureCalloutBorder, lineWidth: 1)
+                    Capsule()
+                        .fill(
+                            isSelected
+                            ? Color.appAccent1
+                            : Color.black.opacity(0.18)
                         )
                 )
         }
@@ -1296,48 +1309,67 @@ struct DocumentCard: View {
     let onDelete: () -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let hasCategory = (document.category != nil)
+        
+        return VStack(alignment: .leading, spacing: 10) {
             if let image = document.image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 120)
+                    .frame(height: 130)
                     .clipped()
-                    .cornerRadius(8)
+                    .cornerRadius(12)
             } else {
-                Rectangle()
-                    .fill(Color.featureCalloutButtonBackground)
-                    .frame(height: 120)
-                    .cornerRadius(8)
-                    .overlay(
-                        Image(systemName: documentTypeIcon)
-                            .font(.system(size: 30))
-                            .foregroundColor(.featureCalloutText.opacity(0.5))
-                    )
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.featureCalloutButtonBackground)
+                    Image(systemName: documentTypeIcon)
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundColor(.featureCalloutText.opacity(0.6))
+                }
+                .frame(height: 130)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title)
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
                     .foregroundColor(.featureCalloutText)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 
                 Text(document.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.featureCalloutText.opacity(0.7))
+                    .font(.caption2)
+                    .foregroundColor(.featureCalloutText.opacity(0.65))
                 
                 if let category = document.category {
                     Text(category)
-                        .font(.caption)
-                        .foregroundColor(.featureCalloutAccent)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(Color.appAccent1.opacity(0.15))
+                        )
+                        .foregroundColor(.appAccent1)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
         }
-        .background(Color.featureCalloutBackground2)
-        .cornerRadius(12)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color.featureCalloutBackground2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(
+                            hasCategory
+                            ? Color.appAccent1.opacity(0.7)
+                            : Color.white.opacity(0.04),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.28), radius: 18, x: 0, y: 10)
+        )
         .contextMenu {
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
@@ -1452,7 +1484,7 @@ struct DocumentPicker: UIViewControllerRepresentable {
 
 struct DocumentManagerView_Previews: PreviewProvider {
     static var previews: some View {
-        DocumentManagerView()
+        DocumentManagerView(showNotebook: .constant(false), onOpenMenu: {})
     }
 }
 

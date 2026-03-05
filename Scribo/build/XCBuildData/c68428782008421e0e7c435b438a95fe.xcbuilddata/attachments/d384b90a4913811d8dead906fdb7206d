@@ -1,0 +1,146 @@
+{
+  "" : {
+    "const-values" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary.swiftconstvalues",
+    "dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary.d",
+    "diagnostics" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary.dia",
+    "emit-module-dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary-emit-module.dia",
+    "pch" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Realtime-primary.swiftdeps"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/CallbackManager.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/CallbackManager.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/CallbackManager.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/CallbackManager.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/Defaults.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Defaults.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Defaults.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Defaults.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/Delegated.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Delegated.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Delegated.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Delegated.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/Deprecated.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Deprecated.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Deprecated.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Deprecated.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/HeartbeatTimer.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/HeartbeatTimer.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/HeartbeatTimer.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/HeartbeatTimer.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/PhoenixTransport.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PhoenixTransport.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PhoenixTransport.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PhoenixTransport.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/Presence.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Presence.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Presence.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Presence.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/Push.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Push.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Push.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Push.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/RealtimeChannel.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/RealtimeClient.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClient.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClient.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClient.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/RealtimeMessage.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessage.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessage.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessage.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Deprecated/TimeoutTimer.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/TimeoutTimer.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/TimeoutTimer.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/TimeoutTimer.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/PostgresAction.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresAction.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresAction.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresAction.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/PostgresActionData.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresActionData.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresActionData.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PostgresActionData.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/PresenceAction.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PresenceAction.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PresenceAction.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PresenceAction.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/PushV2.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PushV2.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PushV2.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/PushV2.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeChannel+AsyncAwait.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel+AsyncAwait.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel+AsyncAwait.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannel+AsyncAwait.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeChannelV2.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannelV2.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannelV2.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeChannelV2.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeClientV2.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClientV2.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClientV2.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeClientV2.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeError.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeError.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeError.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeError.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeJoinConfig.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeJoinConfig.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeJoinConfig.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeJoinConfig.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimeMessageV2.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessageV2.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessageV2.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimeMessageV2.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimePostgresFilter.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilter.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilter.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilter.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/RealtimePostgresFilterValue.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilterValue.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilterValue.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/RealtimePostgresFilterValue.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/Types.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Types.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Types.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/Types.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/WebSocket/URLSessionWebSocket.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/URLSessionWebSocket.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/URLSessionWebSocket.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/URLSessionWebSocket.o"
+  },
+  "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/Sources/Realtime/WebSocket/WebSocket.swift" : {
+    "index-unit-output-path" : "/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/WebSocket.o",
+    "llvm-bc" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/WebSocket.bc",
+    "object" : "/Users/santipa/Library/Developer/Xcode/DerivedData/Scribo-cklawbbdyqhfqgfpzdjzvltmcvyo/SourcePackages/checkouts/supabase-swift/build/Supabase.build/Release-iphoneos/Realtime.build/Objects-normal/arm64/WebSocket.o"
+  }
+}
