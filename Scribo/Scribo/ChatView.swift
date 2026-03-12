@@ -411,7 +411,7 @@ struct DocumentManagerView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 0)
                 .padding(.bottom, -10)
             }
             
@@ -1339,7 +1339,7 @@ struct DocumentCard: View {
                    !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(preview)
                         .font(.body)
-                        .foregroundColor(.featureCalloutText.opacity(0.85))
+                        .foregroundColor(Color(.secondaryLabel))
                         .lineLimit(8)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity,minHeight: 180, maxHeight: 180, alignment: .topLeading)
