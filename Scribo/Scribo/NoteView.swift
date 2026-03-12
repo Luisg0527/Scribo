@@ -74,7 +74,7 @@ struct NoteView: View {
         self._editedContent = State(initialValue: note?.content ?? "")
         self.isNewNote = note == nil
         self.dataManager = dataManager
-        self._isFromChatView = State(initialValue: !isPresented.wrappedValue)
+        self._isFromChatView = State(initialValue: isPresented.wrappedValue)
     }
 
     var body: some View {
@@ -316,29 +316,6 @@ struct NoteView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .foregroundColor(.appAccent1)
-                }
-            }
-
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    Task { 
-                        await saveNote()
-                        if isFromChatView {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                noteDisplayState.isShowingNote = false
-                                noteDisplayState.currentNote = nil
-                                noteDisplayState.currentTopic = nil
-                                noteDisplayState.currentSubtopic = nil
-                            }
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                dismiss()
-                            }
-                        }
-                    }
-                } label: {
-                    Text("Done").fontWeight(.semibold)
                         .foregroundColor(.appAccent1)
                 }
             }

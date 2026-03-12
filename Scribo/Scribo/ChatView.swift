@@ -34,6 +34,7 @@ struct DocumentItem: Identifiable, Equatable {
     var topic: String?
     var subtopic: String?
     var noteId: UUID?
+    var previewText: String?
     
     static func == (lhs: DocumentItem, rhs: DocumentItem) -> Bool {
         lhs.id == rhs.id
@@ -42,7 +43,6 @@ struct DocumentItem: Identifiable, Equatable {
 
 // MARK: - Document Manager View
 struct DocumentManagerView: View {
-    @Binding var showNotebook: Bool
     var onOpenMenu: () -> Void = {}
     @State private var documents: [DocumentItem] = []
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -68,6 +68,7 @@ struct DocumentManagerView: View {
     @State private var selectedFilter: DocumentType? = nil
     @State private var isPhotoPickerPresented = false
     @State private var isLoadingDocuments = true
+    @State private var hasMetMinimumLoadingTime = false
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var showTopicConfirmation = false
@@ -92,6 +93,7 @@ struct DocumentManagerView: View {
     @State private var noteName: String = ""
     @State private var hasLoadedInitialData = false
     @State private var isCreatingNewTopic: Bool = false
+    @State private var isShowingCreateNoteSheet = false
     @FocusState private var isSearchFocused: Bool
 
     
@@ -124,15 +126,24 @@ struct DocumentManagerView: View {
     }
     
     private func documentGridContent() -> some View {
-        // airy 2-column grid
-        let columns = [
-            GridItem(.flexible(minimum: 170), spacing: 20),
-            GridItem(.flexible(minimum: 170), spacing: 20)
-        ]
+        // Pinterest-style two-column waterfall layout
+        let groups = groupedDocuments
+        let leftColumnGroups = groups.enumerated().filter { $0.offset % 2 == 0 }.map { $0.element }
+        let rightColumnGroups = groups.enumerated().filter { $0.offset % 2 == 1 }.map { $0.element }
         
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-            ForEach(groupedDocuments, id: \.0) { noteId, noteTitle, documents in
-                documentGroupView(noteId: noteId, noteTitle: noteTitle, documents: documents)
+        return HStack(alignment: .top, spacing: 6) {
+            LazyVStack(spacing: 6) {
+                ForEach(leftColumnGroups, id: \.0) { group in
+                    let (noteId, noteTitle, documents) = group
+                    documentGroupView(noteId: noteId, noteTitle: noteTitle, documents: documents)
+                }
+            }
+            
+            LazyVStack(spacing: 6) {
+                ForEach(rightColumnGroups, id: \.0) { group in
+                    let (noteId, noteTitle, documents) = group
+                    documentGroupView(noteId: noteId, noteTitle: noteTitle, documents: documents)
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -215,16 +226,23 @@ struct DocumentManagerView: View {
             .zIndex(1)
             
             Menu {
-                Button(action: { isShowingScanner = true }) {
-                    Label("Scan", systemImage: "doc.viewfinder")
-                }
-                .accessibilityLabel("Scan document")
                 Button(action: { isPhotoPickerPresented = true }) {
-                    Label("Photo", systemImage: "photo.fill")
+                    Label("Photo Library", systemImage: "photo.fill")
                 }
                 .accessibilityLabel("Choose from photo library")
+                
+                Button(action: { isShowingCamera = true }) {
+                    Label("Take Photo", systemImage: "camera.fill")
+                }
+                .accessibilityLabel("Take a new photo")
+                
+                Button(action: { isShowingScanner = true }) {
+                    Label("Scan Document", systemImage: "doc.viewfinder")
+                }
+                .accessibilityLabel("Scan document")
+                
                 Button(action: { isDocumentPickerPresented = true }) {
-                    Label("Document", systemImage: "doc.fill")
+                    Label("Choose Files", systemImage: "doc.fill")
                 }
                 .accessibilityLabel("Choose from files")
             } label: {
@@ -293,34 +311,38 @@ struct DocumentManagerView: View {
                             }
                         }
                     } content: {
-                        if isLoadingDocuments {
-                            ProgressView("Loading documents...")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.top, 40)
-                                .foregroundColor(.featureCalloutText)
-                                .accessibilityLabel("Loading documents")
+                        if isLoadingDocuments || !hasMetMinimumLoadingTime {
+                            if isRefreshing {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .accessibilityLabel("Loading documents")
+                            } else {
+                                LottieView(name: "Loader cat", loopMode: .loop, playSpeed: 1.0)
+                                    .frame(width: 300, height: 200)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .accessibilityLabel("Loading documents animation")
+                                    .padding(.top, 130)
+                            }
                         } else if filteredDocuments.isEmpty {
                             VStack(spacing: 16) {
-                                Image(systemName: "doc.text.magnifyingglass")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.featureCalloutText.opacity(0.5))
-                                    .padding(.bottom, 8)
-                                    .accessibilityHidden(true)
-                                
-                                Text("Ready to Organize!")
+                                Image("nonotes")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 300, height: 200)
+                                    .accessibilityLabel("No notes yet")
+                                Text("No notes yet")
                                     .font(.title2)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.featureCalloutText)
                                     .accessibilityAddTraits(.isHeader)
-                                
-                                Text("Upload photos, scan documents, or add files to automatically categorize them into your notebook.")
+                                Text("Tap the '+' icon to get started")
                                     .font(.body)
                                     .foregroundColor(.featureCalloutText.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 32)
+                                    .accessibilityLabel("Tap the '+' icon to get started")
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(.top, 80)
+                            .padding(.top, 75)
                         } else {
                             documentGridContent()
                         }
@@ -365,82 +387,32 @@ struct DocumentManagerView: View {
                     }
                 }
                 
-                // Bottom Bar – three aligned buttons: + (left), camera (center), magnifying glass (right)
-                ZStack {
-                    Color.clear
-                        .ignoresSafeArea()
-                    
-                    HStack(alignment: .center, spacing: 0) {
-                        // + Menu (bottom left)
-                        Menu {
-                            Button(action: { isShowingScanner = true }) {
-                                Label("Scan", systemImage: "doc.viewfinder")
-                            }
-                            .accessibilityLabel("Scan document")
-                            
-                            Button(action: { isPhotoPickerPresented = true }) {
-                                Label("Photo", systemImage: "photo.fill")
-                            }
-                            .accessibilityLabel("Choose from photo library")
-                            
-                            Button(action: { isDocumentPickerPresented = true }) {
-                                Label("Document", systemImage: "doc.fill")
-                            }
-                            .accessibilityLabel("Choose from files")
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    Circle()
-                                        .fill(Color.appAccent1)
-                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 8, x: 0, y: 4)
-                                )
-                        }
-                        .accessibilityLabel("More options")
-                        .accessibilityHint("Double tap to show other upload options")
-                        .frame(width: 44, height: 44, alignment: .center)
-                        
-                        Spacer(minLength: 16)
-                        
-                        // Camera (center)
-                        Button(action: { isShowingCamera = true }) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                                .frame(width: 64, height: 64)
-                                .background(
-                                    Circle()
-                                        .fill(Color.appAccent1)
-                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 10, x: 0, y: 6)
-                                )
-                        }
-                        .accessibilityLabel("Take photo")
-                        .accessibilityHint("Double tap to open camera")
-                        .frame(width: 64, height: 64, alignment: .center)
-                        
-                        Spacer(minLength: 16)
-                        
-                        // Magnifying glass / Notebook (bottom right)
-                        Button(action: { showNotebook = true }) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    Circle()
-                                        .fill(Color.appAccent1)
-                                        .shadow(color: Color.appAccent1.opacity(0.35), radius: 8, x: 0, y: 4)
-                                )
-                        }
-                        .accessibilityLabel("Open notebook")
-                        .accessibilityHint("Double tap to open your notebook")
-                        .frame(width: 44, height: 44, alignment: .center)
+                // Bottom Bar – "Add a new note" block (tap opens create-note sheet)
+                Button(action: { isShowingCreateNoteSheet = true }) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("ADD A NEW NOTE")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.featureCalloutAccent)
+                        Text("Start typing here...")
+                            .font(.body)
+                            .foregroundColor(.featureCalloutText.opacity(0.7))
                     }
-                    .padding(.horizontal, 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .padding(.bottom, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.white))
+                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    )
+                    .contentShape(Rectangle())
                 }
-                .frame(height: 80)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, -10)
             }
             
             // Processing Overlay
@@ -466,6 +438,13 @@ struct DocumentManagerView: View {
         }
         // Use the global app background instead of a strong gradient
         .background(Color.appBackground)
+        .task {
+            // Ensure the loading animation is visible for at least a short duration
+            if !hasMetMinimumLoadingTime {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                hasMetMinimumLoadingTime = true
+            }
+        }
         .sheet(isPresented: $isDocumentPickerPresented) {
             DocumentPicker(selectedDocument: $selectedDocument)
         }
@@ -494,7 +473,9 @@ struct DocumentManagerView: View {
                     handleCameraImage(image)
                 }
             }
-
+        }
+        .fullScreenCover(isPresented: $isShowingCreateNoteSheet) {
+            CreateNoteSheetView(isPresented: $isShowingCreateNoteSheet, dataManager: dataManager)
         }
         .sheet(isPresented: $isShowingScanner) {
             DocumentScannerView { scannedImage in
@@ -809,11 +790,45 @@ struct DocumentManagerView: View {
                         category: "\(topic.title) > \(subtopic.title)",
                         topic: topic.title,
                         subtopic: subtopic.title,
-                        noteId: note.id
+                        noteId: note.id,
+                        previewText: note.content
                     )
                     await MainActor.run {
                         documents.append(document)
                         processedDocumentIds.insert(documentId)
+                    }
+                }
+            }
+            
+            // Also include notes that don't have any attachments yet so the
+            // Everything tab truly shows all of the user's notes.
+            var noteBackedDocuments: [DocumentItem] = []
+            for topic in dataManager.topics {
+                for subtopic in topic.subtopics {
+                    for note in subtopic.notes {
+                        let document = DocumentItem(
+                            id: UUID(),
+                            title: note.title,
+                            type: .document,
+                            date: dateFormatter.date(from: note.created_at) ?? Date(),
+                            image: nil,
+                            documentURL: nil,
+                            category: "\(topic.title) > \(subtopic.title)",
+                            topic: topic.title,
+                            subtopic: subtopic.title,
+                            noteId: note.id,
+                            previewText: note.content
+                        )
+                        noteBackedDocuments.append(document)
+                    }
+                }
+            }
+            
+            await MainActor.run {
+                for doc in noteBackedDocuments {
+                    let alreadyPresent = documents.contains { $0.noteId == doc.noteId }
+                    if !alreadyPresent {
+                        documents.append(doc)
                     }
                 }
             }
@@ -938,7 +953,8 @@ struct DocumentManagerView: View {
                     category: "\(batchTopic ?? "") > \(batchSubtopic ?? "")",
                     topic: batchTopic,
                     subtopic: batchSubtopic,
-                    noteId: nil  // Will be set after note creation
+                        noteId: nil,  // Will be set after note creation
+                        previewText: nil
                 )
                 
                 // Add to documents array
@@ -1041,7 +1057,8 @@ struct DocumentManagerView: View {
                     category: "\(topic) > \(subtopic)",
                     topic: topic,
                     subtopic: subtopic,
-                    noteId: nil
+                    noteId: nil,
+                    previewText: nil
                 )
                 
                 // Add to documents array
@@ -1309,66 +1326,45 @@ struct DocumentCard: View {
     let onDelete: () -> Void
     
     var body: some View {
-        let hasCategory = (document.category != nil)
-        
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             if let image = document.image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 130)
+                    .frame(height: 320)
                     .clipped()
                     .cornerRadius(12)
             } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.featureCalloutButtonBackground)
-                    Image(systemName: documentTypeIcon)
-                        .font(.system(size: 32, weight: .medium))
-                        .foregroundColor(.featureCalloutText.opacity(0.6))
+                if let preview = document.previewText,
+                   !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(preview)
+                        .font(.body)
+                        .foregroundColor(.featureCalloutText.opacity(0.85))
+                        .lineLimit(8)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity,minHeight: 180, maxHeight: 180, alignment: .topLeading)
+                        .padding(14)
+                        .background(Color.featureCalloutBackground)
+                        .cornerRadius(12)
                 }
-                .frame(height: 130)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title)
                     .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.featureCalloutText)
+                    .fontWeight(.regular)
+                    .foregroundColor(Color(.secondaryLabel))
                     .lineLimit(2)
-                
-                Text(document.date, style: .date)
-                    .font(.caption2)
-                    .foregroundColor(.featureCalloutText.opacity(0.65))
-                
-                if let category = document.category {
-                    Text(category)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(Color.appAccent1.opacity(0.15))
-                        )
-                        .foregroundColor(.appAccent1)
-                }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .padding(10)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color.featureCalloutBackground2)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(
-                            hasCategory
-                            ? Color.appAccent1.opacity(0.7)
-                            : Color.white.opacity(0.04),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.28), radius: 18, x: 0, y: 10)
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.featureCalloutBackground2.opacity(1.2))
         )
         .contextMenu {
             Button(role: .destructive, action: onDelete) {
@@ -1482,9 +1478,310 @@ struct DocumentPicker: UIViewControllerRepresentable {
     }
 }
 
+// MARK: - Create Note Sheet (add photos inside sheet + topic/subtopic picker on save)
+struct CreateNoteSheetView: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var dataManager: DataManager
+    var initialTopic: Topic? = nil
+    var initialSubtopic: Subtopic? = nil
+    @State private var noteContent: String = ""
+    @State private var pendingNoteImages: [UIImage] = []
+    @State private var selectedPhotosForNote: [PhotosPickerItem] = []
+    @State private var isSaving = false
+    @State private var showNeedTopicAlert = false
+    @State private var showTopicSubtopicPicker = false
+    @State private var selectedTopic: Topic?
+    @State private var selectedSubtopic: Subtopic?
+    @State private var showConfetti = false
+    @FocusState private var isTextFieldFocused: Bool
+    @Environment(\.colorScheme) var colorScheme
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+                
+                if showConfetti {
+                    LottieView(name: "Confetti", loopMode: .playOnce, playSpeed: 1.0)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("ADD A NEW NOTE")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Color.featureCalloutAccent)
+                    
+                    TextEditor(text: $noteContent)
+                        .font(.body)
+                        .foregroundColor(Color(.label))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 100)
+                        .focused($isTextFieldFocused)
+                        .overlay(alignment: .topLeading) {
+                            if noteContent.isEmpty {
+                                Text("Start typing here...")
+                                    .font(.body)
+                                    .foregroundColor(Color(.placeholderText))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 8)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                    
+                    // Add photos + preview (inside sheet)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Photos")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(Color(.secondaryLabel))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(Array(pendingNoteImages.enumerated()), id: \.offset) { index, img in
+                                    ZStack(alignment: .topTrailing) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 64, height: 64)
+                                            .clipped()
+                                            .cornerRadius(8)
+                                        Button(action: { pendingNoteImages.remove(at: index) }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 20))
+                                                .foregroundStyle(.white, Color.black.opacity(0.6))
+                                        }
+                                        .offset(x: 6, y: -6)
+                                    }
+                                }
+                                PhotosPicker(
+                                    selection: $selectedPhotosForNote,
+                                    maxSelectionCount: 20,
+                                    matching: .images
+                                ) {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
+                                        .foregroundColor(Color(.tertiaryLabel))
+                                        .frame(width: 64, height: 64)
+                                        .overlay(
+                                            Image(systemName: "photo.badge.plus")
+                                                .font(.title2)
+                                                .foregroundColor(Color.featureCalloutAccent)
+                                        )
+                                }
+                                .onChange(of: selectedPhotosForNote) { oldValue, newValue in
+                                    Task {
+                                        for item in newValue {
+                                            if let data = try? await item.loadTransferable(type: Data.self),
+                                               let image = UIImage(data: data) {
+                                                await MainActor.run { pendingNoteImages.append(image) }
+                                            }
+                                        }
+                                        await MainActor.run { selectedPhotosForNote.removeAll() }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .frame(height: 76)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark")
+                            .font(.body)
+                            .foregroundColor(Color(.label))
+                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("Create a new note")
+                        .font(.headline)
+                        .foregroundColor(Color(.label))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: onSaveTapped) {
+                        if isSaving {
+                            ProgressView()
+                                .scaleEffect(0.9)
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.body)
+                                .foregroundColor(Color.featureCalloutAccent)
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+            .onAppear {
+                isTextFieldFocused = true
+                if let topic = initialTopic, let subtopic = initialSubtopic {
+                    selectedTopic = topic
+                    selectedSubtopic = subtopic
+                }
+            }
+            .alert("Add a topic first", isPresented: $showNeedTopicAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Create a topic and subtopic in the Notebook tab, then you can save notes here.")
+            }
+            .sheet(isPresented: $showTopicSubtopicPicker) {
+                TopicSubtopicPickerSheet(
+                    dataManager: dataManager,
+                    selectedTopic: $selectedTopic,
+                    selectedSubtopic: $selectedSubtopic,
+                    onConfirm: { saveNoteWithTopicAndSubtopic() },
+                    onCancel: { showTopicSubtopicPicker = false }
+                )
+            }
+        }
+    }
+    
+    private func onSaveTapped() {
+        let title = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty {
+            return
+        }
+        guard !dataManager.topics.isEmpty else {
+            showNeedTopicAlert = true
+            return
+        }
+        if let topic = initialTopic, let subtopic = initialSubtopic {
+            saveNoteWithTopicAndSubtopic(topic: topic, subtopic: subtopic)
+            return
+        }
+        showTopicSubtopicPicker = true
+    }
+    
+    private func saveNoteWithTopicAndSubtopic(topic: Topic? = nil, subtopic: Subtopic? = nil) {
+        let resolvedTopic = topic ?? selectedTopic
+        let resolvedSubtopic = subtopic ?? selectedSubtopic
+        guard let topicToUse = resolvedTopic, let subtopicToUse = resolvedSubtopic else { return }
+        let title = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = noteContent
+        if title.isEmpty {
+            showTopicSubtopicPicker = false
+            return
+        }
+        isSaving = true
+        showTopicSubtopicPicker = false
+        Task {
+            do {
+                let note = try await dataManager.addNote(to: subtopicToUse, in: topicToUse, title: title, content: content)
+                for image in pendingNoteImages {
+                    let fileName = "\(UUID().uuidString).jpg"
+                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
+                    if let data = image.jpegData(compressionQuality: 0.8) {
+                        try data.write(to: fileURL)
+                        let sizeBytes = data.count
+                        _ = try await dataManager.createAttachment(
+                            for: note.id,
+                            storagePath: fileName,
+                            mimeType: "image/jpeg",
+                            sizeBytes: sizeBytes,
+                            kind: "photo"
+                        )
+                    }
+                }
+                await MainActor.run {
+                    pendingNoteImages.removeAll()
+                    isSaving = false
+                    selectedTopic = topicToUse
+                    selectedSubtopic = subtopicToUse
+                    showConfetti = true
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await MainActor.run {
+                    showConfetti = false
+                    isPresented = false
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Topic / Subtopic Picker (choose where to save the note)
+struct TopicSubtopicPickerSheet: View {
+    @ObservedObject var dataManager: DataManager
+    @Binding var selectedTopic: Topic?
+    @Binding var selectedSubtopic: Subtopic?
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Topic")) {
+                    ForEach(dataManager.topics) { topic in
+                        Button(action: {
+                            selectedTopic = topic
+                            selectedSubtopic = nil
+                        }) {
+                            HStack {
+                                Text(topic.title)
+                                Spacer()
+                                if selectedTopic?.id == topic.id {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(Color.featureCalloutAccent)
+                                }
+                            }
+                        }
+                    }
+                }
+                if let topic = selectedTopic {
+                    Section(header: Text("Subtopic")) {
+                        ForEach(topic.subtopics) { subtopic in
+                            Button(action: { selectedSubtopic = subtopic }) {
+                                HStack {
+                                    Text(subtopic.title)
+                                    Spacer()
+                                    if selectedSubtopic?.id == subtopic.id {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(Color.featureCalloutAccent)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Save note to")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { onCancel() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save note") {
+                        onConfirm()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color.featureCalloutAccent)
+                    .disabled(selectedTopic == nil || selectedSubtopic == nil)
+                }
+            }
+        }
+        .onAppear {
+            if selectedTopic == nil, let first = dataManager.topics.first {
+                selectedTopic = first
+                selectedSubtopic = first.subtopics.first
+            }
+        }
+    }
+}
+
 struct DocumentManagerView_Previews: PreviewProvider {
     static var previews: some View {
-        DocumentManagerView(showNotebook: .constant(false), onOpenMenu: {})
+        DocumentManagerView(onOpenMenu: {})
     }
 }
 

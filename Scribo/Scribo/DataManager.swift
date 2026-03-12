@@ -540,6 +540,16 @@ class DataManager: ObservableObject {
         
         return try JSONDecoder().decode([NoteAttachment].self, from: response.data)
     }
+
+    func getAttachments(forNoteId noteId: UUID) async throws -> [NoteAttachment] {
+        let response = try await supabase
+            .from("note_attachments")
+            .select()
+            .eq("note_id", value: noteId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+        return try JSONDecoder().decode([NoteAttachment].self, from: response.data)
+    }
     
     // MARK: - Subscription Management
     

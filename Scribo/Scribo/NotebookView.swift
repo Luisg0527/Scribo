@@ -1,5 +1,31 @@
 import SwiftUI
 
+// MARK: - Topic Color Storage (for space/notebook color coding)
+enum TopicColorStore {
+    private static let prefix = "topic_color_"
+    static func colorHex(for topicId: UUID) -> String? {
+        UserDefaults.standard.string(forKey: prefix + topicId.uuidString)
+    }
+    static func setColorHex(_ hex: String?, for topicId: UUID) {
+        if let hex = hex {
+            UserDefaults.standard.set(hex, forKey: prefix + topicId.uuidString)
+        } else {
+            UserDefaults.standard.removeObject(forKey: prefix + topicId.uuidString)
+        }
+    }
+    static func color(for topicId: UUID) -> Color? {
+        guard let hex = colorHex(for: topicId) else { return nil }
+        return Color(hex: hex)
+    }
+}
+
+/// 16 colors for the pick-a-color wheel (matches design)
+private let notebookColorPalette: [String] = [
+    "#FF3B30", "#00C7BE", "#8E8E93", "#FF2D55", "#1C1C1E", "#5AC8FA",
+    "#32ADE6", "#FF9F0A", "#30D158", "#FF9500", "#64D2FF", "#FF6482",
+    "#FFCC00", "#AF52DE", "#A2845E", "#007AFF"
+]
+
 // MARK: - Highlighted Text View
 struct HighlightedText: View {
     let text: String
@@ -103,7 +129,7 @@ struct TopicPreviewView: View {
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
         NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Image(systemName: "folder.fill.badge.person.crop")
+                                Image(systemName: "folder.fill")
                                     .font(.system(size: 24))
                                     .foregroundColor(.appAccent1)
                                 
@@ -158,95 +184,78 @@ struct SubtopicPreviewView: View {
     let subtopic: Subtopic
     let topic: Topic
     @Binding var isPresented: Bool
-    @EnvironmentObject var searchState: SearchState
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewNoteSheet = false
-    @State private var searchText = ""
     @Environment(\.colorScheme) var colorScheme
 
-    var filteredNotes: [Note] {
-        if searchText.isEmpty {
-            return subtopic.notes
-        }
-        return subtopic.notes.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.content.localizedCaseInsensitiveContains(searchText)
-        }
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search notes...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .padding(8)
-            .background(Color.appCardBackground)    
-            .cornerRadius(10)
-            .padding([.horizontal, .top])
-
-            // Grid of Notes
-            ScrollView {
-                LazyVGrid(columns: [
-                    GridItem(.fixed(200), spacing: 2),
-                    GridItem(.fixed(200), spacing: 2)
-                ], spacing: 2) {
-                    ForEach(filteredNotes) { note in
-                        NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
-                            .onAppear {
-                                Task {
-                                    do {
-                                        try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                                        await MainActor.run {
-                                            noteDisplayState.currentNote = note
-                                            noteDisplayState.currentTopic = topic
-                                            noteDisplayState.currentSubtopic = subtopic
+        ZStack(alignment: .bottomTrailing) {
+            VStack(spacing: 0) {
+                ScrollView {
+                    LazyVGrid(columns: [
+                        GridItem(.fixed(200), spacing: 2),
+                        GridItem(.fixed(200), spacing: 2)
+                    ], spacing: 2) {
+                        ForEach(subtopic.notes) { note in
+                            NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
+                                .onAppear {
+                                    Task {
+                                        do {
+                                            try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                                            await MainActor.run {
+                                                noteDisplayState.currentNote = note
+                                                noteDisplayState.currentTopic = topic
+                                                noteDisplayState.currentSubtopic = subtopic
+                                            }
+                                        } catch {
+                                            print("Error updating recent notes: \(error)")
                                         }
-                                    } catch {
-                                        print("Error updating recent notes: \(error)")
                                     }
                                 }
-                            }
-                            .onDisappear {
-                                noteDisplayState.currentNote = nil
-                            }
-                        ) {
-                            NoteCardView(note: note)
-                                .contextMenu {
-                                    Button(role: .destructive, action: {
-                                        noteToDelete = (topic, subtopic, note)
-                                    }) {
-                                        Label("Delete Note", systemImage: "trash")
-                                    }
+                                .onDisappear {
+                                    noteDisplayState.currentNote = nil
                                 }
+                            ) {
+                                NoteCardView(note: note, dataManager: dataManager)
+                                    .contextMenu {
+                                        Button(role: .destructive, action: {
+                                            noteToDelete = (topic, subtopic, note)
+                                        }) {
+                                            Label("Delete Note", systemImage: "trash")
+                                        }
+                                    }
+                            }
                         }
                     }
+                    .padding()
                 }
-                .padding()
             }
+            Button(action: { isShowingNewNoteSheet = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 50, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.appAccent1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 40)
+            .padding(.bottom, 24)
         }
         .navigationTitle(subtopic.title)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { isShowingNewNoteSheet = true }) {
-                    Image(systemName: "plus")
-                        .foregroundColor(.accentColor)
-                }
-            }
-        }
-        .sheet(isPresented: $isShowingNewNoteSheet) {
-            NewNoteView(topic: topic, subtopic: subtopic, dataManager: dataManager)
+        .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $isShowingNewNoteSheet) {
+            CreateNoteSheetView(
+                isPresented: $isShowingNewNoteSheet,
+                dataManager: dataManager,
+                initialTopic: topic,
+                initialSubtopic: subtopic
+            )
         }
         .onAppear {
             noteDisplayState.currentNote = nil
@@ -272,57 +281,86 @@ struct SubtopicPreviewView: View {
 
 struct NoteCardView: View {
     let note: Note
+    @ObservedObject var dataManager: DataManager
     @Environment(\.colorScheme) var colorScheme
+    @State private var thumbnailImage: UIImage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Placeholder image area (attachments are managed separately)
+            // Image, text preview, or placeholder
+            cardMediaBlock
+                .frame(width: 160, height: 124)
+                .clipped()
+                .cornerRadius(8)
+
+            // Note title style aligned with Everything cards
+            Text(note.title)
+                .font(.subheadline)
+                .fontWeight(.regular)
+                .foregroundColor(Color(.secondaryLabel))
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(width: 160, alignment: .center)
+                .multilineTextAlignment(.center)
+        }
+        .frame(width: 160, height: 180)
+        .padding()
+        .background(Color.clear)
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .task(id: note.id) {
+            await loadThumbnail()
+        }
+    }
+
+    @ViewBuilder
+    private var cardMediaBlock: some View {
+        if let image = thumbnailImage {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 160, height: 124)
+        } else if !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Text preview when no image
+            Text(note.content)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(14)
+                .background(Color(colorScheme == .dark ? .systemGray5 : .systemGray6))
+        } else {
             ZStack {
                 Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
-                    .frame(width: 160, height: 124)
-                    .cornerRadius(8)
-                
                 Image(systemName: "photo.on.rectangle")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 40, height: 40)
                     .foregroundColor(.gray.opacity(0.6))
             }
-            
-            // Note title
-            Text(note.title)
-                .font(.headline)
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(width: 160, alignment: .leading)
-            
-            // Note preview
-            Text(note.content)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(width: 160, alignment: .leading)
-            
-            // Date
-            if let date = parseDate(note.updated_at) {
-                Text(formatDate(date))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 160, alignment: .leading)
-            } else {
-                Text(note.updated_at)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 160, alignment: .leading)
-            }
         }
-        .frame(width: 160, height: 240)
-        .padding()
-        .background(Color.clear)
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+
+    private func loadThumbnail() async {
+        do {
+            let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+            let imageAttachment = attachments.first { att in
+                let mime = att.mime_type?.lowercased() ?? ""
+                return mime.hasPrefix("image/") || att.kind.lowercased() == "photo"
+            }
+            guard let att = imageAttachment else { return }
+            let dir = dataManager.getDocumentsDirectory()
+            let fileURL = dir.appendingPathComponent(att.storage_path)
+            guard FileManager.default.fileExists(atPath: fileURL.path),
+                  let data = try? Data(contentsOf: fileURL),
+                  let image = UIImage(data: data) else { return }
+            await MainActor.run {
+                thumbnailImage = image
+            }
+        } catch {
+            // Ignore; card will show text preview or placeholder
+        }
     }
 
     private func getDocumentsDirectory() -> URL {
@@ -370,6 +408,229 @@ struct NoteCardView: View {
     }
 }
 
+// MARK: - Notebook Empty State (match design: "Maybe what you need is some notes" + CREATE A NOTEBOOK)
+struct NotebookEmptyStateView: View {
+    let onCreateTapped: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Text("The start of a beautiful journey!")
+                .font(.title2)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Button(action: onCreateTapped) {
+                HStack(spacing: 10) {
+                    Image(systemName: "circle.grid.2x2")
+                        .font(.title2)
+                        .foregroundColor(.appAccent1)
+                    Text("CREATE A NOTEBOOK")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Color(.secondaryLabel))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color(.tertiarySystemFill))
+                .cornerRadius(14)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 40)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            ZStack(alignment: .top) {
+                Color(.systemBackground)
+                LinearGradient(
+                    colors: [
+                        Color(hex: "E85D04"),
+                        Color(hex: "FF9500").opacity(0.5),
+                        Color(hex: "FF9500").opacity(0.4),
+                        Color(hex: "FF9500").opacity(0.2),
+                        Color(hex: "FF9500").opacity(0.1),
+                        Color(hex: "FF9500").opacity(0.05),
+                        Color(hex: "FF9500").opacity(0.01),
+                        Color(hex: "FF9500").opacity(0.005),
+                        Color(hex: "FF9500").opacity(0.002),
+                        Color(hex: "FF9500").opacity(0.001),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 220)
+                .ignoresSafeArea(edges: .top)
+            }
+        )
+    }
+}
+
+// MARK: - Create New Notebook Flow (step 1: name → step 2: pick color → save) — full view with fade
+struct CreateNewNotebookFlowView: View {
+    private static let searchBarHeight: CGFloat = 52
+    private static let searchBarCornerRadius: CGFloat = 12
+    
+    @Binding var isPresented: Bool
+    @ObservedObject var dataManager: DataManager
+    @State private var step: CreateNotebookStep = .name
+    @State private var spaceName: String = ""
+    @State private var selectedColorIndex: Int = 0
+    @State private var isSaving = false
+    
+    enum CreateNotebookStep {
+        case name
+        case color
+    }
+    
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+            ZStack {
+                if step == .name {
+                    createNewSpaceStep
+                        .transition(.opacity)
+                } else {
+                    pickColorStep
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.35), value: step)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topTrailing) {
+            Button(action: { isPresented = false }) {
+                Image(systemName: "xmark")
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+            }
+        }
+    }
+    
+    private var createNewSpaceStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            ZStack {
+                Circle().stroke(Color(hex: "30D158"), lineWidth: 3).frame(width: 48, height: 48).offset(x: -14, y: -14)
+                Circle().stroke(Color(hex: "FF2D55"), lineWidth: 3).frame(width: 48, height: 48).offset(x: 14, y: -14)
+                Circle().stroke(Color(hex: "5AC8FA"), lineWidth: 3).frame(width: 48, height: 48).offset(x: -14, y: 14)
+                Circle().stroke(Color(hex: "AF52DE"), lineWidth: 3).frame(width: 48, height: 48).offset(x: 14, y: 14)
+            }
+            .frame(width: 76, height: 76)
+            Text("Create new notebook")
+                .font(.title)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            Text("Upload directly into a notebook, or pick a note from the overview.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            TextField("Name your new notebook", text: $spaceName)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 12)
+                .frame(height: Self.searchBarHeight)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.searchBarCornerRadius)
+                        .stroke(Color(hex: "C6C6CB").opacity(0.5), lineWidth: 0.5)
+                )
+                .padding(.horizontal, 32)
+                .padding(.top, 8)
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.35)) { step = .color }
+            }) {
+                Text("NEXT STEP")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Color(.tertiaryLabel))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+            .disabled(spaceName.trimmingCharacters(in: .whitespaces).isEmpty)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var pickColorStep: some View {
+        VStack(spacing: 28) {
+            Spacer()
+            Text("Pick a color")
+                .font(.title)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            Text("Color coding your space helps you to spot it a lot easier when you need it.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            colorWheel
+            Button(action: finishAndSave) {
+                Text("FINISH & SAVE")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Color.appAccent1)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaving)
+            if isSaving {
+                ProgressView()
+                    .padding(.top, 4)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var colorWheel: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
+        return LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(0..<16, id: \.self) { index in
+                Circle()
+                    .strokeBorder(
+                        Color(hex: notebookColorPalette[index]),
+                        lineWidth: selectedColorIndex == index ? 6 : 2
+                    )
+                    .background(Circle().fill(Color(.systemBackground)))
+                    .frame(width: 44, height: 44)
+                    .scaleEffect(selectedColorIndex == index ? 1.08 : 1.0)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.8), value: selectedColorIndex)
+                    .onTapGesture { selectedColorIndex = index }
+            }
+        }
+        .padding(.horizontal, 48)
+    }
+    
+    private func finishAndSave() {
+        let name = spaceName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        isSaving = true
+        Task {
+            do {
+                let topic = try await dataManager.addTopic(title: name)
+                TopicColorStore.setColorHex(notebookColorPalette[selectedColorIndex], for: topic.id)
+                await dataManager.loadTopics()
+                await MainActor.run {
+                    isPresented = false
+                }
+            } catch {
+                await MainActor.run { isSaving = false }
+            }
+        }
+    }
+}
+
 // MARK: - Notebook View
 struct NotebookView: View {
     @Environment(\.dismiss) var dismiss
@@ -380,6 +641,7 @@ struct NotebookView: View {
     @State private var selectedSubtopic: Subtopic?
     @State private var selectedNote: Note?
     @State private var isShowingNewTopicSheet = false
+    @State private var isShowingCreateNewNotebookFlow = false
     @State private var isShowingNewSubtopicSheet = false
     @State private var isShowingNewNoteSheet = false
     @State private var topicToDelete: Topic?
@@ -390,126 +652,75 @@ struct NotebookView: View {
     @State private var expandedTopics: Set<UUID> = []
     @State private var expandedSubtopics: Set<UUID> = []
 
-    var filteredTopics: [Topic] {
-        if searchState.searchText.isEmpty {
-            return dataManager.topics
-        }
-        return dataManager.topics.compactMap { topic in
-            let matchingSubtopics = topic.subtopics.compactMap { subtopic -> Subtopic? in
-                let matchingNotes = subtopic.notes.filter { note in
-                    note.title.localizedCaseInsensitiveContains(searchState.searchText) ||
-                    note.content.localizedCaseInsensitiveContains(searchState.searchText)
-                }
-                if !matchingNotes.isEmpty || subtopic.title.localizedCaseInsensitiveContains(searchState.searchText) {
-                    return Subtopic(
-                        id: subtopic.id,
-                        topic_id: subtopic.topic_id,
-                        title: subtopic.title,
-                        notes: matchingNotes,
-                        created_at: subtopic.created_at,
-                        updated_at: subtopic.updated_at
-                    )
-                }
-                return nil
-            }
-            if !matchingSubtopics.isEmpty || topic.title.localizedCaseInsensitiveContains(searchState.searchText) {
-                return Topic(
-                    id: topic.id,
-                    user_id: topic.user_id,
-                    title: topic.title,
-                    subtopics: matchingSubtopics,
-                    created_at: topic.created_at,
-                    updated_at: topic.updated_at
-                )
-            }
-            return nil
-        }
-    }
-
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Search Bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                        .accessibilityHidden(true)
-                    TextField("Search notes...", text: $searchState.searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .accessibilityLabel("Search notes")
-                        .accessibilityHint("Double tap to enter search text")
-                    if !searchState.searchText.isEmpty {
-                        Button(action: {
-                            searchState.searchText = ""
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 20))
-                                .foregroundColor(.gray)
-                        }
-                        .accessibilityLabel("Clear search")
-                        .accessibilityHint("Double tap to clear search text")
-                    }
-                }
-                .padding(8)
-                .background(Color.appCardBackground)
-                .cornerRadius(10)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-                // Hierarchical Tree
-                List {
-                    if filteredTopics.isEmpty {
-                        Text("")
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 0) {
+                    if dataManager.topics.isEmpty {
+                        NotebookEmptyStateView(onCreateTapped: {
+                            isShowingCreateNewNotebookFlow = true
+                        })
                     } else {
-                        ForEach(filteredTopics) { topic in
-                            TopicRow(
-                                topic: topic,
-                                selectedTopic: $selectedTopic,
-                                selectedSubtopic: $selectedSubtopic,
-                                selectedNote: $selectedNote,
-                                isPresented: $isPresented,
-                                dataManager: dataManager,
-                                subtopicToDelete: $subtopicToDelete,
-                                noteToDelete: $noteToDelete,
-                                isExpanded: expandedTopics.contains(topic.id),
-                                onExpandChange: { expanded, topicId in
-                                    if expanded {
-                                        expandedTopics.insert(topicId)
-                                    } else {
-                                        expandedTopics.remove(topicId)
-                                    }
-                                },
-                                expandedSubtopics: $expandedSubtopics,
-                                searchText: searchState.searchText,
-                                isShowingNewTopicSheet: $isShowingNewTopicSheet,
-                                isShowingEditTopicSheet: $isShowingEditTopicSheet,
-                                topicToDelete: $topicToDelete,
-                                isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
-                                isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
-                            )
+                        Text("All Notebooks")
+                            .font(.headline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+
+                        List {
+                            ForEach(dataManager.topics) { topic in
+                                TopicRow(
+                                    topic: topic,
+                                    selectedTopic: $selectedTopic,
+                                    selectedSubtopic: $selectedSubtopic,
+                                    selectedNote: $selectedNote,
+                                    isPresented: $isPresented,
+                                    dataManager: dataManager,
+                                    subtopicToDelete: $subtopicToDelete,
+                                    noteToDelete: $noteToDelete,
+                                    isExpanded: expandedTopics.contains(topic.id),
+                                    onExpandChange: { expanded, topicId in
+                                        if expanded {
+                                            expandedTopics.insert(topicId)
+                                        } else {
+                                            expandedTopics.remove(topicId)
+                                        }
+                                    },
+                                    expandedSubtopics: $expandedSubtopics,
+                                    searchText: "",
+                                    isShowingNewTopicSheet: $isShowingNewTopicSheet,
+                                    isShowingEditTopicSheet: $isShowingEditTopicSheet,
+                                    topicToDelete: $topicToDelete,
+                                    isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
+                                    isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
+                                )
+                            }
                         }
+                        .listStyle(PlainListStyle())
                     }
                 }
-                .listStyle(PlainListStyle())
-            }
-            .navigationTitle("Notebook")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        isPresented = false
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 20))
-                            .foregroundColor(.appAccent1)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        isShowingNewTopicSheet = true
-                    }) {
+                if !dataManager.topics.isEmpty {
+                    Button(action: { isShowingCreateNewNotebookFlow = true }) {
                         Image(systemName: "plus")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 50, height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.appAccent1)
+                            )
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 24)
                 }
+            }
+            .navigationBarHidden(true)
+            .fullScreenCover(isPresented: $isShowingCreateNewNotebookFlow) {
+                CreateNewNotebookFlowView(isPresented: $isShowingCreateNewNotebookFlow, dataManager: dataManager)
             }
             .sheet(isPresented: $isShowingNewTopicSheet) {
                 NewTopicView(dataManager: dataManager)
@@ -584,40 +795,7 @@ struct NotebookView: View {
             }
         }
         .background(Color.appBackground)
-        .safeAreaInset(edge: .top) {
-            Color.clear.frame(height: 120)
-        }
         .environmentObject(searchState)
-        .onChange(of: searchState.searchText) { newValue in
-            if newValue.isEmpty {
-                expandedTopics.removeAll()
-                expandedSubtopics.removeAll()
-            } else {
-                // Expand all topics and subtopics that match the search
-                var newExpandedTopics: Set<UUID> = []
-                var newExpandedSubtopics: Set<UUID> = []
-                for topic in filteredTopics {
-                    let topicMatches = topic.title.localizedCaseInsensitiveContains(newValue)
-                    var topicShouldExpand = topicMatches
-                    for subtopic in topic.subtopics {
-                        let subtopicMatches = subtopic.title.localizedCaseInsensitiveContains(newValue)
-                        let noteMatches = subtopic.notes.contains { note in
-                            note.title.localizedCaseInsensitiveContains(newValue) ||
-                            note.content.localizedCaseInsensitiveContains(newValue)
-                        }
-                        if subtopicMatches || noteMatches {
-                            topicShouldExpand = true
-                            newExpandedSubtopics.insert(subtopic.id)
-                        }
-                    }
-                    if topicShouldExpand {
-                        newExpandedTopics.insert(topic.id)
-                    }
-                }
-                expandedTopics = newExpandedTopics
-                expandedSubtopics = newExpandedSubtopics
-            }
-        }
     }
 }
 
@@ -639,7 +817,6 @@ struct TopicRow: View {
     @Binding var topicToDelete: Topic?
     @Binding var isShowingEditSubtopicSheet: Bool
     @Binding var isShowingNewSubtopicSheet: Bool
-    @EnvironmentObject var searchState: SearchState
     @State private var localIsExpanded: Bool = false
 
     var body: some View {
@@ -677,8 +854,14 @@ struct TopicRow: View {
             }
         } label: {
             HStack {
-                Image(systemName: "folder.fill")
-                    .foregroundColor(.appAccent2)
+                if let color = TopicColorStore.color(for: topic.id) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 12, height: 12)
+                } else {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(.appAccent2)
+                }
                 HighlightedText(text: topic.title, searchText: searchText)
                     .font(.headline)
                 Spacer()
@@ -728,7 +911,6 @@ struct SubtopicRow: View {
     @Binding var isShowingEditSubtopicSheet: Bool
     @Binding var isShowingNewSubtopicSheet: Bool
     @Binding var selectedTopic: Topic?
-    @EnvironmentObject var searchState: SearchState
     @State private var localIsExpanded: Bool = false
     @State private var isActive = false
     @State private var isShowingNewNoteSheet = false
@@ -759,7 +941,7 @@ struct SubtopicRow: View {
                 isActive: $isActive
             ) {
                 HStack {
-                    Image(systemName: "folder.fill.badge.person.crop")
+                    Image(systemName: "folder.fill")
                         .foregroundColor(.appAccent2)
                     HighlightedText(text: subtopic.title, searchText: searchText)
                         .font(.subheadline)

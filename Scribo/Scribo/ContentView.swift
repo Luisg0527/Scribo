@@ -11,7 +11,7 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var isSidebarShowing: Bool = false
-    @State private var showNotebook: Bool = false
+    @State private var selectedTab: Int = 0
     @AppStorage("isDarkMode") private var isDarkMode = true
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
@@ -21,6 +21,7 @@ struct ContentView: View {
         ZStack {
             if authManager.isAuthenticated {
                 mainView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
             if !authManager.isAuthenticated {
@@ -33,6 +34,8 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.featureCalloutBackground.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.4), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.4), value: authManager.isResettingPassword)
         .onChange(of: authManager.isAuthenticated) { oldValue, newValue in
@@ -106,73 +109,46 @@ struct ContentView: View {
     
     private var mainView: some View {
         GeometryReader { geometry in
+            let topInset = geometry.safeAreaInsets.top
             let sidebarWidth = geometry.size.width * 0.9
             let contentOffset = isSidebarShowing ? max(sidebarWidth + sidebarDragOffset, 0) : 0
             let openRatio = sidebarWidth > 0 ? min(max(contentOffset / sidebarWidth, 0), 1) : 0
             
             ZStack(alignment: .leading) {
-                // 1. Sidebar: drawn first, "beside" the content; can be dragged left to close
-                if isSidebarShowing {
-                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager)
-                        .frame(width: sidebarWidth, height: geometry.size.height)
-                        .ignoresSafeArea(edges: .vertical)
-                        .transition(.move(edge: .leading))
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    guard isSidebarShowing else { return }
-                                    let w = value.translation.width, h = value.translation.height
-                                    if abs(w) >= abs(h) { sidebarDragOffset = max(min(0, w), -sidebarWidth) }
-                                }
-                                .onEnded { value in
-                                    guard isSidebarShowing else { return }
-                                    let w = value.translation.width
-                                    let shouldClose = w < -sidebarWidth * 0.3
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                        if shouldClose { isSidebarShowing = false }
-                                        sidebarDragOffset = 0
-                                    }
-                                }
-                        )
-                }
-                
-                // 2. Main content: full-size layer that slides right; overlay inside so it moves with it and darkens by open amount
-            ZStack {
-                Color.featureCalloutBackground
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                        if showNotebook || (noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil) {
-                        topBarView
-                    }
-                    mainContentView
-                }
-                
-                    // Full-content overlay: covers entire view, moves with content, gradient darkness by open ratio (dynamic, not anim)
-                    // Hit testing disabled so buttons in the content stay tappable; close via drag or hamburger
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(openRatio * 0.55),
-                            Color.black.opacity(openRatio * 0.2)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())                 // makes the whole thing tappable
-                    .allowsHitTesting(isSidebarShowing)         // only intercept taps when open
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            isSidebarShowing = false
-                            sidebarDragOffset = 0
+                // 1. Main content: drawn first (behind); slides right when sidebar opens
+                ZStack {
+                    Color.featureCalloutBackground
+                        .ignoresSafeArea()
+                    VStack(spacing: 0) {
+                        mainContentView
+                        if !(noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil) {
+                            mainTabBar
                         }
                     }
+                    // Dim + tap-to-close overlay (single layer so it can receive taps when sidebar is open)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(openRatio * 0.55),
+                                    Color.black.opacity(openRatio * 0.2)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .allowsHitTesting(isSidebarShowing)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                isSidebarShowing = false
+                                sidebarDragOffset = 0
+                            }
+                        }
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .offset(x: contentOffset)
-                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: contentOffset)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture()
@@ -191,62 +167,128 @@ struct ContentView: View {
                             }
                         }
                 )
+                
+                // 2. Sidebar: drawn on top so it receives taps; offset by drag so it slides with the content
+                if isSidebarShowing {
+                    SidebarView(isShowing: $isSidebarShowing, authManager: authManager, topInset: topInset)
+                        .frame(width: sidebarWidth, height: geometry.size.height)
+                        .background(Color.featureCalloutBackground2.ignoresSafeArea())
+                        .offset(x: sidebarDragOffset)
+                        .transition(.move(edge: .leading))
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    guard isSidebarShowing else { return }
+                                    let w = value.translation.width, h = value.translation.height
+                                    if abs(w) >= abs(h) { sidebarDragOffset = max(min(0, w), -sidebarWidth) }
+                                }
+                                .onEnded { value in
+                                    guard isSidebarShowing else { return }
+                                    let w = value.translation.width
+                                    let shouldClose = w < -sidebarWidth * 0.3
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        if shouldClose { isSidebarShowing = false }
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                        )
+                }
             }
+            .environment(\.layoutDirection, .leftToRight)
             .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
     
     private var mainContentView: some View {
         Group {
-            if showNotebook {
-                NotebookView(isPresented: $showNotebook)
-                    .environmentObject(noteDisplayState)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .trailing)
-                    ))
-            } else if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
+            if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
                 NavigationView {
-                    NoteView(note: noteDisplayState.currentNote, isPresented: $showNotebook, dataManager: dataManager)
+                    NoteView(
+                        note: noteDisplayState.currentNote!,
+                        isPresented: Binding(
+                            get: { noteDisplayState.isShowingNote },
+                            set: { if !$0 { noteDisplayState.isShowingNote = false; noteDisplayState.currentNote = nil } }
+                        ),
+                        dataManager: dataManager
+                    )
                 }
+                .environmentObject(noteDisplayState)
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing),
                     removal: .move(edge: .trailing)
                 ))
             } else {
-                DocumentManagerView(showNotebook: $showNotebook, onOpenMenu: { isSidebarShowing.toggle() })
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading),
-                        removal: .move(edge: .leading)
-                    ))
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        DocumentManagerView(onOpenMenu: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { isSidebarShowing.toggle() }
+                        })
+                    case 1:
+                        NotebookView(isPresented: .constant(false))
+                            .environmentObject(noteDisplayState)
+                    case 2:
+                        StudyPlaceholderView()
+                    default:
+                        DocumentManagerView(onOpenMenu: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { isSidebarShowing.toggle() }
+                        })
+                    }
+                }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showNotebook)
+        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: selectedTab)
         .animation(.easeInOut(duration: 0.2), value: noteDisplayState.isShowingNote)
     }
     
-    private var topBarView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                menuButton
-                Spacer()
-            }
-            .background(Color.clear)
+    private var mainTabBar: some View {
+        HStack(spacing: 0) {
+            tabBarButton(title: "Everything", icon: "xmark.triangle.circle.square.fill", tag: 0)
+            tabBarButton(title: "Notebook", icon: "book.fill", tag: 1)
+            tabBarButton(title: "Study", icon: "brain.head.profile", tag: 2)
         }
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color(.systemBackground))
     }
     
-    private var menuButton: some View {
-        Button(action: {
-            withAnimation {
-                isSidebarShowing.toggle()
+    private func tabBarButton(title: String, icon: String, tag: Int) -> some View {
+        Button(action: { selectedTab = tag }) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                Text(title)
+                    .font(.caption)
             }
-        }) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 20))
-                .foregroundColor(.featureCalloutAccent)
+            .frame(maxWidth: .infinity)
+            .foregroundColor(selectedTab == tag ? Color.appAccent1 : Color(.secondaryLabel))
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .buttonStyle(.plain)
+    }
+    
+}
+
+// MARK: - Study Placeholder View
+
+struct StudyPlaceholderView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 56))
+                .foregroundColor(.featureCalloutAccent.opacity(0.8))
+            Text("Work in progress")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.featureCalloutText)
+            Text("AI-powered study tools are coming soon.")
+                .font(.subheadline)
+                .foregroundColor(.featureCalloutText.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.featureCalloutBackground)
     }
 }
 

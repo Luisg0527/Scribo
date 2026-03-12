@@ -11,8 +11,11 @@
 		3131727F2DF8DA2B007615C8 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3131727E2DF8DA2B007615C8 /* SwiftUI.framework */; };
 		313172902DF8DA2C007615C8 /* ScriboWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3158DFB62E4AFE9A00CA5D6B /* pleasant-done-notification.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3158DFB52E4AFE9A00CA5D6B /* pleasant-done-notification.wav */; };
-		31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 31920CE72DF24BF100DB0186 /* GoogleMobileAds */; };
-		31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 31ABE0E12DDBD24500515F83 /* Supabase */; };
+		3199B96A2F60C2060040385D /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 3199B9692F60C2060040385D /* Lottie */; };
+		3199B96E2F60C4A60040385D /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 3199B96D2F60C4A60040385D /* Lottie */; };
+		31B4042B2DD7C06F00BFCA45 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 31920CE72DF24BF100DB0186 /* GoogleMobileAds */; };
+		31B4042C2DD7C06F00BFCA45 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 3199B9652F60C0A40040385D /* Lottie */; };
+		31B4042D2DD7C06F00BFCA45 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 31ABE0E12DDBD24500515F83 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -116,15 +119,17 @@
 			files = (
 				3131727F2DF8DA2B007615C8 /* SwiftUI.framework in Frameworks */,
 				3131727D2DF8DA2B007615C8 /* WidgetKit.framework in Frameworks */,
+				3199B96E2F60C4A60040385D /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BF00E8D52CA1038100CCC3B5 /* Frameworks */ = {
+		31B4042A2DD7C06F00BFCA45 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				31920CE82DF24BF100DB0186 /* GoogleMobileAds in Frameworks */,
-				31ABE0E22DDBD24500515F83 /* Supabase in Frameworks */,
+				31B4042B2DD7C06F00BFCA45 /* GoogleMobileAds in Frameworks */,
+				31B4042C2DD7C06F00BFCA45 /* Lottie in Frameworks */,
+				31B4042D2DD7C06F00BFCA45 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +144,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3199B96A2F60C2060040385D /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,6 +204,7 @@
 			);
 			name = ScriboWidgetExtension;
 			packageProductDependencies = (
+				3199B96D2F60C4A60040385D /* Lottie */,
 			);
 			productName = ScriboWidgetExtension;
 			productReference = 3131727B2DF8DA2B007615C8 /* ScriboWidgetExtension.appex */;
@@ -208,7 +215,7 @@
 			buildConfigurationList = BF00E8FC2CA1038200CCC3B5 /* Build configuration list for PBXNativeTarget "Scribo" */;
 			buildPhases = (
 				BF00E8D42CA1038100CCC3B5 /* Sources */,
-				BF00E8D52CA1038100CCC3B5 /* Frameworks */,
+				31B4042A2DD7C06F00BFCA45 /* Frameworks */,
 				BF00E8D62CA1038100CCC3B5 /* Resources */,
 				313172912DF8DA2C007615C8 /* Embed Foundation Extensions */,
 			);
@@ -224,6 +231,7 @@
 			packageProductDependencies = (
 				31ABE0E12DDBD24500515F83 /* Supabase */,
 				31920CE72DF24BF100DB0186 /* GoogleMobileAds */,
+				3199B9652F60C0A40040385D /* Lottie */,
 			);
 			productName = Scribo;
 			productReference = BF00E8D82CA1038100CCC3B5 /* Scribo.app */;
@@ -270,6 +278,7 @@
 			);
 			name = ScriboUITests;
 			packageProductDependencies = (
+				3199B9692F60C2060040385D /* Lottie */,
 			);
 			productName = ScriboUITests;
 			productReference = BF00E8F22CA1038200CCC3B5 /* ScriboUITests.xctest */;
@@ -314,6 +323,7 @@
 				31ABE0C32DDBC1A300515F83 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				317D88782DEA7E4D008C054B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				314A9FA12DF249860003AC6D /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				3199B9642F60C0A40040385D /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF00E8D92CA1038100CCC3B5 /* Products */;
@@ -800,6 +810,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		3199B9642F60C0A40040385D /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
 		31ABE0C32DDBC1A300515F83 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase-community/supabase-swift.git";
@@ -814,6 +832,21 @@
 		31920CE72DF24BF100DB0186 /* GoogleMobileAds */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = GoogleMobileAds;
+		};
+		3199B9652F60C0A40040385D /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3199B9642F60C0A40040385D /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		3199B9692F60C2060040385D /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3199B9642F60C0A40040385D /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
+		3199B96D2F60C4A60040385D /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3199B9642F60C0A40040385D /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
 		};
 		31ABE0E12DDBD24500515F83 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
