@@ -1,6 +1,39 @@
 import SwiftUI
-import PhotosUI
 import UIKit
+
+// MARK: - Dominant color from image (Instagram stories–style background)
+private func extractDominantColor(from image: UIImage) -> Color? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = min(cgImage.width, 20)
+    let height = min(cgImage.height, 20)
+    let size = CGSize(width: width, height: height)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+    guard let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: colorSpace,
+        bitmapInfo: bitmapInfo.rawValue
+    ) else { return nil }
+    context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+    guard let data = context.data else { return nil }
+    let buffer = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+    var r: Double = 0, g: Double = 0, b: Double = 0
+    let count = width * height
+    for i in 0..<count {
+        let offset = i * 4
+        r += Double(buffer[offset]) / 255.0
+        g += Double(buffer[offset + 1]) / 255.0
+        b += Double(buffer[offset + 2]) / 255.0
+    }
+    r /= Double(count)
+    g /= Double(count)
+    b /= Double(count)
+    return Color(red: r, green: g, blue: b)
+}
 
 struct ClearBackgroundTextEditor: UIViewRepresentable {
     @Binding var text: String
@@ -50,18 +83,19 @@ struct NoteView: View {
 
     @State private var editedTitle: String
     @State private var editedContent: String
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var noteImages: [UIImage] = []
-    @State private var showingImagePicker = false
-    @State private var selectedImageIndex = 0
-    @State private var showingDeleteConfirmation = false
-    @State private var showingCamera = false
+    @State private var tags: [String] = ["Note"]
+    @State private var mindNotesText: String = ""
+    @State private var showAddTagAlert = false
+    @State private var newTagText = ""
+    @State private var showDeleteConfirm = false
+    @State private var showShareQR = false
+    @State private var lastSavedText = "Just now"
     @State private var showingSaveAlert = false
     @State private var hasChanges: Bool = false
-    @State private var showingFullImage = false
-    @State private var isPhotoPickerPresented = false
-    @State private var isShowingCamera = false
-    @State private var isShowingScanner = false
+    @State private var noteImages: [UIImage] = []
+    @State private var dominantColor: Color?
+    @State private var selectedImageIndex: Int = 0
+    @FocusState private var isTitleFocused: Bool
 
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
@@ -77,39 +111,30 @@ struct NoteView: View {
         self._isFromChatView = State(initialValue: isPresented.wrappedValue)
     }
 
+    // Match EverythingCardSheetView styling
+    private var cardBg: Color { Color(red: 0.98, green: 0.98, blue: 0.99) }
+    private var sheetBg: Color { Color(red: 0.95, green: 0.95, blue: 0.97) }
+
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            sheetBg.ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 16) {
-                    topicHeaderView
-                    imageGalleryView
-                    .padding(.top, -16)
-                    textInputView
+                VStack(spacing: 0) {
+                    headerView
+                    mainContentView
+                    mindTagsSection
+                    mindNotesSection
+                    Spacer(minLength: 24)
+                    bottomBarView
+                    statusView
                 }
-                .padding(.top)
             }
-            .background(Color.appBackground)
-
-            // Ad Banner with clear visual separation
-            VStack(spacing: 0) {
-                Divider()
-                BannerAdView(adUnitID: "ca-app-pub-3940256099942544/2934735716") // Test ID
-                    .frame(height: 50)
-                    .padding(.vertical, 8)
-                    .background(Color(UIColor.systemBackground))
-                Divider()
-            }
-
-            bottomBarView
         }
-        .background(Color.appBackground)
+        .background(sheetBg)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            toolbarContent
-        }
         .alert("Save Changes?", isPresented: $showingSaveAlert) {
-            Button("Don't Save", role: .destructive) { 
+            Button("Don't Save", role: .destructive) {
                 if isFromChatView {
                     noteDisplayState.isShowingNote = false
                     noteDisplayState.currentNote = nil
@@ -120,8 +145,8 @@ struct NoteView: View {
                 }
             }
             Button("Cancel", role: .cancel) { }
-            Button("Save") { 
-                Task { 
+            Button("Save") {
+                Task {
                     await saveNote()
                     if isFromChatView {
                         noteDisplayState.isShowingNote = false
@@ -134,190 +159,345 @@ struct NoteView: View {
                 }
             }
         }
-        .photosPicker(isPresented: $isPhotoPickerPresented,
-                     selection: $selectedPhotos,
-                     maxSelectionCount: 10,
-                     matching: .images)
-        .onChange(of: selectedPhotos) { oldValue, newValue in
-            Task {
-                for photo in newValue {
-                    await handleSelectedPhoto(photo)
-                }
-                // Clear selection after processing
-                selectedPhotos.removeAll()
-            }
-        }
-        .fullScreenCover(isPresented: $isShowingCamera) {
-            CameraView { image in
-                if let image = image {
-                    handleCameraImage(image)
-                }
-            }
-        }
-        .sheet(isPresented: $isShowingScanner) {
-            DocumentScannerView { scannedImage in
-                handleScannedImage(scannedImage)
-            }
-        }
-        .alert("Delete Image", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                noteImages.remove(at: selectedImageIndex)
+        .alert("Add tag", isPresented: $showAddTagAlert) {
+            TextField("Tag name", text: $newTagText)
+            Button("Cancel", role: .cancel) { newTagText = "" }
+            Button("Add") {
+                let t = newTagText.trimmingCharacters(in: .whitespaces)
+                if !t.isEmpty { tags.append(t) }
+                newTagText = ""
             }
         } message: {
-            Text("Are you sure you want to delete this image?")
+            Text("Enter a tag for this note.")
         }
-        .fullScreenCover(isPresented: $showingFullImage) {
-            FullscreenImageViewer(
-                image: noteImages[selectedImageIndex],
-                allImages: noteImages,
-                currentIndex: selectedImageIndex,
-                isPresented: $showingFullImage
+        .alert("Delete Note", isPresented: $showDeleteConfirm) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let topic = noteDisplayState.currentTopic,
+                   let subtopic = noteDisplayState.currentSubtopic,
+                   let note = noteDisplayState.currentNote {
+                    dataManager.deleteNote(note, from: subtopic, from: topic)
+                }
+                if isFromChatView {
+                    noteDisplayState.isShowingNote = false
+                    noteDisplayState.currentNote = nil
+                    noteDisplayState.currentTopic = nil
+                    noteDisplayState.currentSubtopic = nil
+                } else {
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete this note?")
+        }
+        .fullScreenCover(isPresented: $showShareQR) {
+            ShareQRSheetView(
+                title: editedTitle.isEmpty ? "Untitled" : editedTitle,
+                inviteURL: noteDisplayState.currentNote.map { "https://scribo.app/note/\($0.id.uuidString)" } ?? "https://scribo.app",
+                isPresented: $showShareQR
             )
         }
+        .task(id: noteDisplayState.currentNote?.id) {
+            await loadNoteImages()
+        }
     }
 
-    private var topicHeaderView: some View {
-        Group {
-            if let topic = noteDisplayState.currentTopic {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.appAccent1.opacity(0.2))
-                        .frame(width: 36, height: 36)
-                        .overlay(Text(String(topic.title.prefix(1))).bold().foregroundColor(.appAccent1))
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                if hasChanges {
+                    showingSaveAlert = true
+                } else {
+                    if isFromChatView {
+                        noteDisplayState.isShowingNote = false
+                        noteDisplayState.currentNote = nil
+                        noteDisplayState.currentTopic = nil
+                        noteDisplayState.currentSubtopic = nil
+                    } else {
+                        dismiss()
+                    }
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.appText)
+                    .frame(width: 44, height: 44)
+            }
+            Spacer()
+            TextField("Untitled", text: $editedTitle)
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.appText)
+                .multilineTextAlignment(.center)
+                .focused($isTitleFocused)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.appAccent1, lineWidth: 2)
+                        .opacity(isTitleFocused ? 1 : 0)
+                )
+                .animation(.easeInOut(duration: 0.25), value: isTitleFocused)
+                .onChange(of: editedTitle) { _, _ in hasChanges = true }
+                .onChange(of: isTitleFocused) { _, focused in
+                    if !focused && hasChanges { Task { await saveNote() } }
+                }
+            Spacer()
+            Menu {
+                Button(action: { showShareQR = true }) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                Button(role: .destructive, action: { showDeleteConfirm = true }) {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.appText)
+                    .frame(width: 44, height: 44)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        .background(sheetBg)
+    }
 
-                    VStack(alignment: .leading) {
-                        Text(topic.title).font(.subheadline).bold().foregroundColor(.appText)
-                        if let subtopic = noteDisplayState.currentSubtopic {
-                            Text(subtopic.title).font(.caption).foregroundColor(.appTextSecondary)
+    private var mainContentView: some View {
+        Group {
+            if noteImages.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider()
+                    TextEditor(text: $editedContent)
+                        .font(.body)
+                        .foregroundColor(.appText)
+                        .scrollContentBackground(.hidden)
+                        .frame(maxWidth: .infinity, minHeight: 252, alignment: .topLeading)
+                        .padding(16)
+                        .onChange(of: editedContent) { _, _ in hasChanges = true }
+                    Divider()
+                }
+                .background(sheetBg)
+            } else {
+                imageMainContent
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private var imageMainContent: some View {
+        let fillColor = dominantColor ?? sheetBg
+        return VStack(spacing: 0) {
+            Divider()
+            ZStack {
+                fillColor
+                    .ignoresSafeArea(edges: .horizontal)
+                if noteImages.count == 1 {
+                    imageCard(noteImages[0])
+                } else {
+                    TabView(selection: $selectedImageIndex) {
+                        ForEach(Array(noteImages.enumerated()), id: \.offset) { index, img in
+                            imageCard(img)
+                                .tag(index)
                         }
                     }
-                    Spacer()
-                }
-                .padding()
-                .background(Color.appHeaderBackground)
-            }
-        }
-    }
-    
-    private var imageGalleryView: some View {
-        Group {
-            if !noteImages.isEmpty {
-                TabView(selection: $selectedImageIndex) {
-                    ForEach(Array(noteImages.enumerated()), id: \.offset) { index, image in
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 300)
-                            .clipped()
-                            .cornerRadius(16)
-                            .padding(.horizontal)
-                            .tag(index)
-                            .onTapGesture {
-                                selectedImageIndex = index
-                                showingFullImage = true
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 6) {
+                            ForEach(0..<noteImages.count, id: \.self) { index in
+                                Circle()
+                                    .fill(index == selectedImageIndex ? Color.white : Color.white.opacity(0.4))
+                                    .frame(width: 6, height: 6)
                             }
+                        }
+                        .padding(.bottom, 12)
                     }
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
-                .frame(height: 300)
             }
+            .frame(minHeight: 280)
+            Divider()
         }
+        .background(sheetBg)
     }
-    
-    private var textInputView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !editedTitle.isEmpty {
-                TextField("Title", text: $editedTitle)
-                    .font(.headline)
-                    .foregroundColor(.appText)
-                    .onChange(of: editedTitle) { _, _ in hasChanges = true }
-            }
 
-            ZStack(alignment: .topLeading) {
-                // Placeholder
-                if editedContent.isEmpty {
-                    Text("Enter your text here...")
-                        .foregroundColor(.appTextSecondary)
-                        .padding(.top, 16)
-                        .padding(.leading, 16)
-                        .background(Color.clear)
-                }
+    private func imageCard(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+    }
 
-                // TextEditor
-                ClearBackgroundTextEditor(text: $editedContent, font: UIFont.preferredFont(forTextStyle: .body))
-                    .frame(minHeight: 100)
-                    .background(Color.clear)
-                    .cornerRadius(12)
-                    .onChange(of: editedContent) { _, _ in
-                        hasChanges = true
+    private var mindTagsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("NOTE TAGS")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.appTextSecondary)
+            HStack(spacing: 10) {
+                Button(action: { showAddTagAlert = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Add tag")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
                     }
-                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.appAccent1)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                ForEach(tags, id: \.self) { tag in
+                    Text("#\(tag)")
+                        .font(.subheadline)
+                        .foregroundColor(.appTextSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(cardBg)
+                        .cornerRadius(10)
+                }
             }
         }
-        .padding(.horizontal)
-        
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+    }
+
+    private var mindNotesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("EXTRA NOTES")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.appTextSecondary)
+            Group {
+                if noteImages.isEmpty {
+                    TextField("Type here to add a note...", text: $mindNotesText, axis: .vertical)
+                } else {
+                    TextField("Type here to add a note...", text: $editedContent, axis: .vertical)
+                }
+            }
+            .textFieldStyle(.plain)
+            .foregroundColor(.appText)
+            .lineLimit(3...8)
+            .padding(12)
+            .background(cardBg)
+            .cornerRadius(12)
+            .onChange(of: editedContent) { _, _ in if !noteImages.isEmpty { hasChanges = true } }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
     }
 
     private var bottomBarView: some View {
-        HStack {
-            Menu {
-                Button(action: { isPhotoPickerPresented = true }) {
-                    Label("Photo", systemImage: "photo.fill")
-                }
-                
-                Button(action: { isShowingCamera = true }) {
-                    Label("Camera", systemImage: "camera.fill")
-                }
-
-                Button(action: { isShowingScanner = true }) {
-                    Label("Scan", systemImage: "doc.viewfinder")
-                }
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.appAccent1)
-            }
-            
-            Spacer()
-            
+        HStack(spacing: 10) {
             Button(action: {
-                // TODO: Implement share functionality
+                Task { await saveNote() }
             }) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 24))
-                    .foregroundColor(.appAccent1)
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.grid.2x2")
+                        .font(.system(size: 16))
+                    Text("Save")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.appText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(cardBg)
+                .cornerRadius(16)
+            }
+            .buttonStyle(.plain)
+            Button(action: { showShareQR = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16))
+                    Text("Share")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.appText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(cardBg)
+                .cornerRadius(16)
+            }
+            .buttonStyle(.plain)
+            if !isNewNote {
+                Button(action: { showDeleteConfirm = true }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 16))
+                        Text("Delete")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(16)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding()
-        .background(Color.appHeaderBackground.opacity(0.8))
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
     }
-    
-    private var toolbarContent: some ToolbarContent {
-        Group {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    if hasChanges {
-                        showingSaveAlert = true
-                    } else {
-                        if isFromChatView {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                noteDisplayState.isShowingNote = false
-                                noteDisplayState.currentNote = nil
-                                noteDisplayState.currentTopic = nil
-                                noteDisplayState.currentSubtopic = nil
-                            }
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                dismiss()
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(.appAccent1)
-                }
+
+    private var statusView: some View {
+        Text("Saved to your notebook, \(lastSavedText)")
+            .font(.caption)
+            .foregroundColor(.appTextSecondary)
+            .padding(.vertical, 12)
+    }
+
+    private func loadNoteImages() async {
+        guard let noteId = noteDisplayState.currentNote?.id else {
+            await MainActor.run {
+                noteImages = []
+                dominantColor = nil
+                selectedImageIndex = 0
+            }
+            return
+        }
+        do {
+            let attachments = try await dataManager.getAttachments(forNoteId: noteId)
+            let imageAttachments = attachments.filter { att in
+                let mime = att.mime_type?.lowercased() ?? ""
+                return mime.hasPrefix("image/") || att.kind.lowercased() == "photo" || att.kind.lowercased() == "camera" || att.kind.lowercased() == "scanned"
+            }
+            let dir = dataManager.getDocumentsDirectory()
+            var loaded: [UIImage] = []
+            for att in imageAttachments {
+                let fileURL = dir.appendingPathComponent(att.storage_path)
+                guard FileManager.default.fileExists(atPath: fileURL.path),
+                      let data = try? Data(contentsOf: fileURL),
+                      let image = UIImage(data: data) else { continue }
+                loaded.append(image)
+            }
+            var color: Color?
+            if let first = loaded.first {
+                color = extractDominantColor(from: first)
+            }
+            await MainActor.run {
+                noteImages = loaded
+                dominantColor = color
+                selectedImageIndex = 0
+            }
+        } catch {
+            await MainActor.run {
+                noteImages = []
+                dominantColor = nil
             }
         }
     }
@@ -334,157 +514,37 @@ struct NoteView: View {
                     title: editedTitle,
                     content: editedContent
                 )
+                await MainActor.run {
+                    noteDisplayState.currentNote = newNote
+                    lastSavedText = "just now"
+                    hasChanges = false
+                }
                 notificationManager.playSound(.success)
                 notificationManager.scheduleNotification(
                     title: "New Note Created",
                     body: "Your note '\(editedTitle)' has been created successfully"
                 )
             } else if let note = noteDisplayState.currentNote {
-                var updatedNote = note
-                updatedNote.title = editedTitle
-                updatedNote.content = editedContent
-                
                 _ = try await dataManager.updateNote(
-                    updatedNote,
+                    note,
                     in: subtopic,
                     in: topic,
                     newTitle: editedTitle,
                     newContent: editedContent
                 )
+                await MainActor.run {
+                    lastSavedText = "just now"
+                    hasChanges = false
+                }
                 notificationManager.playSound(.save)
                 notificationManager.scheduleNotification(
                     title: "Note Saved",
                     body: "Your note '\(editedTitle)' has been saved successfully"
                 )
             }
-
-            await MainActor.run { dismiss() }
-
         } catch {
             print("Error saving note: \(error)")
             notificationManager.playSound(.error)
-        }
-    }
-
-    private func handleSelectedPhoto(_ photo: PhotosPickerItem) async {
-        do {
-            if let data = try await photo.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                await MainActor.run {
-                    noteImages.append(image)
-                    hasChanges = true
-                }
-                
-                // Create attachment record for this note
-                if let topic = noteDisplayState.currentTopic,
-                   let subtopic = noteDisplayState.currentSubtopic,
-                   let note = noteDisplayState.currentNote {
-                    let fileName = "\(UUID().uuidString).jpg"
-                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
-                    try data.write(to: fileURL)
-                    let sizeBytes = data.count
-                    _ = try await dataManager.createAttachment(
-                        for: note.id,
-                        storagePath: fileName,
-                        mimeType: "image/jpeg",
-                        sizeBytes: sizeBytes,
-                        kind: "photo"
-                    )
-                }
-            }
-        } catch {
-            print("❌ Failed to load photo: \(error.localizedDescription)")
-        }
-    }
-    
-    private func handleCameraImage(_ image: UIImage) {
-        Task {
-            await MainActor.run {
-                noteImages.append(image)
-                hasChanges = true
-            }
-            
-            // Create attachment record for this note
-            if let topic = noteDisplayState.currentTopic,
-               let subtopic = noteDisplayState.currentSubtopic,
-               let note = noteDisplayState.currentNote {
-                do {
-                    let fileName = "\(UUID().uuidString).jpg"
-                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
-                    if let data = image.jpegData(compressionQuality: 0.8) {
-                        try data.write(to: fileURL)
-                        let sizeBytes = data.count
-                        _ = try await dataManager.createAttachment(
-                            for: note.id,
-                            storagePath: fileName,
-                            mimeType: "image/jpeg",
-                            sizeBytes: sizeBytes,
-                            kind: "camera"
-                        )
-                    }
-                } catch {
-                    print("❌ Failed to save camera image: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    private func handleScannedImage(_ image: UIImage) {
-        Task {
-            await MainActor.run {
-                noteImages.append(image)
-                hasChanges = true
-            }
-            
-            // Create attachment record for this note
-            if let topic = noteDisplayState.currentTopic,
-               let subtopic = noteDisplayState.currentSubtopic,
-               let note = noteDisplayState.currentNote {
-                do {
-                    let fileName = "\(UUID().uuidString).jpg"
-                    let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
-                    if let data = image.jpegData(compressionQuality: 0.8) {
-                        try data.write(to: fileURL)
-                        let sizeBytes = data.count
-                        _ = try await dataManager.createAttachment(
-                            for: note.id,
-                            storagePath: fileName,
-                            mimeType: "image/jpeg",
-                            sizeBytes: sizeBytes,
-                            kind: "scanned"
-                        )
-                    }
-                } catch {
-                    print("❌ Failed to save scanned image: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    private func processAndCategorizeImage(_ image: UIImage, type: DocumentType) async {
-        // Save image and create attachment record for this note
-        guard let note = noteDisplayState.currentNote,
-              let subtopic = noteDisplayState.currentSubtopic,
-              let topic = noteDisplayState.currentTopic else {
-            return
-        }
-        
-        let fileName = "\(UUID().uuidString).jpg"
-        let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
-        if let data = image.jpegData(compressionQuality: 0.8) {
-            try? data.write(to: fileURL)
-            let sizeBytes = data.count
-            _ = try? await dataManager.createAttachment(
-                for: note.id,
-                storagePath: fileName,
-                mimeType: "image/jpeg",
-                sizeBytes: sizeBytes,
-                kind: type.rawValue
-            )
-            
-            await MainActor.run {
-                noteDisplayState.currentNote = note
-            }
         }
     }
 }

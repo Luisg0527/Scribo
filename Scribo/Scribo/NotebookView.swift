@@ -1,4 +1,17 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
+
+// MARK: - Top-only rounded rectangle (flat bottom)
+struct TopRoundedRectangle: Shape {
+    var radius: CGFloat
+    func path(in rect: CGRect) -> Path {
+        Path(UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: [.topLeft, .topRight],
+            cornerRadii: CGSize(width: radius, height: radius)
+        ).cgPath)
+    }
+}
 
 // MARK: - Topic Color Storage (for space/notebook color coding)
 enum TopicColorStore {
@@ -56,29 +69,61 @@ struct TopicPreviewView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var searchState: SearchState
     @ObservedObject var dataManager: DataManager
+    @State private var isShowingDeleteAlert: Bool = false
+    @State private var isShowingShareSheet: Bool = false
     @State private var subtopicToDelete: (Topic, Subtopic)?
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewSubtopicSheet = false
+    @State private var isShowingNewNoteSheet = false
     @State private var selectedSubtopic: Subtopic?
     @State private var isShowingEditSubtopicSheet = false
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                headerView
-                subtopicsGridView
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    headerView
+                    subtopicsGridView
+                }
+                .padding(.vertical)
             }
-            .padding(.vertical)
+            .background(Color.appBackground)
+            Button(action: { isShowingNewSubtopicSheet = true }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 50, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.appAccent1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 40)
+            .padding(.bottom, 24)
         }
-        .background(Color.appBackground)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                addSubtopicButton
-            }
+        .navigationBarBackButtonHidden(true)
+        .fullScreenCover(isPresented: $isShowingShareSheet) {
+            TopicShareView(
+                topicTitle: topic.title,
+                inviteURL: "https://scribo.app/invite/topic/\(topic.id.uuidString)",
+                isPresented: $isShowingShareSheet
+            )
         }
         .sheet(isPresented: $isShowingNewSubtopicSheet) {
             NewSubtopicView(topic: topic, dataManager: dataManager)
+        }
+        .fullScreenCover(isPresented: $isShowingNewNoteSheet) {
+            if let subtopic = selectedSubtopic {
+                CreateNoteSheetView(
+                    isPresented: $isShowingNewNoteSheet,
+                    dataManager: dataManager,
+                    initialTopic: topic,
+                    initialSubtopic: subtopic
+                )
+            }
         }
         .sheet(isPresented: $isShowingEditSubtopicSheet) {
             if let subtopic = selectedSubtopic {
@@ -101,25 +146,168 @@ struct TopicPreviewView: View {
         } message: {
             Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
         }
+        .alert("Delete Notebook", isPresented: $isShowingDeleteAlert) {
+            Button("Cancel", role: .cancel) {
+                isShowingDeleteAlert = false
+            }
+            Button("Delete", role: .destructive) {
+                dataManager.deleteTopic(topic)
+                isShowingDeleteAlert = false
+                dismiss()
+            }
+        }
+    }
+    
+    // MARK: - Share Sheet
+    struct TopicShareView: View {
+        let topicTitle: String
+        let inviteURL: String
+        @Binding var isPresented: Bool
+        private let context = CIContext()
+        private let filter = CIFilter.qrCodeGenerator()
+        
+        var body: some View {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    HStack {
+                        Text("Share")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button(action: { isPresented = false }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(8)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    
+                    Text(topicTitle)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(.top, 8)
+                    
+                    if let image = generateQRCode(from: inviteURL) {
+                        Image(uiImage: image)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 260, height: 260)
+                            .padding(24)
+                            .background(Color.white)
+                            .cornerRadius(24)
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 32) {
+                        shareActionButton(icon: "paintpalette.fill", title: "Customize") {
+                            // Placeholder
+                        }
+                        shareActionButton(icon: "square.and.arrow.up", title: "Share") {
+                            presentSystemShare()
+                        }
+                        shareActionButton(icon: "doc.on.doc", title: "Copy") {
+                            UIPasteboard.general.string = inviteURL
+                        }
+                    }
+                    .padding(.bottom, 32)
+                }
+            }
+        }
+        
+        private func generateQRCode(from string: String) -> UIImage? {
+            let data = Data(string.utf8)
+            filter.setValue(data, forKey: "inputMessage")
+            filter.setValue("M", forKey: "inputCorrectionLevel") // L, M, Q, or H (string, not number)
+            
+            guard let outputImage = filter.outputImage,
+                  let cgimg = context.createCGImage(outputImage.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
+                                                    from: outputImage.extent) else {
+                return nil
+            }
+            return UIImage(cgImage: cgimg)
+        }
+        
+        private func shareActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+            Button(action: action) {
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.12))
+                            .frame(width: 60, height: 60)
+                        Image(systemName: icon)
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    Text(title)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        
+        private func presentSystemShare() {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first,
+                  let root = window.rootViewController else { return }
+            
+            let vc = UIActivityViewController(activityItems: [inviteURL], applicationActivities: nil)
+            root.present(vc, animated: true)
+        }
     }
     
     private var headerView: some View {
-                HStack {
-                    Text(topic.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
+        ZStack {
+            HStack {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.appText)
-                    Spacer()
+                        .padding(8)
+                        .padding(.horizontal, 8)
                 }
-                .padding(.horizontal)
+                
+                Spacer()
+                
+                Menu {
+                    Button(action: { isShowingShareSheet = true }) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive, action: { isShowingDeleteAlert = true }) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.appText)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            
+            Text(topic.title)
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.appText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
                 
     private var subtopicsGridView: some View {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 16),
-                    GridItem(.flexible(), spacing: 16)
-                ], spacing: 16) {
-                    ForEach(topic.subtopics) { subtopic in
+        LazyVGrid(columns: [
+            GridItem(.fixed(200), spacing: 2),
+            GridItem(.fixed(200), spacing: 2)
+        ], spacing: 2) {
+            ForEach(topic.subtopics) { subtopic in
                 subtopicCard(subtopic)
             }
         }
@@ -128,46 +316,22 @@ struct TopicPreviewView: View {
     
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
         NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Image(systemName: "folder.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.appAccent1)
-                                
-                                Text(subtopic.title)
-                                    .font(.headline)
-                                    .foregroundColor(.appText)
-                                    .lineLimit(2)
-                                
-                                Text("\(subtopic.notes.count) notes")
-                                    .font(.caption)
-                                    .foregroundColor(.appTextSecondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color.appCardBackground)
-                            .cornerRadius(12)
-                        }
-                        .contextMenu {
-                            Button(action: {
-                                // Add note action
-                            }) {
-                                Label("Add Note", systemImage: "note.text.badge.plus")
-                            }
-            
+            SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
+        }
+        .contextMenu {
             Button(action: {
                 selectedSubtopic = subtopic
                 isShowingEditSubtopicSheet = true
             }) {
                 Label("Edit Subtopic", systemImage: "pencil")
             }
-                            
-                            Button(role: .destructive, action: {
-                                subtopicToDelete = (topic, subtopic)
-                            }) {
-                                Label("Delete Subtopic", systemImage: "trash")
-                            }
-                        }
-                    }
+            Button(role: .destructive, action: {
+                subtopicToDelete = (topic, subtopic)
+            }) {
+                Label("Delete Subtopic", systemImage: "trash")
+            }
+        }
+    }
     
     private var addSubtopicButton: some View {
                 Button(action: {
@@ -189,10 +353,12 @@ struct SubtopicPreviewView: View {
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingNewNoteSheet = false
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) var dismiss
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
+                headerView
                 ScrollView {
                     LazyVGrid(columns: [
                         GridItem(.fixed(200), spacing: 2),
@@ -247,8 +413,8 @@ struct SubtopicPreviewView: View {
             .padding(.trailing, 40)
             .padding(.bottom, 24)
         }
-        .navigationTitle(subtopic.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .fullScreenCover(isPresented: $isShowingNewNoteSheet) {
             CreateNoteSheetView(
                 isPresented: $isShowingNewNoteSheet,
@@ -277,6 +443,143 @@ struct SubtopicPreviewView: View {
             Text("Are you sure you want to delete this note?")
         }
     }
+
+    private var headerView: some View {
+        ZStack {
+            HStack {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.appText)
+                        .padding(8)
+                        .padding(.horizontal, 8)
+                }
+                Spacer()
+            }
+            Text(subtopic.title)
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.appText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+}
+
+// MARK: - Subtopic Card View (same look as note cards: first note preview, centered title & count)
+struct SubtopicCardView: View {
+    let subtopic: Subtopic
+    @ObservedObject var dataManager: DataManager
+    @Environment(\.colorScheme) var colorScheme
+    @State private var thumbnailImage: UIImage?
+    
+    private var firstNote: Note? { subtopic.notes.first }
+    
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            // Note square with stacked card effect (second card behind, rotated left)
+            ZStack {
+                // Back card – visible gray so the stack reads clearly
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(colorScheme == .dark ? .systemGray3 : .systemGray4))
+                    .frame(width: 160, height: 124)
+                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                    .rotationEffect(.degrees(-6))
+                    .offset(x: -6, y: 4)
+                cardMediaBlock
+                    .frame(width: 160, height: 124)
+                    .clipped()
+                    .cornerRadius(8)
+            }
+            .frame(width: 168, height: 130)
+            
+            Text(subtopic.title)
+                .font(.subheadline)
+                .fontWeight(.regular)
+                .foregroundColor(Color(.secondaryLabel))
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .frame(width: 168, alignment: .center)
+                .multilineTextAlignment(.center)
+            
+            Text("\(subtopic.notes.count) notes")
+                .font(.caption)
+                .foregroundColor(Color(.secondaryLabel))
+                .frame(width: 168, alignment: .center)
+        }
+        .frame(width: 168, height: 184)
+        .padding()
+        .background(Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color(.systemGray5), lineWidth: 0.5)
+        )
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .task(id: firstNote?.id) {
+            await loadThumbnail()
+        }
+    }
+    
+    @ViewBuilder
+    private var cardMediaBlock: some View {
+        if let note = firstNote {
+            if let image = thumbnailImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 160, height: 124)
+            } else if !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(note.content)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(14)
+                    .background(Color(.systemBackground))
+            } else {
+                placeholderBlock
+            }
+        } else {
+            placeholderBlock
+        }
+    }
+    
+    private var placeholderBlock: some View {
+        ZStack {
+            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
+            Image(systemName: "photo.on.rectangle")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .foregroundColor(.gray.opacity(0.6))
+        }
+    }
+    
+    private func loadThumbnail() async {
+        guard let note = firstNote else { return }
+        do {
+            let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+            let imageAttachment = attachments.first { att in
+                let mime = att.mime_type?.lowercased() ?? ""
+                return mime.hasPrefix("image/") || att.kind.lowercased() == "photo"
+            }
+            guard let att = imageAttachment else { return }
+            let dir = dataManager.getDocumentsDirectory()
+            let fileURL = dir.appendingPathComponent(att.storage_path)
+            guard FileManager.default.fileExists(atPath: fileURL.path),
+                  let data = try? Data(contentsOf: fileURL),
+                  let image = UIImage(data: data) else { return }
+            await MainActor.run {
+                thumbnailImage = image
+            }
+        } catch {
+            // Ignore; card will show text preview or placeholder
+        }
+    }
 }
 
 struct NoteCardView: View {
@@ -287,27 +590,36 @@ struct NoteCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image, text preview, or placeholder
+            // Image, text preview, or placeholder — always on top (inner card)
             cardMediaBlock
                 .frame(width: 160, height: 124)
                 .clipped()
                 .cornerRadius(8)
+                .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
 
-            // Note title style aligned with Everything cards
-            Text(note.title)
-                .font(.subheadline)
-                .fontWeight(.regular)
-                .foregroundColor(Color(.secondaryLabel))
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(width: 160, alignment: .center)
-                .multilineTextAlignment(.center)
+            // Fixed-height title area so cards align; show title or empty space
+            Group {
+                if note.title.isEmpty {
+                    Color.clear
+                } else {
+                    Text(note.title)
+                        .font(.subheadline)
+                        .fontWeight(.regular)
+                        .foregroundColor(Color(.secondaryLabel))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(width: 160, height: 40)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(width: 160, height: 180)
         .padding()
         .background(Color.clear)
         .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         .task(id: note.id) {
             await loadThumbnail()
         }
@@ -639,7 +951,6 @@ struct NotebookView: View {
     @Binding var isPresented: Bool
     @State private var selectedTopic: Topic?
     @State private var selectedSubtopic: Subtopic?
-    @State private var selectedNote: Note?
     @State private var isShowingNewTopicSheet = false
     @State private var isShowingCreateNewNotebookFlow = false
     @State private var isShowingNewSubtopicSheet = false
@@ -671,31 +982,24 @@ struct NotebookView: View {
 
                         List {
                             ForEach(dataManager.topics) { topic in
-                                TopicRow(
-                                    topic: topic,
-                                    selectedTopic: $selectedTopic,
-                                    selectedSubtopic: $selectedSubtopic,
-                                    selectedNote: $selectedNote,
-                                    isPresented: $isPresented,
-                                    dataManager: dataManager,
-                                    subtopicToDelete: $subtopicToDelete,
-                                    noteToDelete: $noteToDelete,
-                                    isExpanded: expandedTopics.contains(topic.id),
-                                    onExpandChange: { expanded, topicId in
-                                        if expanded {
-                                            expandedTopics.insert(topicId)
-                                        } else {
-                                            expandedTopics.remove(topicId)
-                                        }
-                                    },
-                                    expandedSubtopics: $expandedSubtopics,
-                                    searchText: "",
-                                    isShowingNewTopicSheet: $isShowingNewTopicSheet,
-                                    isShowingEditTopicSheet: $isShowingEditTopicSheet,
-                                    topicToDelete: $topicToDelete,
-                                    isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
-                                    isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet
-                                )
+                                NavigationLink(
+                                    destination: TopicPreviewView(
+                                        topic: topic,
+                                        isPresented: $isPresented,
+                                        dataManager: dataManager
+                                    )
+                                    .environmentObject(searchState)
+                                ) {
+                                    TopicRow(
+                                        topic: topic,
+                                        isExpanded: expandedTopics.contains(topic.id),
+                                        onExpandChange: { _, _ in },
+                                        searchText: "",
+                                        isShowingNewTopicSheet: $isShowingNewTopicSheet,
+                                        isShowingEditTopicSheet: $isShowingEditTopicSheet,
+                                        topicToDelete: $topicToDelete
+                                    )
+                                }
                             }
                         }
                         .listStyle(PlainListStyle())
@@ -801,96 +1105,48 @@ struct NotebookView: View {
 
 struct TopicRow: View {
     let topic: Topic
-    @Binding var selectedTopic: Topic?
-    @Binding var selectedSubtopic: Subtopic?
-    @Binding var selectedNote: Note?
-    @Binding var isPresented: Bool
-    @ObservedObject var dataManager: DataManager
-    @Binding var subtopicToDelete: (Topic, Subtopic)?
-    @Binding var noteToDelete: (Topic, Subtopic, Note)?
     var isExpanded: Bool
     var onExpandChange: (Bool, UUID) -> Void
-    @Binding var expandedSubtopics: Set<UUID>
     var searchText: String
     @Binding var isShowingNewTopicSheet: Bool
     @Binding var isShowingEditTopicSheet: Bool
     @Binding var topicToDelete: Topic?
-    @Binding var isShowingEditSubtopicSheet: Bool
-    @Binding var isShowingNewSubtopicSheet: Bool
     @State private var localIsExpanded: Bool = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: Binding(
-            get: { isExpanded },
-            set: { newValue in
-                localIsExpanded = newValue
-                onExpandChange(newValue, topic.id)
+        HStack {
+            if let color = TopicColorStore.color(for: topic.id) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+                    .padding(.horizontal, 8)
+            } else {
+                Image(systemName: "folder.fill")
+                    .foregroundColor(.appAccent2)
+                    .padding(.horizontal, 2)
+                    .padding(.trailing, 1) //WOW! so specific...
             }
-        )) {
-            ForEach(topic.subtopics) { subtopic in
-                SubtopicRow(
-                    subtopic: subtopic,
-                    topic: topic,
-                    selectedSubtopic: $selectedSubtopic,
-                    selectedNote: $selectedNote,
-                    isPresented: $isPresented,
-                    dataManager: dataManager,
-                    subtopicToDelete: $subtopicToDelete,
-                    noteToDelete: $noteToDelete,
-                    isExpanded: expandedSubtopics.contains(subtopic.id),
-                    onExpandChange: { expanded, subtopicId in
-                        if expanded {
-                            expandedSubtopics.insert(subtopicId)
-                        } else {
-                            expandedSubtopics.remove(subtopicId)
-                        }
-                    },
-                    searchText: searchText,
-                    isShowingEditSubtopicSheet: $isShowingEditSubtopicSheet,
-                    isShowingNewSubtopicSheet: $isShowingNewSubtopicSheet,
-                    selectedTopic: $selectedTopic
-                )
-                .padding(.leading, 16)
+            HighlightedText(text: topic.title, searchText: searchText)
+                .font(.headline)
+            Spacer()
+            Text("\(topic.subtopics.count)")
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundColor(.appTextSecondary)
+                .padding(.trailing, 8)
+        }
+        .padding(.vertical, 6)
+        .contextMenu {
+            Button(action: {
+                isShowingEditTopicSheet = true
+                topicToDelete = topic
+            }) {
+                Label("Edit Topic", systemImage: "pencil")
             }
-        } label: {
-            HStack {
-                if let color = TopicColorStore.color(for: topic.id) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 12, height: 12)
-                } else {
-                    Image(systemName: "folder.fill")
-                        .foregroundColor(.appAccent2)
-                }
-                HighlightedText(text: topic.title, searchText: searchText)
-                    .font(.headline)
-                Spacer()
-                Text("\(topic.subtopics.count)")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.appTextSecondary)
-                    .padding(.trailing, 8)
-            }
-            .padding(.vertical, 6)
-            .contextMenu {
-                Button(action: {
-                    selectedTopic = topic
-                    isShowingNewSubtopicSheet = true
-                }) {
-                    Label("Add Subtopic", systemImage: "folder.badge.plus")
-                }
-                Button(action: {
-                    selectedTopic = topic
-                    isShowingEditTopicSheet = true
-                }) {
-                    Label("Edit Topic", systemImage: "pencil")
-                }
-                Button(role: .destructive, action: {
-                    selectedTopic = topic
-                    topicToDelete = topic
-                }) {
-                    Label("Delete Topic", systemImage: "trash")
-                }
+            Button(role: .destructive, action: {
+                topicToDelete = topic
+            }) {
+                Label("Delete Topic", systemImage: "trash")
             }
         }
     }
@@ -962,13 +1218,6 @@ struct SubtopicRow: View {
             }
             .buttonStyle(PlainButtonStyle())
             .contextMenu {
-                Button(action: {
-                    selectedSubtopic = subtopic
-                    selectedTopic = topic
-                    isShowingNewNoteSheet = true
-                }) {
-                    Label("Add Note", systemImage: "note.text.badge.plus")
-                }
                 Button(action: {
                     selectedSubtopic = subtopic
                     selectedTopic = topic

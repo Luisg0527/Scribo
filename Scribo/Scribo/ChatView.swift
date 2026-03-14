@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import AVFoundation
 import VisionKit
 import Vision
+import CoreImage.CIFilterBuiltins
 
 // MARK: - Classification Response
 struct TextClassificationResponse: Codable {
@@ -41,10 +42,19 @@ struct DocumentItem: Identifiable, Equatable {
     }
 }
 
+// MARK: - Card sheet context (for Everything tab sheet)
+struct CardSheetContext: Identifiable {
+    let note: Note
+    let topic: Topic
+    let subtopic: Subtopic
+    var id: UUID { note.id }
+}
+
 // MARK: - Document Manager View
 struct DocumentManagerView: View {
     var onOpenMenu: () -> Void = {}
     @State private var documents: [DocumentItem] = []
+    @State private var cardSheetContext: CardSheetContext?
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var selectedDocument: URL?
@@ -729,6 +739,29 @@ struct DocumentManagerView: View {
         } message: {
             Text("Are you sure you want to delete this document? This action cannot be undone.")
         }
+        .sheet(item: $cardSheetContext) { ctx in
+            NavigationView {
+                NoteView(
+                    note: ctx.note,
+                    isPresented: Binding(
+                        get: { cardSheetContext != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                cardSheetContext = nil
+                                Task { await loadExistingDocuments() }
+                            }
+                        }
+                    ),
+                    dataManager: dataManager
+                )
+                .environmentObject(noteDisplayState)
+                .onAppear {
+                    noteDisplayState.currentNote = ctx.note
+                    noteDisplayState.currentTopic = ctx.topic
+                    noteDisplayState.currentSubtopic = ctx.subtopic
+                }
+            }
+        }
     }
     
     private func loadExistingDocuments() async {
@@ -1231,10 +1264,7 @@ struct DocumentManagerView: View {
                     }
                     
                     await MainActor.run {
-                        noteDisplayState.currentTopic = topicObj
-                        noteDisplayState.currentSubtopic = subtopicObj
-                        noteDisplayState.currentNote = note
-                        noteDisplayState.isShowingNote = true
+                        cardSheetContext = CardSheetContext(note: note, topic: topicObj, subtopic: subtopicObj)
                     }
                 } catch {
                     print("❌ Failed to open document: \(error.localizedDescription)")
@@ -1295,6 +1325,93 @@ struct DocumentManagerView: View {
     }
 }
 
+// MARK: - Share QR sheet (note/topic – full-screen QR view)
+struct ShareQRSheetView: View {
+    let title: String
+    let inviteURL: String
+    @Binding var isPresented: Bool
+    private let context = CIContext()
+    private let filter = CIFilter.qrCodeGenerator()
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 24) {
+                HStack {
+                    Text("Share")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(8)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+                if let image = generateQRCode(from: inviteURL) {
+                    Image(uiImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 260, height: 260)
+                        .padding(24)
+                        .background(Color.white)
+                        .cornerRadius(24)
+                }
+                Spacer()
+                HStack(spacing: 32) {
+                    shareActionButton(icon: "paintpalette.fill", title: "Customize") {}
+                    shareActionButton(icon: "square.and.arrow.up", title: "Share") {
+                        presentSystemShare()
+                    }
+                    shareActionButton(icon: "doc.on.doc", title: "Copy") {
+                        UIPasteboard.general.string = inviteURL
+                    }
+                }
+                .padding(.bottom, 32)
+            }
+        }
+    }
+    
+    private func generateQRCode(from string: String) -> UIImage? {
+        let data = Data(string.utf8)
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let outputImage = filter.outputImage,
+              let cgimg = context.createCGImage(outputImage.transformed(by: CGAffineTransform(scaleX: 8, y: 8)), from: outputImage.extent) else { return nil }
+        return UIImage(cgImage: cgimg)
+    }
+    
+    private func shareActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.12)).frame(width: 60, height: 60)
+                    Image(systemName: icon).font(.system(size: 24, weight: .medium)).foregroundColor(.white)
+                }
+                Text(title).font(.caption).foregroundColor(.white.opacity(0.9))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func presentSystemShare() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let root = window.rootViewController else { return }
+        let vc = UIActivityViewController(activityItems: [inviteURL], applicationActivities: nil)
+        root.present(vc, animated: true)
+    }
+}
+
 // MARK: - Supporting Views
 struct FilterPill: View {
     let title: String
@@ -1338,7 +1455,7 @@ struct DocumentCard: View {
                 if let preview = document.previewText,
                    !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(preview)
-                        .font(.body)
+                        .font(.caption)
                         .foregroundColor(Color(.secondaryLabel))
                         .lineLimit(8)
                         .multilineTextAlignment(.leading)
@@ -1351,7 +1468,7 @@ struct DocumentCard: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title)
-                    .font(.subheadline)
+                    .font(.caption)
                     .fontWeight(.regular)
                     .foregroundColor(Color(.secondaryLabel))
                     .lineLimit(2)
@@ -1643,8 +1760,8 @@ struct CreateNoteSheetView: View {
     }
     
     private func onSaveTapped() {
-        let title = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        if title.isEmpty {
+        let hasContent = !noteContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasContent && pendingNoteImages.isEmpty {
             return
         }
         guard !dataManager.topics.isEmpty else {
@@ -1662,9 +1779,9 @@ struct CreateNoteSheetView: View {
         let resolvedTopic = topic ?? selectedTopic
         let resolvedSubtopic = subtopic ?? selectedSubtopic
         guard let topicToUse = resolvedTopic, let subtopicToUse = resolvedSubtopic else { return }
-        let title = noteContent.trimmingCharacters(in: .whitespacesAndNewlines)
         let content = noteContent
-        if title.isEmpty {
+        let hasContent = !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !hasContent && pendingNoteImages.isEmpty {
             showTopicSubtopicPicker = false
             return
         }
@@ -1672,7 +1789,7 @@ struct CreateNoteSheetView: View {
         showTopicSubtopicPicker = false
         Task {
             do {
-                let note = try await dataManager.addNote(to: subtopicToUse, in: topicToUse, title: title, content: content)
+                let note = try await dataManager.addNote(to: subtopicToUse, in: topicToUse, title: "", content: content)
                 for image in pendingNoteImages {
                     let fileName = "\(UUID().uuidString).jpg"
                     let fileURL = dataManager.getDocumentsDirectory().appendingPathComponent(fileName)
