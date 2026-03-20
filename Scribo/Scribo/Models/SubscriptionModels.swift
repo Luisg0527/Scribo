@@ -1,77 +1,10 @@
 import Foundation
 
-// MARK: - Models
-struct Topic: Identifiable, Codable {
-    let id: UUID
-    let user_id: UUID
-    var title: String
-    var subtopics: [Subtopic]
-    let created_at: String
-    let updated_at: String
-}
-
-struct Subtopic: Identifiable, Codable {
-    let id: UUID
-    let topic_id: UUID
-    var title: String
-    var notes: [Note]
-    let created_at: String
-    let updated_at: String
-}
-
-struct Note: Identifiable, Codable, Equatable {
-    let id: UUID
-    let subtopic_id: UUID?
-    let workspace_id: UUID?
-    let user_id: UUID?
-    var title: String
-    var content: String
-    let created_at: String
-    let updated_at: String
-    
-    static func == (lhs: Note, rhs: Note) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.title == rhs.title &&
-        lhs.content == rhs.content
-    }
-}
-
-class User: Codable {
-    let id: UUID
-    var full_name: String
-    var avatar_url: String?
-    let created_at: String
-    let updated_at: String
-    var subscription_tier: String?
-    var subscription_expires_at: String?
-}
-
-// MARK: - Attachments
-struct NoteAttachment: Identifiable, Codable {
-    let id: UUID
-    let note_id: UUID
-    let uploaded_by: UUID?
-    let kind: String
-    let bucket: String
-    let storage_path: String
-    let mime_type: String?
-    let size_bytes: Int?
-    let created_at: String
-    let updated_at: String
-}
-
-extension User {
-    var tierEnum: SubscriptionTier {
-        SubscriptionTier(rawValue: subscription_tier ?? "free") ?? .free
-    }
-}
-
-// MARK: - Subscription Models
 enum SubscriptionTier: String, CaseIterable, Codable {
     case free = "free"
     case pro = "pro"
     case premium = "premium"
-    
+
     var displayName: String {
         switch self {
         case .free: return "Free"
@@ -79,7 +12,7 @@ enum SubscriptionTier: String, CaseIterable, Codable {
         case .premium: return "Premium"
         }
     }
-    
+
     var description: String {
         switch self {
         case .free: return "Basic note-taking features"
@@ -87,7 +20,7 @@ enum SubscriptionTier: String, CaseIterable, Codable {
         case .premium: return "Unlimited access to all features"
         }
     }
-    
+
     var price: String {
         switch self {
         case .free: return "Free"
@@ -95,7 +28,7 @@ enum SubscriptionTier: String, CaseIterable, Codable {
         case .premium: return "$9.99/month"
         }
     }
-    
+
     var features: [String] {
         switch self {
         case .free:
@@ -132,7 +65,7 @@ enum SubscriptionTier: String, CaseIterable, Codable {
             ]
         }
     }
-    
+
     var limits: SubscriptionLimits {
         switch self {
         case .free:
@@ -173,7 +106,7 @@ struct SubscriptionLimits {
     let maxSubtopics: Int
     let aiChatMessagesPerDay: Int
     let ocrProcessingPerDay: Int
-    
+
     func isUnlimited(_ limit: Int) -> Bool {
         return limit == -1
     }
@@ -187,8 +120,3 @@ struct SubscriptionProduct: Identifiable {
     let period: String
     let isPopular: Bool
 }
-
-// MARK: - Search State
-class SearchState: ObservableObject {
-    @Published var searchText: String = ""
-} 

@@ -7,7 +7,7 @@ import VisionKit
 import StoreKit
 
 struct ContentView: View {
-    @StateObject private var authManager = AuthManager()
+    @EnvironmentObject private var authManager: AuthManager
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var isSidebarShowing: Bool = false
@@ -16,14 +16,14 @@ struct ContentView: View {
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
     @State private var sidebarDragOffset: CGFloat = 0
-    
+
     var body: some View {
         ZStack {
             if authManager.isAuthenticated {
                 mainView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            
+
             if !authManager.isAuthenticated {
                 if authManager.isResettingPassword {
                     NewPasswordView(authManager: authManager)
@@ -106,14 +106,14 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private var mainView: some View {
         GeometryReader { geometry in
             let topInset = geometry.safeAreaInsets.top
             let sidebarWidth = geometry.size.width * 0.9
             let contentOffset = isSidebarShowing ? max(sidebarWidth + sidebarDragOffset, 0) : 0
             let openRatio = sidebarWidth > 0 ? min(max(contentOffset / sidebarWidth, 0), 1) : 0
-            
+
             ZStack(alignment: .leading) {
                 // 1. Main content: drawn first (behind); slides right when sidebar opens
                 ZStack {
@@ -167,7 +167,7 @@ struct ContentView: View {
                             }
                         }
                 )
-                
+
                 // 2. Sidebar: drawn on top so it receives taps; offset by drag so it slides with the content
                 if isSidebarShowing {
                     SidebarView(isShowing: $isSidebarShowing, authManager: authManager, topInset: topInset)
@@ -199,7 +199,7 @@ struct ContentView: View {
             .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
-    
+
     private var mainContentView: some View {
         Group {
             if noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil {
@@ -241,18 +241,18 @@ struct ContentView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.9), value: selectedTab)
         .animation(.easeInOut(duration: 0.2), value: noteDisplayState.isShowingNote)
     }
-    
+
     private var mainTabBar: some View {
         HStack(spacing: 0) {
             tabBarButton(title: "Everything", icon: "xmark.triangle.circle.square.fill", tag: 0)
             tabBarButton(title: "Notebook", icon: "book.fill", tag: 1)
-            tabBarButton(title: "Study", icon: "brain.head.profile", tag: 2)
+            tabBarButton(title: "Study", icon: "capsule.on.capsule.fill", tag: 2)
         }
         .padding(.top, 10)
         .padding(.bottom, 8)
         .background(Color(.systemBackground))
     }
-    
+
     private func tabBarButton(title: String, icon: String, tag: Int) -> some View {
         Button(action: { selectedTab = tag }) {
             VStack(spacing: 4) {
@@ -266,7 +266,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
 }
 
 // MARK: - Study Placeholder View
@@ -274,7 +274,7 @@ struct ContentView: View {
 struct StudyPlaceholderView: View {
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "brain.head.profile")
+            Image(systemName: "capsule.on.capsule.fill")
                 .font(.system(size: 56))
                 .foregroundColor(.featureCalloutAccent.opacity(0.8))
             Text("Work in progress")
@@ -296,6 +296,7 @@ struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
             .environmentObject(NoteDisplayState())
+            .environmentObject(AuthManager())
             .previewDevice(PreviewDevice(rawValue: "iPhone 16 Pro"))
             .previewDisplayName("iPhone 16 Pro")
     }

@@ -28,12 +28,11 @@ struct ScriboApp: App {
                     LaunchScreenView()
                         .transition(.opacity)
                         .onAppear {
-                            // Check authentication
                             Task {
                                 await authManager.checkSession()
                                 isAuthChecked = true
                             }
-                            
+
                             // Show launch screen for at least 2 seconds
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                                 withAnimation {
@@ -89,7 +88,7 @@ struct ScriboApp: App {
             }
         }
     }
-    
+
     private func checkCameraPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:

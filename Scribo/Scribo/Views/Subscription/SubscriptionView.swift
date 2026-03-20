@@ -8,13 +8,13 @@ struct SubscriptionView: View {
     @State private var showingPurchaseAlert = false
     @State private var purchaseError: String?
     @AppStorage("isDarkMode") private var isDarkMode = false
-    
+
     var body: some View {
         ZStack {
             // Background using ChatView colors
             AppColors.featureCalloutBackgroundWarm(for: isDarkMode ? .dark : .light)
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
                 // Header with Bumble-style design
                 VStack(spacing: 22) {
@@ -24,7 +24,7 @@ struct SubscriptionView: View {
                             .fill(Color.white.opacity(0.2))
                             .frame(width: 95, height: 95)
                             .blur(radius: 17)
-                        
+
                         Image("ScriboIcon")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -32,13 +32,13 @@ struct SubscriptionView: View {
                             .shadow(color: .black.opacity(0.3), radius: 9, x: 0, y: 4)
                     }
                     .padding(.top, 55)
-                    
+
                     VStack(spacing: 10) {
                         Text("Unlock Premium")
                             .font(.system(size: 30, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
-                        
+
                         Text("Take your notes to the next level")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundColor(.white.opacity(0.9))
@@ -47,7 +47,7 @@ struct SubscriptionView: View {
                     }
                 }
                 .padding(.bottom, 30)
-                
+
                 // Horizontal scrolling subscription cards
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 18) {
@@ -67,7 +67,7 @@ struct SubscriptionView: View {
                     .padding(.horizontal, 20)
                 }
                 .padding(.bottom, 25)
-                
+
                 // Current Status
                 if subscriptionManager.currentSubscriptionTier != .free {
                     VStack(spacing: 14) {
@@ -79,7 +79,7 @@ struct SubscriptionView: View {
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(.white)
                         }
-                        
+
                         if let remainingNotes = subscriptionManager.getRemainingNotes() {
                             Text("\(remainingNotes) notes remaining")
                                 .font(.system(size: 15, weight: .medium))
@@ -98,7 +98,7 @@ struct SubscriptionView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 18)
                 }
-                
+
                 // Action Buttons
                 VStack(spacing: 18) {
                     if let selectedProduct = selectedProduct {
@@ -127,12 +127,12 @@ struct SubscriptionView: View {
                             .foregroundColor(Color.featureCalloutAccent)
                         }
                         .disabled(subscriptionManager.isLoading)
-                        
+
                         Text("\(selectedProduct.displayPrice) per month")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.white.opacity(0.9))
                     }
-                    
+
                     Button("Restore Purchases") {
                         Task {
                             await restorePurchases()
@@ -144,7 +144,7 @@ struct SubscriptionView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 18)
-                
+
                 // Terms and Privacy - moved up to avoid phone corners
                 VStack(spacing: 10) {
                     Text("By subscribing, you agree to our Terms of Service and Privacy Policy")
@@ -152,14 +152,14 @@ struct SubscriptionView: View {
                         .foregroundColor(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
-                    
+
                     HStack(spacing: 28) {
                         Button("Terms of Service") {
                             // TODO: Show terms
                         }
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
-                        
+
                         Button("Privacy Policy") {
                             // TODO: Show privacy policy
                         }
@@ -169,7 +169,7 @@ struct SubscriptionView: View {
                 }
                 .padding(.bottom, 50) // Just right padding
             }
-            
+
             // Close button in top-right corner
             VStack {
                 HStack {
@@ -196,14 +196,14 @@ struct SubscriptionView: View {
             }
         }
     }
-    
+
     private func selectProduct(for tier: SubscriptionTier) {
         // Find the monthly product for the selected tier
         selectedProduct = subscriptionManager.products.first { product in
             product.id.contains(tier.rawValue) && product.id.contains("monthly")
         }
     }
-    
+
     private func purchaseSubscription(_ product: Product) async {
         do {
             try await subscriptionManager.purchase(product)
@@ -213,7 +213,7 @@ struct SubscriptionView: View {
             showingPurchaseAlert = true
         }
     }
-    
+
     private func restorePurchases() async {
         do {
             try await subscriptionManager.restorePurchases()
@@ -228,7 +228,7 @@ struct BumbleStyleSubscriptionCard: View {
     let tier: SubscriptionTier
     let isSelected: Bool
     let onSelect: () -> Void
-    
+
     var body: some View {
         Button(action: onSelect) {
             ScrollView {
@@ -241,7 +241,7 @@ struct BumbleStyleSubscriptionCard: View {
                                     Text(tier.displayName)
                                         .font(.system(size: 26, weight: .bold, design: .rounded))
                                         .foregroundColor(.white)
-                                    
+
                                     if tier == .pro {
                                         Text("MOST POPULAR")
                                             .font(.system(size: 10, weight: .bold))
@@ -252,20 +252,20 @@ struct BumbleStyleSubscriptionCard: View {
                                             .cornerRadius(7)
                                     }
                                 }
-                                
+
                                 Text(tier.description)
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.white.opacity(0.8))
                             }
-                            
+
                             Spacer()
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text(tier.price)
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
-                            
+
                             if tier != .free {
                                 Text("per month")
                                     .font(.system(size: 13, weight: .medium))
@@ -273,7 +273,7 @@ struct BumbleStyleSubscriptionCard: View {
                             }
                         }
                     }
-                    
+
                     // Features list
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(tier.features, id: \.self) { feature in
@@ -281,12 +281,12 @@ struct BumbleStyleSubscriptionCard: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.white)
                                     .font(.system(size: 15, weight: .semibold))
-                                
+
                                 Text(feature)
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.white.opacity(0.9))
                                     .multilineTextAlignment(.leading)
-                                
+
                                 Spacer()
                             }
                         }
@@ -331,4 +331,3 @@ struct BumbleStyleSubscriptionCard: View {
 #Preview {
     SubscriptionView()
 }
-

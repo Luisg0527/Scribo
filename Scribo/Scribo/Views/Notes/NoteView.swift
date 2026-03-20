@@ -113,7 +113,7 @@ struct NoteView: View {
 
     // Match EverythingCardSheetView styling
     private var cardBg: Color { Color(red: 0.98, green: 0.98, blue: 0.99) }
-    private var sheetBg: Color { Color(red: 0.95, green: 0.95, blue: 0.97) }
+    private var sheetBg: Color { Color(red: 0.917, green: 0.917, blue: 0.917) }
 
     var body: some View {
         ZStack {

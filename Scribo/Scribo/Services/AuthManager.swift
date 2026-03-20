@@ -18,12 +18,12 @@ class AuthManager: ObservableObject {
     @Published var currentUser: User?
     @Published var error: String?
     @Published var isResettingPassword = false
-    
+
     private let supabase = SupabaseConfig.shared.client
-    
+
     private func handleAuthError(_ error: Error) -> String {
         let errorMessage = error.localizedDescription.lowercased()
-        
+
         // Handle common authentication errors
         if errorMessage.contains("invalid login credentials") {
             return "Incorrect email or password. Please try again."
@@ -46,25 +46,25 @@ class AuthManager: ObservableObject {
         } else if errorMessage.contains("invalid login credentials") {
             return "Incorrect email or password. Please try again."
         }
-        
+
         // Default error message
         return "An error occurred. Please try again."
     }
-    
+
     init() {
         // Check for existing session
         Task {
             await checkSession()
         }
     }
-    
+
     @MainActor
     func checkSession() async {
         do {
             let session = try await supabase.auth.session
             print("🔑 Session user ID: \(session.user.id)")
             isAuthenticated = true
-            
+
             // Get user profile from profiles table
             print("🔍 Fetching user profile with ID: \(session.user.id)")
             do {
@@ -74,7 +74,7 @@ class AuthManager: ObservableObject {
                     .eq("id", value: session.user.id)
                     .single()
                     .execute()
-                
+
                 print("📦 Raw response data: \(String(data: response.data, encoding: .utf8) ?? "none")")
                 let decoder = JSONDecoder()
                 currentUser = try decoder.decode(User.self, from: response.data)
@@ -92,13 +92,13 @@ class AuthManager: ObservableObject {
                     subscription_tier: nil,
                     subscription_expires_at: nil
                 )
-                
+
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
                     .from("profiles")
                     .insert(userData)
                     .execute()
-                
+
                 // Fetch the newly created profile
                 let userResponse = try await supabase
                     .from("profiles")
@@ -106,7 +106,7 @@ class AuthManager: ObservableObject {
                     .eq("id", value: session.user.id)
                     .single()
                     .execute()
-                
+
                 let decoder = JSONDecoder()
                 currentUser = try decoder.decode(User.self, from: userResponse.data)
                 print("✅ Successfully created and decoded user profile")
@@ -118,7 +118,7 @@ class AuthManager: ObservableObject {
             self.error = handleAuthError(error)
         }
     }
-    
+
     @MainActor
     func signIn(email: String, password: String) async {
         do {
@@ -128,7 +128,7 @@ class AuthManager: ObservableObject {
             )
             print("🔑 Sign in successful, user ID: \(response.user.id)")
             isAuthenticated = true
-            
+
             // Get user profile from profiles table
             print("🔍 Fetching user profile with ID: \(response.user.id)")
             do {
@@ -138,7 +138,7 @@ class AuthManager: ObservableObject {
                     .eq("id", value: response.user.id)
                     .single()
                     .execute()
-                
+
                 print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
                 let decoder = JSONDecoder()
                 currentUser = try decoder.decode(User.self, from: userResponse.data)
@@ -156,13 +156,13 @@ class AuthManager: ObservableObject {
                     subscription_tier: nil,
                     subscription_expires_at: nil
                 )
-                
+
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
                     .from("profiles")
                     .insert(userData)
                     .execute()
-                
+
                 // Fetch the newly created profile
                 let userResponse = try await supabase
                     .from("profiles")
@@ -170,7 +170,7 @@ class AuthManager: ObservableObject {
                     .eq("id", value: response.user.id)
                     .single()
                     .execute()
-                
+
                 let decoder = JSONDecoder()
                 currentUser = try decoder.decode(User.self, from: userResponse.data)
                 print("✅ Successfully created and decoded user profile")
@@ -182,7 +182,7 @@ class AuthManager: ObservableObject {
             currentUser = nil
         }
     }
-    
+
     @MainActor
     func signUp(email: String, password: String) async {
         do {
@@ -192,7 +192,7 @@ class AuthManager: ObservableObject {
             )
             print("🔑 Sign up successful, user ID: \(response.user.id)")
             isAuthenticated = true
-            
+
             // Create user profile in profiles table
             let now = ISO8601DateFormatter().string(from: Date())
             let userData = UserInsertData(
@@ -204,13 +204,13 @@ class AuthManager: ObservableObject {
                 subscription_tier: nil,
                 subscription_expires_at: nil
             )
-            
+
             print("📝 Creating user profile with data: \(userData)")
             try await supabase
                 .from("profiles")
                 .insert(userData)
                 .execute()
-            
+
             // Fetch the created user profile
             print("🔍 Fetching newly created user profile")
             let userResponse = try await supabase
@@ -219,7 +219,7 @@ class AuthManager: ObservableObject {
                 .eq("id", value: response.user.id)
                 .single()
                 .execute()
-            
+
             print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
             let decoder = JSONDecoder()
             currentUser = try decoder.decode(User.self, from: userResponse.data)
@@ -229,7 +229,7 @@ class AuthManager: ObservableObject {
             self.error = handleAuthError(error)
         }
     }
-    
+
     @MainActor
     func signOut() async {
         do {
@@ -237,19 +237,19 @@ class AuthManager: ObservableObject {
             if let session = try? await supabase.auth.session {
                 try await supabase.auth.signOut()
             }
-            
+
             // Clear local state
             isAuthenticated = false
             currentUser = nil
             self.error = nil
-            
+
             // Verify session is cleared
             _ = try? await supabase.auth.session
         } catch {
             self.error = error.localizedDescription
         }
     }
-    
+
     @MainActor
     func resetPassword(email: String) async {
         do {
@@ -262,12 +262,12 @@ class AuthManager: ObservableObject {
             self.error = handleAuthError(error)
         }
     }
-    
+
     @MainActor
     func handlePasswordReset(url: URL) async {
         do {
             print("🔑 Processing password reset URL")
-            
+
             // Check for error in URL
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
                let queryItems = components.queryItems,
@@ -278,21 +278,21 @@ class AuthManager: ObservableObject {
                     return
                 }
             }
-            
+
             // Extract the tokens from the URL
             guard let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
                   let fragment = components.fragment else {
                 print("❌ Invalid URL format - missing fragment")
                 throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid reset password URL"])
             }
-            
+
             print("📝 URL fragment: \(fragment)")
-            
+
             // Parse the fragment to get access_token and refresh_token
             let params = fragment.split(separator: "&")
             var accessToken: String?
             var refreshToken: String?
-            
+
             for param in params {
                 let parts = param.split(separator: "=")
                 if parts.count == 2 {
@@ -305,14 +305,14 @@ class AuthManager: ObservableObject {
                     }
                 }
             }
-            
+
             guard let accessToken = accessToken, let refreshToken = refreshToken else {
                 print("❌ Missing tokens in URL")
                 throw NSError(domain: "AuthError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing tokens in reset password URL"])
             }
-            
+
             print("✅ Tokens extracted successfully")
-            
+
             // Exchange the tokens for a session
             let session = try await supabase.auth.setSession(accessToken: accessToken, refreshToken: refreshToken)
             print("✅ Session established successfully")
@@ -323,7 +323,7 @@ class AuthManager: ObservableObject {
             self.error = handleAuthError(error)
         }
     }
-    
+
     @MainActor
     func updatePassword(newPassword: String) async {
         do {
@@ -334,17 +334,17 @@ class AuthManager: ObservableObject {
             self.error = handleAuthError(error)
         }
     }
-    
+
     @MainActor
     func signInWithGoogle() async {
         do {
             print("🔑 Starting Google Sign In process...")
-            
+
             // Use the Supabase callback URL
             let redirectURL = URL(string: "https://kyklpwptsuubycuaaeoq.supabase.co/auth/v1/callback")!
-            
+
             print("🔑 Attempting to sign in with Google...")
-            
+
             // Create a strong reference to the authentication session
             let authSession = try await supabase.auth.signInWithOAuth(
                 provider: .google,
@@ -354,14 +354,14 @@ class AuthManager: ObservableObject {
                     (name: "prompt", value: "consent")
                 ]
             )
-            
+
             print("🔑 Google Sign In successful, user ID: \(authSession.user.id)")
-            
+
             // Ensure we're on the main thread for UI updates
             await MainActor.run {
                 isAuthenticated = true
             }
-            
+
             // Get user profile from profiles table
             print("🔍 Fetching user profile...")
             do {
@@ -371,11 +371,11 @@ class AuthManager: ObservableObject {
                     .eq("id", value: authSession.user.id)
                     .single()
                     .execute()
-                
+
                 print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
                 let decoder = JSONDecoder()
                 let user = try decoder.decode(User.self, from: userResponse.data)
-                
+
                 // Update UI on main thread
                 await MainActor.run {
                     currentUser = user
@@ -385,11 +385,11 @@ class AuthManager: ObservableObject {
                 print("📝 Creating new user profile...")
                 // Create new user profile if it doesn't exist
                 let now = ISO8601DateFormatter().string(from: Date())
-                
+
                 // Safely extract metadata values
                 let fullName = authSession.user.userMetadata["full_name"]?.stringValue ?? ""
                 let avatarUrl = authSession.user.userMetadata["avatar_url"]?.stringValue
-                
+
                 let userData = UserInsertData(
                     id: authSession.user.id.uuidString,
                     full_name: fullName,
@@ -399,13 +399,13 @@ class AuthManager: ObservableObject {
                     subscription_tier: nil,
                     subscription_expires_at: nil
                 )
-                
+
                 print("📝 Creating user profile with data: \(userData)")
                 try await supabase
                     .from("profiles")
                     .insert(userData)
                     .execute()
-                
+
                 // Fetch the newly created user profile
                 print("🔍 Fetching newly created user profile")
                 let userResponse = try await supabase
@@ -414,11 +414,11 @@ class AuthManager: ObservableObject {
                     .eq("id", value: authSession.user.id)
                     .single()
                     .execute()
-                
+
                 print("📦 Raw response data: \(String(data: userResponse.data, encoding: .utf8) ?? "none")")
                 let decoder = JSONDecoder()
                 let user = try decoder.decode(User.self, from: userResponse.data)
-                
+
                 // Update UI on main thread
                 await MainActor.run {
                     currentUser = user
@@ -437,7 +437,7 @@ class AuthManager: ObservableObject {
             }
         }
     }
-    
+
     @MainActor
     func signInWithApple() async {
         do {
@@ -445,10 +445,10 @@ class AuthManager: ObservableObject {
                 provider: .apple,
                 redirectTo: URL(string: "scribo://auth-callback")!
             )
-            
+
             // The response is already a session
             isAuthenticated = true
-            
+
             // Get user profile from profiles table
             let userResponse = try await supabase
                 .from("profiles")
@@ -456,11 +456,11 @@ class AuthManager: ObservableObject {
                 .eq("id", value: response.user.id)
                 .single()
                 .execute()
-            
+
             let decoder = JSONDecoder()
             currentUser = try decoder.decode(User.self, from: userResponse.data)
         } catch {
             self.error = handleAuthError(error)
         }
     }
-} 
+}
