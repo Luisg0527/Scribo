@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import Supabase
+import UIKit
+import Photos
+import CryptoKit
 
 // MARK: - Database Models
 struct TopicRecord: Codable {
@@ -503,28 +506,202 @@ class DataManager: ObservableObject {
     }
 
     // MARK: - Note Attachments
-    func createAttachment(for noteId: UUID, storagePath: String, mimeType: String?, sizeBytes: Int?, kind: String) async throws -> NoteAttachment {
+
+    /// Inserts image metadata for `note_attachments` using **existing columns only**:
+    /// - **Pro / Premium**: `bucket` = `attachments`, `storage_path` = object key (contains `/`), bytes in Supabase Storage.
+    /// - **Free + Photos asset id**: `bucket` = `photo_library`, `storage_path` = `localIdentifier`, thumbnail on disk `ph_thumb_<hash>.jpg`.
+    /// - **Free otherwise**: `bucket` = `local`, `storage_path` = filename in app Documents.
+    /// - **Legacy**: rows with `bucket` = `attachments` and a filename-only `storage_path` still resolve as on-device files.
+    func createImageAttachment(
+        for noteId: UUID,
+        imageJPEGData: Data,
+        assetLocalIdentifier: String?,
+        reuseRelativePathIfAlreadyOnDisk: String? = nil
+    ) async throws -> NoteAttachment {
         let session = try await supabase.auth.session
         let userId = session.user.id
+        let tier = await MainActor.run { SubscriptionManager.shared.currentSubscriptionTier }
+        let maxPhotos = tier.limits.maxPhotosPerNote
+        let existingImages = try await imageAttachmentCount(forNoteId: noteId)
+        if !tier.limits.isUnlimited(maxPhotos), existingImages >= maxPhotos {
+            throw NSError(
+                domain: "DataManager",
+                code: 429,
+                userInfo: [NSLocalizedDescriptionKey: "This note already has the maximum number of photos for your plan."]
+            )
+        }
 
-        let insert = NoteAttachmentInsert(
-            note_id: noteId,
-            uploaded_by: userId,
-            kind: kind,
-            bucket: "attachments",
-            storage_path: storagePath,
-            mime_type: mimeType,
-            size_bytes: sizeBytes
+        let trimmedAsset = assetLocalIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasAssetId = !(trimmedAsset?.isEmpty ?? true)
+
+        switch tier {
+        case .pro, .premium:
+            let objectKey = "\(userId.uuidString.lowercased())/\(noteId.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
+            try await supabase.storage
+                .from(NoteAttachmentBuckets.supabase)
+                .upload(
+                    path: objectKey,
+                    file: imageJPEGData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+            let insert = NoteAttachmentInsert(
+                note_id: noteId,
+                uploaded_by: userId,
+                kind: "image",
+                bucket: NoteAttachmentBuckets.supabase,
+                storage_path: objectKey,
+                mime_type: "image/jpeg",
+                size_bytes: imageJPEGData.count
+            )
+            return try await insertNoteAttachment(insert)
+
+        case .free:
+            if hasAssetId, let assetId = trimmedAsset {
+                guard let thumbData = Self.thumbnailJPEGData(from: imageJPEGData) else {
+                    throw NSError(domain: "DataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not prepare image"])
+                }
+                let thumbName = "ph_thumb_\(Self.shortSHA256HexPrefix(assetId)).jpg"
+                try thumbData.write(to: getDocumentsDirectory().appendingPathComponent(thumbName))
+                let insert = NoteAttachmentInsert(
+                    note_id: noteId,
+                    uploaded_by: userId,
+                    kind: "image",
+                    bucket: NoteAttachmentBuckets.photoLibrary,
+                    storage_path: assetId,
+                    mime_type: "image/jpeg",
+                    size_bytes: thumbData.count
+                )
+                return try await insertNoteAttachment(insert)
+            }
+
+            let relativeName: String
+            if let reuse = reuseRelativePathIfAlreadyOnDisk,
+               !reuse.isEmpty,
+               !reuse.contains("/"),
+               FileManager.default.fileExists(atPath: getDocumentsDirectory().appendingPathComponent(reuse).path) {
+                relativeName = reuse
+            } else {
+                relativeName = "\(UUID().uuidString).jpg"
+                try imageJPEGData.write(to: getDocumentsDirectory().appendingPathComponent(relativeName))
+            }
+            let insert = NoteAttachmentInsert(
+                note_id: noteId,
+                uploaded_by: userId,
+                kind: "image",
+                bucket: NoteAttachmentBuckets.localDevice,
+                storage_path: relativeName,
+                mime_type: "image/jpeg",
+                size_bytes: imageJPEGData.count
+            )
+            return try await insertNoteAttachment(insert)
+        }
+    }
+
+    /// Legacy helper: file already exists under Documents at `storagePath`. Applies tier rules via `createImageAttachment`.
+    func createAttachment(for noteId: UUID, storagePath: String, mimeType: String?, sizeBytes: Int?, kind _: String) async throws -> NoteAttachment {
+        let url = getDocumentsDirectory().appendingPathComponent(storagePath)
+        let data = try Data(contentsOf: url)
+        return try await createImageAttachment(
+            for: noteId,
+            imageJPEGData: data,
+            assetLocalIdentifier: nil,
+            reuseRelativePathIfAlreadyOnDisk: storagePath
         )
+    }
 
+    func imageAttachmentCount(forNoteId noteId: UUID) async throws -> Int {
+        let attachments = try await getAttachments(forNoteId: noteId)
+        return attachments.filter { $0.isImageLike }.count
+    }
+
+    func loadUIImage(for attachment: NoteAttachment) async -> UIImage? {
+        guard attachment.isImageLike else { return nil }
+        switch attachment.imageSemantics {
+        case .localDeviceFile, .legacyLocalInAttachmentsBucket:
+            let url = getDocumentsDirectory().appendingPathComponent(attachment.storage_path)
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        case .photoLibraryReference:
+            let thumbName = "ph_thumb_\(Self.shortSHA256HexPrefix(attachment.storage_path)).jpg"
+            let thumbURL = getDocumentsDirectory().appendingPathComponent(thumbName)
+            if let data = try? Data(contentsOf: thumbURL), let img = UIImage(data: data) {
+                return img
+            }
+            return await loadUIImageFromPhotoLibrary(localIdentifier: attachment.storage_path)
+        case .supabaseStorage:
+            return await loadRemoteUIImage(for: attachment)
+        }
+    }
+
+    private func insertNoteAttachment(_ insert: NoteAttachmentInsert) async throws -> NoteAttachment {
         let response = try await supabase
             .from("note_attachments")
             .insert(insert)
             .select()
             .single()
             .execute()
-
         return try JSONDecoder().decode(NoteAttachment.self, from: response.data)
+    }
+
+    private func loadRemoteUIImage(for attachment: NoteAttachment) async -> UIImage? {
+        let cacheURL = getDocumentsDirectory().appendingPathComponent("remote_img_\(attachment.id.uuidString).jpg")
+        if let cached = try? Data(contentsOf: cacheURL), let img = UIImage(data: cached) {
+            return img
+        }
+        do {
+            let data = try await supabase.storage
+                .from(attachment.bucket)
+                .download(path: attachment.storage_path)
+            try? data.write(to: cacheURL)
+            return UIImage(data: data)
+        } catch {
+            print("Remote image download failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func loadUIImageFromPhotoLibrary(localIdentifier: String) async -> UIImage? {
+        let access: PHAccessLevel = .readWrite
+        let status = PHPhotoLibrary.authorizationStatus(for: access)
+        if status == .notDetermined {
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: access)
+            guard newStatus == .authorized || newStatus == .limited else { return nil }
+        } else if status != .authorized && status != .limited {
+            return nil
+        }
+
+        return await withCheckedContinuation { continuation in
+            let results = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+            guard let asset = results.firstObject else {
+                continuation.resume(returning: nil)
+                return
+            }
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .highQualityFormat
+            options.isNetworkAccessAllowed = true
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+                let image = data.flatMap { UIImage(data: $0) }
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    private static func shortSHA256HexPrefix(_ string: String) -> String {
+        let digest = SHA256.hash(data: Data(string.utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func thumbnailJPEGData(from jpegData: Data, maxSide: CGFloat = 512, quality: CGFloat = 0.78) -> Data? {
+        guard let image = UIImage(data: jpegData) else { return nil }
+        let size = image.size
+        let scale = min(1, maxSide / max(size.width, size.height))
+        guard scale < 1 else { return image.jpegData(compressionQuality: quality) }
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let scaled = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+        return scaled.jpegData(compressionQuality: quality)
     }
 
     func getMyAttachments() async throws -> [NoteAttachment] {

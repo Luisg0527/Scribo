@@ -5,28 +5,17 @@ struct FullscreenImageViewer: View {
     let allImages: [UIImage]
     let currentIndex: Int
     @Binding var isPresented: Bool
+    /// When set with `zoomTransitionSourceID`, enables the system zoom presentation transition (iOS 18+).
+    var transitionNamespace: Namespace.ID? = nil
+    var zoomTransitionSourceID: Int? = nil
     @State private var showOverlay = true
-    @State private var isShowingGallery = false
-    @State private var selectedIndex: Int = 0
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
-            ZoomableScrollView {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Image \(currentIndex + 1) of \(allImages.count)")
-            }
-            .ignoresSafeArea()
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) { 
-                    showOverlay.toggle() 
-                }
-            }
+
+            zoomableScrollContent
 
             if showOverlay {
                 VStack {
@@ -50,18 +39,6 @@ struct FullscreenImageViewer: View {
                         }
                         .accessibilityLabel("Share image")
                         .accessibilityHint("Double tap to share this image")
-
-                        Button {
-                            selectedIndex = currentIndex
-                            isShowingGallery = true
-                        } label: {
-                            Image(systemName: "square.grid.2x2")
-                                .font(.title2)
-                                .padding(.trailing)
-                                .foregroundColor(.white)
-                        }
-                        .accessibilityLabel("Show gallery")
-                        .accessibilityHint("Double tap to view all images in a grid")
                     }
                     .background(Color.black.opacity(0.6))
                     Spacer()
@@ -69,12 +46,31 @@ struct FullscreenImageViewer: View {
                 .transition(.opacity)
             }
         }
-        .sheet(isPresented: $isShowingGallery) {
-            ImageGalleryGridView(
-                images: allImages,
-                selectedIndex: $selectedIndex,
-                isPresented: $isShowingGallery
-            )
+    }
+
+    @ViewBuilder
+    private var zoomableScrollContent: some View {
+        if let ns = transitionNamespace, let sid = zoomTransitionSourceID {
+            zoomScrollBase
+                .navigationTransition(.zoom(sourceID: sid, in: ns))
+        } else {
+            zoomScrollBase
+        }
+    }
+
+    private var zoomScrollBase: some View {
+        ZoomableScrollView {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityLabel("Image \(currentIndex + 1) of \(allImages.count)")
+        }
+        .ignoresSafeArea()
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showOverlay.toggle()
+            }
         }
     }
 

@@ -1,17 +1,6 @@
 import SwiftUI
+import UIKit
 import CoreImage.CIFilterBuiltins
-
-// MARK: - Top-only rounded rectangle (flat bottom)
-struct TopRoundedRectangle: Shape {
-    var radius: CGFloat
-    func path(in rect: CGRect) -> Path {
-        Path(UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: [.topLeft, .topRight],
-            cornerRadii: CGSize(width: radius, height: radius)
-        ).cgPath)
-    }
-}
 
 // MARK: - Topic Color Storage (for space/notebook color coding)
 enum TopicColorStore {
@@ -39,6 +28,28 @@ private let notebookColorPalette: [String] = [
     "#FFCC00", "#AF52DE", "#A2845E", "#007AFF"
 ]
 
+private struct CreationBadgeIconView: View {
+    @State private var didAnimate = false
+    @State private var scale: CGFloat = 0.78
+
+    var body: some View {
+        Image("ScriboLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 96, height: 96)
+            .scaleEffect(scale)
+            .onAppear {
+                guard !didAnimate else { return }
+                didAnimate = true
+
+                scale = 0.78
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                    scale = 1.0
+                }
+            }
+    }
+}
+
 // MARK: - Highlighted Text View
 struct HighlightedText: View {
     let text: String
@@ -62,6 +73,15 @@ struct HighlightedText: View {
     }
 }
 
+@ViewBuilder
+private func bulkSelectionBadge(isSelected: Bool) -> some View {
+    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+        .font(.system(size: 22, weight: .semibold))
+        .foregroundStyle(isSelected ? Color.appAccent1 : Color.primary.opacity(0.4))
+        .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+        .padding(8)
+}
+
 // MARK: - Topic Preview View
 struct TopicPreviewView: View {
     let topic: Topic
@@ -69,14 +89,18 @@ struct TopicPreviewView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var searchState: SearchState
     @ObservedObject var dataManager: DataManager
-    @State private var isShowingDeleteAlert: Bool = false
     @State private var isShowingShareSheet: Bool = false
-    @State private var subtopicToDelete: (Topic, Subtopic)?
-    @State private var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isBulkSelectingSubtopics = false
+    @State private var selectedSubtopicIdsForDeletion: Set<UUID> = []
+    @State private var confirmBulkDeleteSubtopics = false
     @State private var isShowingNewSubtopicSheet = false
-    @State private var isShowingNewNoteSheet = false
-    @State private var selectedSubtopic: Subtopic?
-    @State private var isShowingEditSubtopicSheet = false
+    @State private var editedTopicTitle = ""
+    @FocusState private var isTopicTitleFocused: Bool
+    @State private var topicTitleHasChanges = false
+    
+    private var displayTopicTitle: String {
+        dataManager.topics.first(where: { $0.id == topic.id })?.title ?? editedTopicTitle
+    }
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -88,73 +112,77 @@ struct TopicPreviewView: View {
                 .padding(.vertical)
             }
             .background(Color.appBackground)
-            Button(action: { isShowingNewSubtopicSheet = true }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 50, height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.appAccent1)
-                    )
-                    .contentShape(Rectangle())
+            .overlay(alignment: .bottom) {
+                TabBarContentBottomFade()
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 40)
-            .padding(.bottom, 24)
+            if !isBulkSelectingSubtopics {
+                Button(action: { isShowingNewSubtopicSheet = true }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 50, height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.appAccent1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 30)
+                .padding(.bottom, 24)
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isBulkSelectingSubtopics {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack {
+                        Text("Tap subtopics to select")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("Delete") {
+                            confirmBulkDeleteSubtopics = true
+                        }
+                        .fontWeight(.semibold)
+                        .disabled(selectedSubtopicIdsForDeletion.isEmpty)
+                        .foregroundColor(selectedSubtopicIdsForDeletion.isEmpty ? Color(.systemGray3) : .red)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.appBackground)
+                }
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .fullScreenCover(isPresented: $isShowingShareSheet) {
             TopicShareView(
-                topicTitle: topic.title,
+                topicTitle: displayTopicTitle,
                 inviteURL: "https://scribo.app/invite/topic/\(topic.id.uuidString)",
                 isPresented: $isShowingShareSheet
             )
         }
-        .sheet(isPresented: $isShowingNewSubtopicSheet) {
+        .fullScreenCover(isPresented: $isShowingNewSubtopicSheet) {
             NewSubtopicView(topic: topic, dataManager: dataManager)
         }
-        .fullScreenCover(isPresented: $isShowingNewNoteSheet) {
-            if let subtopic = selectedSubtopic {
-                CreateNoteSheetView(
-                    isPresented: $isShowingNewNoteSheet,
-                    dataManager: dataManager,
-                    initialTopic: topic,
-                    initialSubtopic: subtopic
-                )
-            }
+        .onAppear {
+            syncTopicTitleFromDataManager()
         }
-        .sheet(isPresented: $isShowingEditSubtopicSheet) {
-            if let subtopic = selectedSubtopic {
-                EditSubtopicView(subtopic: subtopic, topic: topic, dataManager: dataManager)
-            }
-        }
-        .alert("Delete Subtopic", isPresented: .init(
-            get: { subtopicToDelete != nil },
-            set: { if !$0 { subtopicToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) {
-                subtopicToDelete = nil
-            }
+        .alert("Delete selected subtopics?", isPresented: $confirmBulkDeleteSubtopics) {
+            Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
-                if let (topic, subtopic) = subtopicToDelete {
-                    dataManager.deleteSubtopic(subtopic, from: topic)
+                let ids = selectedSubtopicIdsForDeletion
+                for id in ids {
+                    guard let t = dataManager.topics.first(where: { $0.id == topic.id }),
+                          let st = t.subtopics.first(where: { $0.id == id }) else { continue }
+                    dataManager.deleteSubtopic(st, from: t)
                 }
-                subtopicToDelete = nil
+                selectedSubtopicIdsForDeletion = []
+                isBulkSelectingSubtopics = false
             }
         } message: {
-            Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
-        }
-        .alert("Delete Notebook", isPresented: $isShowingDeleteAlert) {
-            Button("Cancel", role: .cancel) {
-                isShowingDeleteAlert = false
-            }
-            Button("Delete", role: .destructive) {
-                dataManager.deleteTopic(topic)
-                isShowingDeleteAlert = false
-                dismiss()
-            }
+            Text("This will permanently remove \(selectedSubtopicIdsForDeletion.count) subtopic(s) and all notes inside them.")
         }
     }
     
@@ -264,23 +292,49 @@ struct TopicPreviewView: View {
     }
     
     private var headerView: some View {
-        ZStack {
-            HStack {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.appText)
-                        .padding(8)
-                        .padding(.horizontal, 8)
+        HStack(alignment: .center, spacing: 4) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.appText)
+                    .frame(width: 44, height: 44)
+            }
+            TextField("Untitled", text: $editedTopicTitle)
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.appText)
+                .multilineTextAlignment(.center)
+                .focused($isTopicTitleFocused)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.appText, lineWidth: 2)
+                        .opacity(isTopicTitleFocused ? 1 : 0)
+                )
+                .animation(.easeInOut(duration: 0.25), value: isTopicTitleFocused)
+                .onChange(of: editedTopicTitle) { _, _ in topicTitleHasChanges = true }
+                .onChange(of: isTopicTitleFocused) { _, focused in
+                    if !focused && topicTitleHasChanges { Task { await saveTopicTitleIfNeeded() } }
                 }
-                
-                Spacer()
-                
+                .disabled(isBulkSelectingSubtopics)
+            if isBulkSelectingSubtopics {
+                Button("Cancel") {
+                    isBulkSelectingSubtopics = false
+                    selectedSubtopicIdsForDeletion = []
+                }
+                .font(.body.weight(.medium))
+                .foregroundColor(.appAccent1)
+                .frame(width: 60, alignment: .trailing)
+            } else {
                 Menu {
                     Button(action: { isShowingShareSheet = true }) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
-                    Button(role: .destructive, action: { isShowingDeleteAlert = true }) {
+                    Button(role: .destructive, action: {
+                        selectedSubtopicIdsForDeletion = []
+                        isBulkSelectingSubtopics = true
+                    }) {
                         Label("Delete", systemImage: "trash")
                     }
                 } label: {
@@ -290,16 +344,43 @@ struct TopicPreviewView: View {
                         .frame(width: 44, height: 44)
                 }
             }
-            
-            Text(topic.title)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.appText)
-                .lineLimit(1)
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.horizontal, 24)
+        .padding(.top, -8)
         .padding(.bottom, 4)
+    }
+    
+    private func syncTopicTitleFromDataManager() {
+        editedTopicTitle = dataManager.topics.first(where: { $0.id == topic.id })?.title ?? topic.title
+        topicTitleHasChanges = false
+    }
+    
+    private func saveTopicTitleIfNeeded() async {
+        let trimmed = editedTopicTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let t = dataManager.topics.first(where: { $0.id == topic.id }) else {
+            await MainActor.run { topicTitleHasChanges = false }
+            return
+        }
+        let newTitle = trimmed.isEmpty ? t.title : trimmed
+        guard newTitle != t.title else {
+            await MainActor.run {
+                topicTitleHasChanges = false
+                editedTopicTitle = t.title
+            }
+            return
+        }
+        do {
+            try await dataManager.updateTopic(t, newTitle: newTitle)
+            await MainActor.run {
+                topicTitleHasChanges = false
+                editedTopicTitle = newTitle
+            }
+        } catch {
+            await MainActor.run {
+                editedTopicTitle = t.title
+                topicTitleHasChanges = false
+            }
+        }
     }
                 
     private var subtopicsGridView: some View {
@@ -307,28 +388,34 @@ struct TopicPreviewView: View {
             GridItem(.fixed(200), spacing: 2),
             GridItem(.fixed(200), spacing: 2)
         ], spacing: 2) {
-            ForEach(topic.subtopics) { subtopic in
+            ForEach(Array(topic.subtopics.enumerated()), id: \.element.id) { index, subtopic in
                 subtopicCard(subtopic)
+                    .staggeredCardPopIn(delay: Double(index) * 0.05)
             }
         }
         .padding(.horizontal)
     }
     
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
-        NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
-            SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
-        }
-        .contextMenu {
-            Button(action: {
-                selectedSubtopic = subtopic
-                isShowingEditSubtopicSheet = true
-            }) {
-                Label("Edit Subtopic", systemImage: "pencil")
-            }
-            Button(role: .destructive, action: {
-                subtopicToDelete = (topic, subtopic)
-            }) {
-                Label("Delete Subtopic", systemImage: "trash")
+        Group {
+            if isBulkSelectingSubtopics {
+                Button {
+                    if selectedSubtopicIdsForDeletion.contains(subtopic.id) {
+                        selectedSubtopicIdsForDeletion.remove(subtopic.id)
+                    } else {
+                        selectedSubtopicIdsForDeletion.insert(subtopic.id)
+                    }
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
+                        bulkSelectionBadge(isSelected: selectedSubtopicIdsForDeletion.contains(subtopic.id))
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
+                    SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
+                }
             }
         }
     }
@@ -350,8 +437,19 @@ struct SubtopicPreviewView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
-    @State private var noteToDelete: (Topic, Subtopic, Note)?
+    @State private var isBulkSelectingNotes = false
+    @State private var selectedNoteIdsForDeletion: Set<UUID> = []
+    @State private var confirmBulkDeleteNotes = false
     @State private var isShowingNewNoteSheet = false
+    @State private var newNoteDraftPhotos: [PendingNotePhoto] = []
+    @State private var newNoteDraftBody: String = ""
+    @State private var newNoteCameraPresented = false
+    @State private var newNoteDocPickerPresented = false
+    @State private var newNotePickedDocument: URL?
+    @State private var newNoteDocImportError = false
+    @State private var editedSubtopicTitle = ""
+    @FocusState private var isSubtopicTitleFocused: Bool
+    @State private var subtopicTitleHasChanges = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
 
@@ -361,111 +459,337 @@ struct SubtopicPreviewView: View {
                 headerView
                 ScrollView {
                     LazyVGrid(columns: [
-                        GridItem(.fixed(200), spacing: 2),
-                        GridItem(.fixed(200), spacing: 2)
-                    ], spacing: 2) {
-                        ForEach(subtopic.notes) { note in
-                            NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
-                                .onAppear {
-                                    Task {
-                                        do {
-                                            try await dataManager.addRecentNote(noteId: note.id.uuidString)
-                                            await MainActor.run {
-                                                noteDisplayState.currentNote = note
-                                                noteDisplayState.currentTopic = topic
-                                                noteDisplayState.currentSubtopic = subtopic
+                        GridItem(.flexible(), spacing: 0)
+                    ], spacing: 6) {
+                        ForEach(Array(subtopic.notes.enumerated()), id: \.element.id) { index, note in
+                            Group {
+                                if isBulkSelectingNotes {
+                                    Button {
+                                        if selectedNoteIdsForDeletion.contains(note.id) {
+                                            selectedNoteIdsForDeletion.remove(note.id)
+                                        } else {
+                                            selectedNoteIdsForDeletion.insert(note.id)
+                                        }
+                                    } label: {
+                                        ZStack(alignment: .topTrailing) {
+                                            NoteCardView(note: note, dataManager: dataManager, expanded: true)
+                                            bulkSelectionBadge(isSelected: selectedNoteIdsForDeletion.contains(note.id))
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    NavigationLink(destination: NoteView(note: note, isPresented: $isPresented, dataManager: dataManager)
+                                        .onAppear {
+                                            Task {
+                                                do {
+                                                    try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                                                    await MainActor.run {
+                                                        noteDisplayState.currentNote = note
+                                                        noteDisplayState.currentTopic = topic
+                                                        noteDisplayState.currentSubtopic = subtopic
+                                                    }
+                                                } catch {
+                                                    print("Error updating recent notes: \(error)")
+                                                }
                                             }
-                                        } catch {
-                                            print("Error updating recent notes: \(error)")
                                         }
+                                        .onDisappear {
+                                            noteDisplayState.currentNote = nil
+                                        }
+                                    ) {
+                                        NoteCardView(note: note, dataManager: dataManager, expanded: true)
                                     }
                                 }
-                                .onDisappear {
-                                    noteDisplayState.currentNote = nil
-                                }
-                            ) {
-                                NoteCardView(note: note, dataManager: dataManager)
-                                    .contextMenu {
-                                        Button(role: .destructive, action: {
-                                            noteToDelete = (topic, subtopic, note)
-                                        }) {
-                                            Label("Delete Note", systemImage: "trash")
-                                        }
-                                    }
                             }
+                            .staggeredCardPopIn(delay: Double(index) * 0.045)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.top)
+                    .padding(.bottom, 20)
+                }
+                .overlay(alignment: .top) {
+                    ScrollContentTopFade()
+                }
+                .overlay(alignment: .bottom) {
+                    TabBarContentBottomFade()
                 }
             }
-            Button(action: { isShowingNewNoteSheet = true }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 50, height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.appAccent1)
-                    )
-                    .contentShape(Rectangle())
+            if !isBulkSelectingNotes {
+                Button(action: {
+                    newNoteDraftPhotos = []
+                    newNoteDraftBody = ""
+                    isShowingNewNoteSheet = true
+                }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 50, height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.appAccent1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 15)
+                .padding(.bottom, 24)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 40)
-            .padding(.bottom, 24)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isBulkSelectingNotes {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack {
+                        Text("Tap notes to select")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("Delete") {
+                            confirmBulkDeleteNotes = true
+                        }
+                        .fontWeight(.semibold)
+                        .disabled(selectedNoteIdsForDeletion.isEmpty)
+                        .foregroundColor(selectedNoteIdsForDeletion.isEmpty ? Color(.systemGray3) : .red)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.appBackground)
+                }
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .fullScreenCover(isPresented: $isShowingNewNoteSheet) {
             CreateNoteSheetView(
                 isPresented: $isShowingNewNoteSheet,
+                pendingPhotos: $newNoteDraftPhotos,
+                noteBody: $newNoteDraftBody,
                 dataManager: dataManager,
                 initialTopic: topic,
-                initialSubtopic: subtopic
+                initialSubtopic: subtopic,
+                onRequestCamera: { newNoteCameraPresented = true },
+                onRequestDocument: { newNoteDocPickerPresented = true }
             )
+        }
+        .fullScreenCover(isPresented: $newNoteCameraPresented) {
+            CameraView { image in
+                if let image = image {
+                    handleNewNoteCameraImage(image)
+                }
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $newNoteDocPickerPresented) {
+            DocumentPicker(selectedDocument: $newNotePickedDocument)
+        }
+        .onChange(of: newNotePickedDocument) { _, newValue in
+            guard let url = newValue else { return }
+            Task {
+                await handleNewNotePickedDocument(url: url)
+                await MainActor.run { newNotePickedDocument = nil }
+            }
+        }
+        .alert("Couldn’t read file", isPresented: $newNoteDocImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Try an image, PDF, or plain text.")
         }
         .onAppear {
             noteDisplayState.currentNote = nil
+            syncSubtopicTitleFromDataManager()
         }
-        .alert("Delete Note", isPresented: .init(
-            get: { noteToDelete != nil },
-            set: { if !$0 { noteToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) {
-                noteToDelete = nil
-            }
+        .alert("Delete selected notes?", isPresented: $confirmBulkDeleteNotes) {
+            Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
-                if let (topic, subtopic, note) = noteToDelete {
-                    dataManager.deleteNote(note, from: subtopic, from: topic)
+                let ids = selectedNoteIdsForDeletion
+                for id in ids {
+                    guard let t = dataManager.topics.first(where: { $0.id == topic.id }),
+                          let st = t.subtopics.first(where: { $0.id == subtopic.id }),
+                          let n = st.notes.first(where: { $0.id == id }) else { continue }
+                    dataManager.deleteNote(n, from: st, from: t)
                 }
-                noteToDelete = nil
+                selectedNoteIdsForDeletion = []
+                isBulkSelectingNotes = false
             }
         } message: {
-            Text("Are you sure you want to delete this note?")
+            Text("This will permanently remove \(selectedNoteIdsForDeletion.count) note(s).")
+        }
+    }
+
+    private func mergeNewNoteDraft(photos: [PendingNotePhoto], text: String) {
+        if isShowingNewNoteSheet {
+            newNoteDraftPhotos.append(contentsOf: photos)
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty {
+                if newNoteDraftBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    newNoteDraftBody = t
+                } else {
+                    newNoteDraftBody += "\n\n" + t
+                }
+            }
+        } else {
+            newNoteDraftPhotos = photos
+            newNoteDraftBody = text
+            isShowingNewNoteSheet = true
+        }
+    }
+
+    private func handleNewNoteCameraImage(_ image: UIImage) {
+        let entry = PendingNotePhoto(image: image, photoLibraryAssetId: nil)
+        mergeNewNoteDraft(photos: [entry], text: "")
+    }
+
+    private func handleNewNotePickedDocument(url: URL) async {
+        let needsAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if needsAccess { url.stopAccessingSecurityScopedResource() }
+        }
+        let (photos, text) = CreateNoteDraftDocument.load(url: url)
+        await MainActor.run {
+            if photos.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                newNoteDocImportError = true
+                return
+            }
+            mergeNewNoteDraft(photos: photos, text: text)
         }
     }
 
     private var headerView: some View {
-        ZStack {
-            HStack {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.appText)
-                        .padding(8)
-                        .padding(.horizontal, 8)
-                }
-                Spacer()
+        HStack(alignment: .center, spacing: 4) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.appText)
+                    .frame(width: 44, height: 44)
             }
-            Text(subtopic.title)
+            TextField("Untitled", text: $editedSubtopicTitle)
                 .font(.headline)
                 .fontWeight(.semibold)
                 .foregroundColor(.appText)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .focused($isSubtopicTitleFocused)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.appText, lineWidth: 2)
+                        .opacity(isSubtopicTitleFocused ? 1 : 0)
+                )
+                .animation(.easeInOut(duration: 0.25), value: isSubtopicTitleFocused)
+                .onChange(of: editedSubtopicTitle) { _, _ in subtopicTitleHasChanges = true }
+                .onChange(of: isSubtopicTitleFocused) { _, focused in
+                    if !focused && subtopicTitleHasChanges { Task { await saveSubtopicTitleIfNeeded() } }
+                }
+                .disabled(isBulkSelectingNotes)
+            if isBulkSelectingNotes {
+                Button("Cancel") {
+                    isBulkSelectingNotes = false
+                    selectedNoteIdsForDeletion = []
+                }
+                .font(.body.weight(.medium))
+                .foregroundColor(.appAccent1)
+                .frame(width: 60, alignment: .trailing)
+            } else {
+                Menu {
+                    Button(role: .destructive, action: {
+                        selectedNoteIdsForDeletion = []
+                        isBulkSelectingNotes = true
+                    }) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.appText)
+                        .frame(width: 44, height: 44)
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 4)
     }
+    
+    private func syncSubtopicTitleFromDataManager() {
+        if let t = dataManager.topics.first(where: { $0.id == topic.id }),
+           let st = t.subtopics.first(where: { $0.id == subtopic.id }) {
+            editedSubtopicTitle = st.title
+        } else {
+            editedSubtopicTitle = subtopic.title
+        }
+        subtopicTitleHasChanges = false
+    }
+    
+    private func saveSubtopicTitleIfNeeded() async {
+        let trimmed = editedSubtopicTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let t = dataManager.topics.first(where: { $0.id == topic.id }),
+              let st = t.subtopics.first(where: { $0.id == subtopic.id }) else {
+            await MainActor.run { subtopicTitleHasChanges = false }
+            return
+        }
+        let newTitle = trimmed.isEmpty ? st.title : trimmed
+        guard newTitle != st.title else {
+            await MainActor.run {
+                subtopicTitleHasChanges = false
+                editedSubtopicTitle = st.title
+            }
+            return
+        }
+        do {
+            try await dataManager.updateSubtopic(st, in: t, newTitle: newTitle)
+            await MainActor.run {
+                subtopicTitleHasChanges = false
+                editedSubtopicTitle = newTitle
+                if noteDisplayState.currentSubtopic?.id == subtopic.id,
+                   let t2 = dataManager.topics.first(where: { $0.id == topic.id }),
+                   let st2 = t2.subtopics.first(where: { $0.id == subtopic.id }) {
+                    noteDisplayState.currentSubtopic = st2
+                }
+            }
+        } catch {
+            await MainActor.run {
+                editedSubtopicTitle = st.title
+                subtopicTitleHasChanges = false
+            }
+        }
+    }
+}
+
+// MARK: - Stacked card preview note (image-first, then first text note)
+private func resolvePreviewNoteForSubtopic(_ subtopic: Subtopic, dataManager: DataManager) async -> Note? {
+    for note in subtopic.notes {
+        do {
+            let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+            if attachments.contains(where: { $0.isImageLike }) {
+                return note
+            }
+        } catch {
+            continue
+        }
+    }
+    if let textNote = subtopic.notes.first(where: { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        return textNote
+    }
+    return subtopic.notes.first
+}
+
+private func resolvePreviewNoteForTopic(_ topic: Topic, dataManager: DataManager) async -> Note? {
+    let ordered = topic.subtopics.flatMap(\.notes)
+    for note in ordered {
+        do {
+            let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+            if attachments.contains(where: { $0.isImageLike }) {
+                return note
+            }
+        } catch {
+            continue
+        }
+    }
+    if let textNote = ordered.first(where: { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+        return textNote
+    }
+    return ordered.first
 }
 
 // MARK: - Subtopic Card View (same look as note cards: first note preview, centered title & count)
@@ -474,14 +798,12 @@ struct SubtopicCardView: View {
     @ObservedObject var dataManager: DataManager
     @Environment(\.colorScheme) var colorScheme
     @State private var thumbnailImage: UIImage?
-    
-    private var firstNote: Note? { subtopic.notes.first }
-    
+    @State private var previewNote: Note?
+
     var body: some View {
         VStack(alignment: .center, spacing: 8) {
             // Note square with stacked card effect (second card behind, rotated left)
             ZStack {
-                // Back card – visible gray so the stack reads clearly
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(colorScheme == .dark ? .systemGray3 : .systemGray4))
                     .frame(width: 160, height: 124)
@@ -512,25 +834,49 @@ struct SubtopicCardView: View {
         .frame(width: 168, height: 184)
         .padding()
         .background(Color.clear)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color(.systemGray5), lineWidth: 0.5)
-        )
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
-        .task(id: firstNote?.id) {
-            await loadThumbnail()
+        .task(id: "\(subtopic.id.uuidString)-\(subtopic.notes.count)") {
+            await MainActor.run {
+                thumbnailImage = nil
+                previewNote = nil
+            }
+            let resolved = await resolvePreviewNoteForSubtopic(subtopic, dataManager: dataManager)
+            guard let note = resolved else { return }
+            do {
+                let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+                if let att = attachments.first(where: { $0.isImageLike }),
+                   let image = await dataManager.loadUIImage(for: att) {
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.48, dampingFraction: 0.82)) {
+                            previewNote = note
+                            thumbnailImage = image
+                        }
+                    }
+                    return
+                }
+            } catch {}
+            await MainActor.run {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.88)) {
+                    previewNote = note
+                    thumbnailImage = nil
+                }
+            }
         }
     }
     
     @ViewBuilder
     private var cardMediaBlock: some View {
-        if let note = firstNote {
+        if let note = previewNote {
             if let image = thumbnailImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(width: 160, height: 124)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.92)),
+                        removal: .opacity
+                    ))
             } else if !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(note.content)
                     .font(.subheadline)
@@ -540,6 +886,7 @@ struct SubtopicCardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(14)
                     .background(Color(.systemBackground))
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
             } else {
                 placeholderBlock
             }
@@ -558,26 +905,142 @@ struct SubtopicCardView: View {
                 .foregroundColor(.gray.opacity(0.6))
         }
     }
-    
-    private func loadThumbnail() async {
-        guard let note = firstNote else { return }
-        do {
-            let attachments = try await dataManager.getAttachments(forNoteId: note.id)
-            let imageAttachment = attachments.first { att in
-                let mime = att.mime_type?.lowercased() ?? ""
-                return mime.hasPrefix("image/") || att.kind.lowercased() == "photo"
+}
+
+// MARK: - Topic Card View (All Notebooks — same stacked-card layout as SubtopicCardView)
+struct TopicCardView: View {
+    let topic: Topic
+    @ObservedObject var dataManager: DataManager
+    @Environment(\.colorScheme) var colorScheme
+    @State private var thumbnailImage: UIImage?
+    @State private var previewNote: Note?
+
+    private var orderedNotes: [Note] {
+        topic.subtopics.flatMap(\.notes)
+    }
+
+    private var totalNoteCount: Int {
+        topic.subtopics.reduce(0) { $0 + $1.notes.count }
+    }
+
+    /// Rear “peek” card uses the notebook color; falls back to neutral gray if unset.
+    private var stackedBackCardFill: Color {
+        if let c = TopicColorStore.color(for: topic.id) {
+            return c.opacity(colorScheme == .dark ? 0.55 : 0.72)
+        }
+        return Color(colorScheme == .dark ? .systemGray3 : .systemGray4)
+    }
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(stackedBackCardFill)
+                    .frame(width: 160, height: 124)
+                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                    .rotationEffect(.degrees(-6))
+                    .offset(x: -6, y: 4)
+                cardMediaBlock
+                    .frame(width: 160, height: 124)
+                    .clipped()
+                    .cornerRadius(8)
             }
-            guard let att = imageAttachment else { return }
-            let dir = dataManager.getDocumentsDirectory()
-            let fileURL = dir.appendingPathComponent(att.storage_path)
-            guard FileManager.default.fileExists(atPath: fileURL.path),
-                  let data = try? Data(contentsOf: fileURL),
-                  let image = UIImage(data: data) else { return }
+            .frame(width: 168, height: 130)
+
+            HStack(alignment: .center, spacing: 0) {
+                Spacer(minLength: 0)
+                HStack(alignment: .center, spacing: 6) {
+                    Text(topic.title)
+                        .font(.subheadline)
+                        .fontWeight(.regular)
+                        .foregroundColor(Color(.secondaryLabel))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 146, alignment: .center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 168)
+
+            Text("\(totalNoteCount) notes")
+                .font(.caption)
+                .foregroundColor(Color(.secondaryLabel))
+                .frame(width: 168, alignment: .center)
+        }
+        .frame(width: 168, height: 184)
+        .padding()
+        .background(Color.clear)
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .task(id: "\(topic.id.uuidString)-\(orderedNotes.count)") {
             await MainActor.run {
-                thumbnailImage = image
+                thumbnailImage = nil
+                previewNote = nil
             }
-        } catch {
-            // Ignore; card will show text preview or placeholder
+            let resolved = await resolvePreviewNoteForTopic(topic, dataManager: dataManager)
+            guard let note = resolved else { return }
+            do {
+                let attachments = try await dataManager.getAttachments(forNoteId: note.id)
+                if let att = attachments.first(where: { $0.isImageLike }),
+                   let image = await dataManager.loadUIImage(for: att) {
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.48, dampingFraction: 0.82)) {
+                            previewNote = note
+                            thumbnailImage = image
+                        }
+                    }
+                    return
+                }
+            } catch {}
+            await MainActor.run {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.88)) {
+                    previewNote = note
+                    thumbnailImage = nil
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var cardMediaBlock: some View {
+        if let note = previewNote {
+            if let image = thumbnailImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 160, height: 124)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.92)),
+                        removal: .opacity
+                    ))
+            } else if !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(note.content)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(14)
+                    .background(Color(.systemBackground))
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+            } else {
+                placeholderBlock
+            }
+        } else {
+            placeholderBlock
+        }
+    }
+
+    private var placeholderBlock: some View {
+        ZStack {
+            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
+            Image(systemName: "photo.on.rectangle")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .foregroundColor(.gray.opacity(0.6))
         }
     }
 }
@@ -585,38 +1048,44 @@ struct SubtopicCardView: View {
 struct NoteCardView: View {
     let note: Note
     @ObservedObject var dataManager: DataManager
+    /// Full-width layout for single-column grids (e.g. subtopic note list).
+    var expanded: Bool = false
     @Environment(\.colorScheme) var colorScheme
     @State private var thumbnailImage: UIImage?
 
+    private var mediaHeight: CGFloat { expanded ? 240 : 168 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image, text preview, or placeholder — always on top (inner card)
             cardMediaBlock
-                .frame(width: 160, height: 124)
+                .frame(minWidth: expanded ? 0 : 200, maxWidth: expanded ? .infinity : 160)
+                .frame(height: mediaHeight)
                 .clipped()
                 .cornerRadius(8)
                 .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
                 .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
 
-            // Fixed-height title area so cards align; show title or empty space
             Group {
                 if note.title.isEmpty {
                     Color.clear
+                        .frame(height: expanded ? 0 : 40)
                 } else {
                     Text(note.title)
-                        .font(.subheadline)
+                        .font(expanded ? .body : .subheadline)
                         .fontWeight(.regular)
                         .foregroundColor(Color(.secondaryLabel))
-                        .lineLimit(2)
+                        .lineLimit(expanded ? 4 : 2)
                         .truncationMode(.tail)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .frame(width: 160, height: 40)
             .frame(maxWidth: .infinity, alignment: .center)
+            .frame(minHeight: expanded ? (note.title.isEmpty ? 0 : 48) : 40, maxHeight: expanded ? nil : 40)
         }
-        .frame(width: 160, height: 180)
-        .padding()
+        .frame(maxWidth: expanded ? .infinity : nil)
+        .frame(width: expanded ? nil : 160, height: expanded ? nil : 180)
+        .padding(expanded ? EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12) : EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
         .background(Color.clear)
         .cornerRadius(14)
         .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
@@ -631,16 +1100,19 @@ struct NoteCardView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 160, height: 124)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.94)),
+                    removal: .opacity
+                ))
         } else if !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // Text preview when no image
             Text(note.content)
-                .font(.subheadline)
+                .font(expanded ? .body : .subheadline)
                 .foregroundColor(.secondary)
-                .lineLimit(3)
+                .lineLimit(expanded ? 10 : 3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(14)
+                .padding(expanded ? 18 : 14)
                 .background(Color(colorScheme == .dark ? .systemGray5 : .systemGray6))
         } else {
             ZStack {
@@ -648,27 +1120,23 @@ struct NoteCardView: View {
                 Image(systemName: "photo.on.rectangle")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 40, height: 40)
+                    .frame(width: expanded ? 56 : 40, height: expanded ? 56 : 40)
                     .foregroundColor(.gray.opacity(0.6))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private func loadThumbnail() async {
         do {
             let attachments = try await dataManager.getAttachments(forNoteId: note.id)
-            let imageAttachment = attachments.first { att in
-                let mime = att.mime_type?.lowercased() ?? ""
-                return mime.hasPrefix("image/") || att.kind.lowercased() == "photo"
-            }
+            let imageAttachment = attachments.first(where: { $0.isImageLike })
             guard let att = imageAttachment else { return }
-            let dir = dataManager.getDocumentsDirectory()
-            let fileURL = dir.appendingPathComponent(att.storage_path)
-            guard FileManager.default.fileExists(atPath: fileURL.path),
-                  let data = try? Data(contentsOf: fileURL),
-                  let image = UIImage(data: data) else { return }
+            guard let image = await dataManager.loadUIImage(for: att) else { return }
             await MainActor.run {
-                thumbnailImage = image
+                withAnimation(.spring(response: 0.48, dampingFraction: 0.82)) {
+                    thumbnailImage = image
+                }
             }
         } catch {
             // Ignore; card will show text preview or placeholder
@@ -825,13 +1293,7 @@ struct CreateNewNotebookFlowView: View {
     private var createNewSpaceStep: some View {
         VStack(spacing: 24) {
             Spacer()
-            ZStack {
-                Circle().stroke(Color(hex: "30D158"), lineWidth: 3).frame(width: 48, height: 48).offset(x: -14, y: -14)
-                Circle().stroke(Color(hex: "FF2D55"), lineWidth: 3).frame(width: 48, height: 48).offset(x: 14, y: -14)
-                Circle().stroke(Color(hex: "5AC8FA"), lineWidth: 3).frame(width: 48, height: 48).offset(x: -14, y: 14)
-                Circle().stroke(Color(hex: "AF52DE"), lineWidth: 3).frame(width: 48, height: 48).offset(x: 14, y: 14)
-            }
-            .frame(width: 76, height: 76)
+            CreationBadgeIconView()
             Text("Create new notebook")
                 .font(.title)
                 .fontWeight(.semibold)
@@ -960,8 +1422,6 @@ struct NotebookView: View {
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingEditTopicSheet = false
     @State private var isShowingEditSubtopicSheet = false
-    @State private var expandedTopics: Set<UUID> = []
-    @State private var expandedSubtopics: Set<UUID> = []
 
     var body: some View {
         NavigationView {
@@ -972,38 +1432,55 @@ struct NotebookView: View {
                             isShowingCreateNewNotebookFlow = true
                         })
                     } else {
-                        Text("All Notebooks")
-                            .font(.headline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                Text("All Notebooks")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity)
 
-                        List {
-                            ForEach(dataManager.topics) { topic in
-                                NavigationLink(
-                                    destination: TopicPreviewView(
-                                        topic: topic,
-                                        isPresented: $isPresented,
-                                        dataManager: dataManager
-                                    )
-                                    .environmentObject(searchState)
-                                ) {
-                                    TopicRow(
-                                        topic: topic,
-                                        isExpanded: expandedTopics.contains(topic.id),
-                                        onExpandChange: { _, _ in },
-                                        searchText: "",
-                                        isShowingNewTopicSheet: $isShowingNewTopicSheet,
-                                        isShowingEditTopicSheet: $isShowingEditTopicSheet,
-                                        topicToDelete: $topicToDelete
-                                    )
+                                LazyVGrid(columns: [
+                                    GridItem(.fixed(200), spacing: 2),
+                                    GridItem(.fixed(200), spacing: 2)
+                                ], spacing: 2) {
+                                    ForEach(Array(dataManager.topics.enumerated()), id: \.element.id) { index, topic in
+                                        NavigationLink(
+                                            destination: TopicPreviewView(
+                                                topic: topic,
+                                                isPresented: $isPresented,
+                                                dataManager: dataManager
+                                            )
+                                            .environmentObject(searchState)
+                                        ) {
+                                            TopicCardView(topic: topic, dataManager: dataManager)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .staggeredCardPopIn(delay: Double(index) * 0.05)
+                                        .contextMenu {
+                                            Button {
+                                                selectedTopic = topic
+                                                isShowingEditTopicSheet = true
+                                            } label: {
+                                                Label("Edit Topic", systemImage: "pencil")
+                                            }
+                                            Button(role: .destructive) {
+                                                topicToDelete = topic
+                                            } label: {
+                                                Label("Delete Topic", systemImage: "trash")
+                                            }
+                                        }
+                                    }
                                 }
+                                .padding(.horizontal)
                             }
+                            .padding(.vertical)
                         }
-                        .listStyle(PlainListStyle())
+                        .background(Color.appBackground)
                     }
+                }
+                .overlay(alignment: .bottom) {
+                    TabBarContentBottomFade()
                 }
                 if !dataManager.topics.isEmpty {
                     Button(action: { isShowingCreateNewNotebookFlow = true }) {
@@ -1018,7 +1495,7 @@ struct NotebookView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.trailing, 20)
+                    .padding(.trailing, 30)
                     .padding(.bottom, 24)
                 }
             }
@@ -1029,7 +1506,7 @@ struct NotebookView: View {
             .sheet(isPresented: $isShowingNewTopicSheet) {
                 NewTopicView(dataManager: dataManager)
             }
-            .sheet(isPresented: $isShowingNewSubtopicSheet) {
+            .fullScreenCover(isPresented: $isShowingNewSubtopicSheet) {
                 if let topic = selectedTopic {
                     NewSubtopicView(topic: topic, dataManager: dataManager)
                 }
@@ -1100,55 +1577,6 @@ struct NotebookView: View {
         }
         .background(Color.appBackground)
         .environmentObject(searchState)
-    }
-}
-
-struct TopicRow: View {
-    let topic: Topic
-    var isExpanded: Bool
-    var onExpandChange: (Bool, UUID) -> Void
-    var searchText: String
-    @Binding var isShowingNewTopicSheet: Bool
-    @Binding var isShowingEditTopicSheet: Bool
-    @Binding var topicToDelete: Topic?
-    @State private var localIsExpanded: Bool = false
-
-    var body: some View {
-        HStack {
-            if let color = TopicColorStore.color(for: topic.id) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 12, height: 12)
-                    .padding(.horizontal, 8)
-            } else {
-                Image(systemName: "folder.fill")
-                    .foregroundColor(.appAccent2)
-                    .padding(.horizontal, 2)
-                    .padding(.trailing, 1) //WOW! so specific...
-            }
-            HighlightedText(text: topic.title, searchText: searchText)
-                .font(.headline)
-            Spacer()
-            Text("\(topic.subtopics.count)")
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundColor(.appTextSecondary)
-                .padding(.trailing, 8)
-        }
-        .padding(.vertical, 6)
-        .contextMenu {
-            Button(action: {
-                isShowingEditTopicSheet = true
-                topicToDelete = topic
-            }) {
-                Label("Edit Topic", systemImage: "pencil")
-            }
-            Button(role: .destructive, action: {
-                topicToDelete = topic
-            }) {
-                Label("Delete Topic", systemImage: "trash")
-            }
-        }
     }
 }
 
@@ -1419,37 +1847,83 @@ struct NewSubtopicView: View {
     @State private var errorMessage: String?
     
     var body: some View {
-        NavigationView {
-            Form {
-                TextField("Subtopic Title", text: $title)
-            }
-            .navigationTitle("New Subtopic")
-            .navigationBarItems(
-                leading: Button("Cancel") {
-                    dismiss()
-                },
-                trailing: Button("Add") {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Spacer()
+                CreationBadgeIconView()
+
+                Text("Create new subtopic")
+                    .font(.title)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+
+                Text("Add a subtopic inside \(topic.title) to organize your notes.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                TextField("Name your new subtopic", text: $title)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .frame(height: 52)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(hex: "C6C6CB").opacity(0.5), lineWidth: 0.5)
+                    )
+                    .padding(.horizontal, 32)
+                    .padding(.top, 8)
+
+                Button("CREATE SUBTOPIC") {
                     Task {
                         await saveSubtopic()
                     }
                 }
-                .disabled(title.isEmpty || isSaving)
-            )
-            .alert("Error", isPresented: .init(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage ?? "")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(Color.appAccent1)
+                .clipShape(Capsule())
+                .buttonStyle(.plain)
+                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
+
+                if isSaving {
+                    ProgressView()
+                        .padding(.top, 4)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
             }
         }
+        .alert("Error", isPresented: .init(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
-    
+
     private func saveSubtopic() async {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
         isSaving = true
         do {
-            _ = try await dataManager.addSubtopic(to: topic, title: title)
+            _ = try await dataManager.addSubtopic(to: topic, title: trimmedTitle)
             await MainActor.run {
                 dismiss()
             }

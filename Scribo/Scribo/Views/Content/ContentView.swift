@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import Photos
 import UniformTypeIdentifiers
@@ -12,6 +13,12 @@ struct ContentView: View {
     @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @State private var isSidebarShowing: Bool = false
     @State private var selectedTab: Int = 0
+    @State private var everythingCreateNotePresented = false
+    @State private var everythingCreateNotePhotos: [PendingNotePhoto] = []
+    @State private var everythingCreateNoteBody: String = ""
+    @State private var everythingCreateNoteCameraPresented = false
+    @State private var everythingCreateNoteDocPickerPresented = false
+    @State private var everythingCreateNotePickedDocument: URL?
     @AppStorage("isDarkMode") private var isDarkMode = true
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
@@ -117,14 +124,27 @@ struct ContentView: View {
             ZStack(alignment: .leading) {
                 // 1. Main content: drawn first (behind); slides right when sidebar opens
                 ZStack {
-                    Color.featureCalloutBackground
+                    // Match `DocumentManagerView` / Notebook (`Color.appBackground`) so the strip above the tab bar
+                    // isn’t system white while the grid uses grouped grey.
+                    Color.appBackground
                         .ignoresSafeArea()
                     VStack(spacing: 0) {
                         mainContentView
+                        if selectedTab == 0 && !(noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil) {
+                            EverythingTabAddNoteBar {
+                                everythingCreateNotePhotos = []
+                                everythingCreateNoteBody = ""
+                                everythingCreateNotePresented = true
+                            }
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
                         if !(noteDisplayState.isShowingNote && noteDisplayState.currentNote != nil) {
                             mainTabBar
                         }
                     }
+                    .animation(.spring(response: 0.42, dampingFraction: 0.86), value: selectedTab)
+                    .animation(.easeInOut(duration: 0.22), value: noteDisplayState.isShowingNote)
+                    .animation(.easeInOut(duration: 0.22), value: noteDisplayState.currentNote?.id)
                     // Dim + tap-to-close overlay (single layer so it can receive taps when sidebar is open)
                     Rectangle()
                         .fill(
@@ -197,6 +217,75 @@ struct ContentView: View {
             }
             .environment(\.layoutDirection, .leftToRight)
             .preferredColorScheme(isDarkMode ? .dark : .light)
+            .fullScreenCover(isPresented: $everythingCreateNotePresented) {
+                CreateNoteSheetView(
+                    isPresented: $everythingCreateNotePresented,
+                    pendingPhotos: $everythingCreateNotePhotos,
+                    noteBody: $everythingCreateNoteBody,
+                    dataManager: dataManager,
+                    onRequestCamera: { everythingCreateNoteCameraPresented = true },
+                    onRequestDocument: { everythingCreateNoteDocPickerPresented = true }
+                )
+            }
+            .fullScreenCover(isPresented: $everythingCreateNoteCameraPresented) {
+                CameraView { image in
+                    if let image = image {
+                        handleEverythingCreateNoteCameraImage(image)
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $everythingCreateNoteDocPickerPresented) {
+                DocumentPicker(selectedDocument: $everythingCreateNotePickedDocument)
+            }
+            .onChange(of: everythingCreateNotePickedDocument) { _, newValue in
+                guard let url = newValue else { return }
+                Task {
+                    await handleEverythingCreateNotePickedDocument(url: url)
+                    await MainActor.run { everythingCreateNotePickedDocument = nil }
+                }
+            }
+        }
+    }
+
+    private func mergeEverythingCreateNoteDraft(photos: [PendingNotePhoto], text: String) {
+        if everythingCreateNotePresented {
+            everythingCreateNotePhotos.append(contentsOf: photos)
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty {
+                if everythingCreateNoteBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    everythingCreateNoteBody = t
+                } else {
+                    everythingCreateNoteBody += "\n\n" + t
+                }
+            }
+        } else {
+            everythingCreateNotePhotos = photos
+            everythingCreateNoteBody = text
+            everythingCreateNotePresented = true
+        }
+    }
+
+    private func handleEverythingCreateNoteCameraImage(_ image: UIImage) {
+        let entry = PendingNotePhoto(image: image, photoLibraryAssetId: nil)
+        mergeEverythingCreateNoteDraft(photos: [entry], text: "")
+    }
+
+    private func handleEverythingCreateNotePickedDocument(url: URL) async {
+        let needsAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if needsAccess { url.stopAccessingSecurityScopedResource() }
+        }
+        let (photos, text) = CreateNoteDraftDocument.load(url: url)
+        await MainActor.run {
+            if photos.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                alertManager.alertTitle = "Couldn’t read file"
+                alertManager.alertMessage = "Try an image, PDF, or plain text."
+                alertManager.alertRecoverySuggestion = ""
+                alertManager.showAlert = true
+                return
+            }
+            mergeEverythingCreateNoteDraft(photos: photos, text: text)
         }
     }
 
@@ -242,15 +331,39 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.2), value: noteDisplayState.isShowingNote)
     }
 
+    /// Same idea as `SidebarView` fades: clear → opaque so the bar blends into content above.
+    private var tabBarEdgeFadeHeight: CGFloat { 26 }
+
     private var mainTabBar: some View {
-        HStack(spacing: 0) {
+        let mainGray: Color = Color(hex: "#F2F2F7")
+
+        return HStack(spacing: 0) {
             tabBarButton(title: "Everything", icon: "xmark.triangle.circle.square.fill", tag: 0)
             tabBarButton(title: "Notebook", icon: "book.fill", tag: 1)
-            tabBarButton(title: "Study", icon: "capsule.on.capsule.fill", tag: 2)
+            //tabBarButton(title: "Study", icon: "capsule.on.capsule.fill", tag: 2)
         }
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(Color(.systemBackground))
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack(alignment: .top) {
+                mainGray
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: mainGray, location: 1.0)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: tabBarEdgeFadeHeight)
+                    Spacer(minLength: 0)
+                }
+            }
+            // Fills the strip under the home indicator (bottom safe area) with the same gray
+            .ignoresSafeArea(edges: .bottom)
+        )
     }
 
     private func tabBarButton(title: String, icon: String, tag: Int) -> some View {
@@ -267,6 +380,47 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
+}
+
+// MARK: - Tab bar content blend (Notebook, Study, etc.)
+
+/// Bottom fade that matches `mainTabBar`’s top gradient (`clear` → `#F2F2F7`) so content blends into the bar.
+struct TabBarContentBottomFade: View {
+    private let height: CGFloat = 26
+    private var barGray: Color { Color(hex: "#F2F2F7") }
+
+    var body: some View {
+        LinearGradient(
+            gradient: Gradient(stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: barGray, location: 1.0)
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Top fade over scroll content: `appBackground` at the header seam → `clear` downward into the list.
+struct ScrollContentTopFade: View {
+    private let height: CGFloat = 28
+
+    var body: some View {
+        LinearGradient(
+            gradient: Gradient(stops: [
+                .init(color: Color.white, location: 0.0),
+                .init(color: .clear, location: 1.0)
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+    }
 }
 
 // MARK: - Study Placeholder View
@@ -288,6 +442,9 @@ struct StudyPlaceholderView: View {
                 .padding(.horizontal, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            TabBarContentBottomFade()
+        }
         .background(Color.featureCalloutBackground)
     }
 }

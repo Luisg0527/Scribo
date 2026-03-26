@@ -1,15 +1,18 @@
 import SwiftUI
 
-private let sidebarBackgroundDark = LinearGradient(
-    colors: [
-        Color(hex: "E85D04"),
-        Color(hex: "FF9500"),
-        Color(hex: "232429"),
-        Color(hex: "1C1D24")
-    ],
-    startPoint: .topLeading,
-    endPoint: .bottomTrailing
-)
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private let sidebarGradientColors: [Color] = [
+    Color(hex: "E85D04"),
+    Color(hex: "FF9500"),
+    Color(hex: "232429"),
+    Color(hex: "1C1D24")
+]
 
 private let sidebarCardDark = Color(hex: "2C2D33")
 private let sidebarLabelGray = Color.white.opacity(0.5)
@@ -35,15 +38,32 @@ struct SidebarView: View {
     @AppStorage("offlineSyncEnabled") private var offlineSyncEnabled = false
     @AppStorage("spotlightSearchEnabled") private var spotlightSearchEnabled = false
     @State private var showDeleteAccountAlert = false
+    @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
+            // Scroll down → minY negative → shift gradient upward (inverse of previous max(0, -offset))
+            let gradientShift = min(0, scrollOffset / 800)
             ZStack {
-                // Full-screen background
-                sidebarBackgroundDark
-                    .ignoresSafeArea()
+                // Full-screen background — shifts subtly with scroll
+                LinearGradient(
+                    colors: sidebarGradientColors,
+                    startPoint: UnitPoint(x: 0, y: gradientShift),
+                    endPoint: UnitPoint(x: 1, y: 1 + gradientShift)
+                )
+                .ignoresSafeArea()
+                .animation(.easeOut(duration: 0.2), value: scrollOffset)
 
                 ScrollView(showsIndicators: false) {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(
+                                key: ScrollOffsetKey.self,
+                                value: proxy.frame(in: .named("sidebarScroll")).minY
+                            )
+                    }
+                    .frame(height: 0)
+
                     VStack(alignment: .leading, spacing: 30) {
                         Text("Never stop learning, because life never stops teaching.")
                             .font(.system(size: 26, weight: .medium, design: .serif))
@@ -208,6 +228,10 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .frame(minHeight: geo.size.height) // makes content at least full screen height
                     .padding(.top, topInset)
+                }
+                .coordinateSpace(name: "sidebarScroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { value in
+                    scrollOffset = value
                 }
                 .mask(
                     VStack(spacing: 0) {

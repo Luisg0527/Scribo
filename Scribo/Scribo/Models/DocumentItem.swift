@@ -30,6 +30,18 @@ struct DocumentItem: Identifiable, Equatable {
     var subtopic: String?
     var noteId: UUID?
     var previewText: String?
+    /// Image-like attachments on the same note (Everything tab: stack vs single photo icon).
+    var siblingImageCount: Int = 1
+
+    /// Maps `note_attachments.kind` to a card type for the Everything grid.
+    static func documentType(forAttachmentKind kind: String) -> DocumentType {
+        switch kind.lowercased() {
+        case "scanned": return .scanned
+        case "camera": return .camera
+        case "photo": return .photo
+        default: return .photo
+        }
+    }
 
     static func == (lhs: DocumentItem, rhs: DocumentItem) -> Bool {
         lhs.id == rhs.id
