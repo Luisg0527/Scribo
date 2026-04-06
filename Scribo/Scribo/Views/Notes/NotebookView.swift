@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreImage.CIFilterBuiltins
 
 // MARK: - Topic Color Storage (for space/notebook color coding)
 enum TopicColorStore {
@@ -82,14 +81,148 @@ private func bulkSelectionBadge(isSelected: Bool) -> some View {
         .padding(8)
 }
 
+/// Trailing header badge for shared notebooks opened in read-only mode.
+private struct ViewOnlyHeaderBadge: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 13, weight: .semibold))
+            Text("View only")
+                .font(.caption)
+                .fontWeight(.semibold)
+        }
+        .foregroundColor(.appTextSecondary)
+    }
+}
+
+// MARK: - Shared notebook in “My notebooks” (library card + detail loader)
+
+private struct SharedNotebookLibraryCardView: View {
+    let entry: SavedSharedNotebookEntry
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.appAccent2.opacity(colorScheme == .dark ? 0.35 : 0.45))
+                    .frame(width: 160, height: 124)
+                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                    .rotationEffect(.degrees(-6))
+                    .offset(x: -6, y: 4)
+                Group {
+                    if let snippet = entry.previewSnippet, !snippet.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(snippet)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(3)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .padding(14)
+                            .background(Color(.systemBackground))
+                    } else {
+                        ZStack {
+                            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
+                            Image(systemName: "eye.circle.fill")
+                                .font(.system(size: 44, weight: .light))
+                                .foregroundColor(.gray.opacity(0.55))
+                        }
+                    }
+                }
+                .frame(width: 160, height: 124)
+                .clipped()
+                .cornerRadius(8)
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(5)
+                    .background(Circle().fill(Color.black.opacity(0.5)))
+                    .padding(8)
+            }
+            .frame(width: 168, height: 130)
+
+            Text(entry.title)
+                .font(.subheadline)
+                .fontWeight(.regular)
+                .foregroundColor(Color(.secondaryLabel))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: 168, alignment: .center)
+
+            Text("\(entry.noteCount) notes · shared")
+                .font(.caption)
+                .foregroundColor(Color(.secondaryLabel))
+                .frame(width: 168, alignment: .center)
+        }
+        .frame(width: 168, height: 184)
+        .padding()
+        .background(Color.clear)
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+    }
+}
+
+private struct SharedNotebookDetailLoaderView: View {
+    let entry: SavedSharedNotebookEntry
+    @ObservedObject var dataManager: DataManager
+    @EnvironmentObject private var searchState: SearchState
+    @State private var topic: Topic?
+    @State private var loadFailed = false
+
+    var body: some View {
+        Group {
+            if let topic = topic {
+                TopicPreviewView(
+                    topic: topic,
+                    isReadOnlySharedNotebook: true,
+                    isPresented: .constant(true),
+                    dataManager: dataManager
+                )
+                .environmentObject(searchState)
+            } else if loadFailed {
+                VStack(spacing: 12) {
+                    Text("Couldn’t load this notebook")
+                        .font(.headline)
+                    Text("The link may have been revoked.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: entry.shareToken) {
+            loadFailed = false
+            topic = nil
+            do {
+                guard let payload = try await dataManager.fetchSharedNotebookPayload(shareToken: entry.shareToken) else {
+                    await MainActor.run { loadFailed = true }
+                    return
+                }
+                await dataManager.addOrUpdateSharedNotebookInLibrary(shareToken: entry.shareToken, payload: payload)
+                await MainActor.run {
+                    topic = payload.asTopic()
+                }
+            } catch {
+                await MainActor.run { loadFailed = true }
+            }
+        }
+    }
+}
+
 // MARK: - Topic Preview View
 struct TopicPreviewView: View {
     let topic: Topic
+    /// When true, UI is browse-only (opened from a `/b/…` share link snapshot).
+    var isReadOnlySharedNotebook: Bool = false
     @Environment(\.dismiss) var dismiss
     @Binding var isPresented: Bool
     @EnvironmentObject var searchState: SearchState
     @ObservedObject var dataManager: DataManager
     @State private var isShowingShareSheet: Bool = false
+    @State private var notebookShareSheetURL: String?
     @State private var isBulkSelectingSubtopics = false
     @State private var selectedSubtopicIdsForDeletion: Set<UUID> = []
     @State private var confirmBulkDeleteSubtopics = false
@@ -99,7 +232,8 @@ struct TopicPreviewView: View {
     @State private var topicTitleHasChanges = false
     
     private var displayTopicTitle: String {
-        dataManager.topics.first(where: { $0.id == topic.id })?.title ?? editedTopicTitle
+        if isReadOnlySharedNotebook { return topic.title }
+        return dataManager.topics.first(where: { $0.id == topic.id })?.title ?? editedTopicTitle
     }
     
     var body: some View {
@@ -115,7 +249,7 @@ struct TopicPreviewView: View {
             .overlay(alignment: .bottom) {
                 TabBarContentBottomFade()
             }
-            if !isBulkSelectingSubtopics {
+            if !isBulkSelectingSubtopics, !isReadOnlySharedNotebook {
                 Button(action: { isShowingNewSubtopicSheet = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 20, weight: .semibold))
@@ -156,12 +290,14 @@ struct TopicPreviewView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .fullScreenCover(isPresented: $isShowingShareSheet) {
-            TopicShareView(
-                topicTitle: displayTopicTitle,
-                inviteURL: "https://scribo.app/invite/topic/\(topic.id.uuidString)",
-                isPresented: $isShowingShareSheet
-            )
+        .fullScreenCover(isPresented: $isShowingShareSheet, onDismiss: { notebookShareSheetURL = nil }) {
+            if let url = notebookShareSheetURL {
+                ShareQRSheetView(
+                    title: displayTopicTitle,
+                    inviteURL: url,
+                    isPresented: $isShowingShareSheet
+                )
+            }
         }
         .fullScreenCover(isPresented: $isShowingNewSubtopicSheet) {
             NewSubtopicView(topic: topic, dataManager: dataManager)
@@ -186,111 +322,6 @@ struct TopicPreviewView: View {
         }
     }
     
-    // MARK: - Share Sheet
-    struct TopicShareView: View {
-        let topicTitle: String
-        let inviteURL: String
-        @Binding var isPresented: Bool
-        private let context = CIContext()
-        private let filter = CIFilter.qrCodeGenerator()
-        
-        var body: some View {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                
-                VStack(spacing: 24) {
-                    HStack {
-                        Text("Share")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button(action: { isPresented = false }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(8)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    
-                    Text(topicTitle)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(.top, 8)
-                    
-                    if let image = generateQRCode(from: inviteURL) {
-                        Image(uiImage: image)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 260, height: 260)
-                            .padding(24)
-                            .background(Color.white)
-                            .cornerRadius(24)
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 32) {
-                        shareActionButton(icon: "paintpalette.fill", title: "Customize") {
-                            // Placeholder
-                        }
-                        shareActionButton(icon: "square.and.arrow.up", title: "Share") {
-                            presentSystemShare()
-                        }
-                        shareActionButton(icon: "doc.on.doc", title: "Copy") {
-                            UIPasteboard.general.string = inviteURL
-                        }
-                    }
-                    .padding(.bottom, 32)
-                }
-            }
-        }
-        
-        private func generateQRCode(from string: String) -> UIImage? {
-            let data = Data(string.utf8)
-            filter.setValue(data, forKey: "inputMessage")
-            filter.setValue("M", forKey: "inputCorrectionLevel") // L, M, Q, or H (string, not number)
-            
-            guard let outputImage = filter.outputImage,
-                  let cgimg = context.createCGImage(outputImage.transformed(by: CGAffineTransform(scaleX: 8, y: 8)),
-                                                    from: outputImage.extent) else {
-                return nil
-            }
-            return UIImage(cgImage: cgimg)
-        }
-        
-        private func shareActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-            Button(action: action) {
-                VStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(width: 60, height: 60)
-                        Image(systemName: icon)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.white)
-                    }
-                    Text(title)
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.9))
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        
-        private func presentSystemShare() {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first,
-                  let root = window.rootViewController else { return }
-            
-            let vc = UIActivityViewController(activityItems: [inviteURL], applicationActivities: nil)
-            root.present(vc, animated: true)
-        }
-    }
-    
     private var headerView: some View {
         HStack(alignment: .center, spacing: 4) {
             Button(action: { dismiss() }) {
@@ -299,25 +330,38 @@ struct TopicPreviewView: View {
                     .foregroundColor(.appText)
                     .frame(width: 44, height: 44)
             }
-            TextField("Untitled", text: $editedTopicTitle)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.appText)
-                .multilineTextAlignment(.center)
-                .focused($isTopicTitleFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.appText, lineWidth: 2)
-                        .opacity(isTopicTitleFocused ? 1 : 0)
-                )
-                .animation(.easeInOut(duration: 0.25), value: isTopicTitleFocused)
-                .onChange(of: editedTopicTitle) { _, _ in topicTitleHasChanges = true }
-                .onChange(of: isTopicTitleFocused) { _, focused in
-                    if !focused && topicTitleHasChanges { Task { await saveTopicTitleIfNeeded() } }
+            Group {
+                if isReadOnlySharedNotebook {
+                    Text(displayTopicTitle)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                } else {
+                    TextField("Untitled", text: $editedTopicTitle)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .focused($isTopicTitleFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.appText, lineWidth: 2)
+                                .opacity(isTopicTitleFocused ? 1 : 0)
+                        )
+                        .animation(.easeInOut(duration: 0.25), value: isTopicTitleFocused)
+                        .onChange(of: editedTopicTitle) { _, _ in topicTitleHasChanges = true }
+                        .onChange(of: isTopicTitleFocused) { _, focused in
+                            if !focused && topicTitleHasChanges { Task { await saveTopicTitleIfNeeded() } }
+                        }
+                        .disabled(isBulkSelectingSubtopics)
                 }
-                .disabled(isBulkSelectingSubtopics)
+            }
+            .frame(maxWidth: .infinity)
             if isBulkSelectingSubtopics {
                 Button("Cancel") {
                     isBulkSelectingSubtopics = false
@@ -326,10 +370,13 @@ struct TopicPreviewView: View {
                 .font(.body.weight(.medium))
                 .foregroundColor(.appAccent1)
                 .frame(width: 60, alignment: .trailing)
+            } else if isReadOnlySharedNotebook {
+                ViewOnlyHeaderBadge()
+                    .frame(width: 104, alignment: .trailing)
             } else {
                 Menu {
-                    Button(action: { isShowingShareSheet = true }) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                    Button(action: { Task { await beginNotebookShareFlow() } }) {
+                        Label("Share notebook", systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive, action: {
                         selectedSubtopicIdsForDeletion = []
@@ -355,7 +402,25 @@ struct TopicPreviewView: View {
         topicTitleHasChanges = false
     }
     
+    private func beginNotebookShareFlow() async {
+        guard !isReadOnlySharedNotebook else { return }
+        do {
+            let token = try await dataManager.ensureActiveTopicShareLink(forTopicId: topic.id)
+            let url = NoteShareInviteURL.httpsNotebookInviteURL(for: token)
+            await MainActor.run {
+                notebookShareSheetURL = url
+                isShowingShareSheet = true
+            }
+        } catch {
+            await MainActor.run { }
+        }
+    }
+
     private func saveTopicTitleIfNeeded() async {
+        guard !isReadOnlySharedNotebook else {
+            await MainActor.run { topicTitleHasChanges = false }
+            return
+        }
         let trimmed = editedTopicTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let t = dataManager.topics.first(where: { $0.id == topic.id }) else {
             await MainActor.run { topicTitleHasChanges = false }
@@ -413,7 +478,13 @@ struct TopicPreviewView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(destination: SubtopicPreviewView(subtopic: subtopic, topic: topic, isPresented: $isPresented, dataManager: dataManager)) {
+                NavigationLink(destination: SubtopicPreviewView(
+                    subtopic: subtopic,
+                    topic: topic,
+                    isPresented: $isPresented,
+                    dataManager: dataManager,
+                    isReadOnlySharedNotebook: isReadOnlySharedNotebook
+                )) {
                     SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
                 }
             }
@@ -437,6 +508,7 @@ struct SubtopicPreviewView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var noteDisplayState: NoteDisplayState
     @ObservedObject var dataManager: DataManager
+    var isReadOnlySharedNotebook: Bool = false
     @State private var isBulkSelectingNotes = false
     @State private var selectedNoteIdsForDeletion: Set<UUID> = []
     @State private var confirmBulkDeleteNotes = false
@@ -482,11 +554,16 @@ struct SubtopicPreviewView: View {
                                         .onAppear {
                                             Task {
                                                 do {
-                                                    try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                                                    if !isReadOnlySharedNotebook {
+                                                        try await dataManager.addRecentNote(noteId: note.id.uuidString)
+                                                    }
                                                     await MainActor.run {
                                                         noteDisplayState.currentNote = note
                                                         noteDisplayState.currentTopic = topic
                                                         noteDisplayState.currentSubtopic = subtopic
+                                                        if isReadOnlySharedNotebook {
+                                                            noteDisplayState.isReadOnlySharePresentation = true
+                                                        }
                                                     }
                                                 } catch {
                                                     print("Error updating recent notes: \(error)")
@@ -515,7 +592,7 @@ struct SubtopicPreviewView: View {
                     TabBarContentBottomFade()
                 }
             }
-            if !isBulkSelectingNotes {
+            if !isBulkSelectingNotes, !isReadOnlySharedNotebook {
                 Button(action: {
                     newNoteDraftPhotos = []
                     newNoteDraftBody = ""
@@ -663,25 +740,38 @@ struct SubtopicPreviewView: View {
                     .foregroundColor(.appText)
                     .frame(width: 44, height: 44)
             }
-            TextField("Untitled", text: $editedSubtopicTitle)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.appText)
-                .multilineTextAlignment(.center)
-                .focused($isSubtopicTitleFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.appText, lineWidth: 2)
-                        .opacity(isSubtopicTitleFocused ? 1 : 0)
-                )
-                .animation(.easeInOut(duration: 0.25), value: isSubtopicTitleFocused)
-                .onChange(of: editedSubtopicTitle) { _, _ in subtopicTitleHasChanges = true }
-                .onChange(of: isSubtopicTitleFocused) { _, focused in
-                    if !focused && subtopicTitleHasChanges { Task { await saveSubtopicTitleIfNeeded() } }
+            Group {
+                if isReadOnlySharedNotebook {
+                    Text(subtopic.title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                } else {
+                    TextField("Untitled", text: $editedSubtopicTitle)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .focused($isSubtopicTitleFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.appText, lineWidth: 2)
+                                .opacity(isSubtopicTitleFocused ? 1 : 0)
+                        )
+                        .animation(.easeInOut(duration: 0.25), value: isSubtopicTitleFocused)
+                        .onChange(of: editedSubtopicTitle) { _, _ in subtopicTitleHasChanges = true }
+                        .onChange(of: isSubtopicTitleFocused) { _, focused in
+                            if !focused && subtopicTitleHasChanges { Task { await saveSubtopicTitleIfNeeded() } }
+                        }
+                        .disabled(isBulkSelectingNotes)
                 }
-                .disabled(isBulkSelectingNotes)
+            }
+            .frame(maxWidth: .infinity)
             if isBulkSelectingNotes {
                 Button("Cancel") {
                     isBulkSelectingNotes = false
@@ -690,6 +780,9 @@ struct SubtopicPreviewView: View {
                 .font(.body.weight(.medium))
                 .foregroundColor(.appAccent1)
                 .frame(width: 60, alignment: .trailing)
+            } else if isReadOnlySharedNotebook {
+                ViewOnlyHeaderBadge()
+                    .frame(width: 104, alignment: .trailing)
             } else {
                 Menu {
                     Button(role: .destructive, action: {
@@ -722,6 +815,10 @@ struct SubtopicPreviewView: View {
     }
     
     private func saveSubtopicTitleIfNeeded() async {
+        guard !isReadOnlySharedNotebook else {
+            await MainActor.run { subtopicTitleHasChanges = false }
+            return
+        }
         let trimmed = editedSubtopicTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let t = dataManager.topics.first(where: { $0.id == topic.id }),
               let st = t.subtopics.first(where: { $0.id == subtopic.id }) else {
@@ -1406,11 +1503,20 @@ struct CreateNewNotebookFlowView: View {
 }
 
 // MARK: - Notebook View
+
+private enum NotebookLibrarySectionFilter: Equatable {
+    case all
+    case mineOnly
+    case sharedOnly
+}
+
 struct NotebookView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @StateObject private var searchState = SearchState()
     @StateObject private var dataManager = DataManager.shared
     @Binding var isPresented: Bool
+    @State private var topicPresentedFromQR: Topic?
     @State private var selectedTopic: Topic?
     @State private var selectedSubtopic: Subtopic?
     @State private var isShowingNewTopicSheet = false
@@ -1422,52 +1528,146 @@ struct NotebookView: View {
     @State private var noteToDelete: (Topic, Subtopic, Note)?
     @State private var isShowingEditTopicSheet = false
     @State private var isShowingEditSubtopicSheet = false
+    /// Tap the section title to cycle: All → My → Shared → All (skips empty legs).
+    @State private var librarySectionFilter: NotebookLibrarySectionFilter = .all
+
+    private var hasNotebookLibraryContent: Bool {
+        !dataManager.topics.isEmpty || !dataManager.savedSharedNotebookEntries.isEmpty
+    }
+
+    private var hasSharedNotebookEntries: Bool {
+        !dataManager.savedSharedNotebookEntries.isEmpty
+    }
+
+    private var hasOwnedNotebooks: Bool {
+        !dataManager.topics.isEmpty
+    }
+
+    private var librarySectionTitle: String {
+        switch librarySectionFilter {
+        case .all: return "All Notebooks"
+        case .mineOnly: return "My Notebooks"
+        case .sharedOnly: return "Shared Notebooks"
+        }
+    }
+
+    private func advanceNotebookLibrarySectionFilter() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            let hasMine = hasOwnedNotebooks
+            let hasShared = hasSharedNotebookEntries
+            switch librarySectionFilter {
+            case .all:
+                if hasMine {
+                    librarySectionFilter = .mineOnly
+                } else if hasShared {
+                    librarySectionFilter = .sharedOnly
+                }
+            case .mineOnly:
+                if hasShared {
+                    librarySectionFilter = .sharedOnly
+                } else {
+                    librarySectionFilter = .all
+                }
+            case .sharedOnly:
+                librarySectionFilter = .all
+            }
+        }
+    }
+
+    private func libraryFilterAccessibilityHint() -> String {
+        switch librarySectionFilter {
+        case .all: return "Show my notebooks only"
+        case .mineOnly: return hasSharedNotebookEntries ? "Show shared notebooks only" : "Show all notebooks"
+        case .sharedOnly: return "Show all notebooks"
+        }
+    }
 
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottomTrailing) {
                 VStack(spacing: 0) {
-                    if dataManager.topics.isEmpty {
+                    if !hasNotebookLibraryContent {
                         NotebookEmptyStateView(onCreateTapped: {
                             isShowingCreateNewNotebookFlow = true
                         })
                     } else {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 20) {
-                                Text("All Notebooks")
-                                    .font(.headline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
+                                Button(action: advanceNotebookLibrarySectionFilter) {
+                                    HStack(spacing: 8) {
+                                        Text(librarySectionTitle)
+                                            .font(.headline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.primary)
+                                        Image(systemName: "line.3.horizontal.decrease.circle")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .foregroundColor(.appAccent1.opacity(0.9))
+                                    }
                                     .frame(maxWidth: .infinity)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint(libraryFilterAccessibilityHint())
+                                .disabled(!hasOwnedNotebooks && !hasSharedNotebookEntries)
 
                                 LazyVGrid(columns: [
                                     GridItem(.fixed(200), spacing: 2),
                                     GridItem(.fixed(200), spacing: 2)
                                 ], spacing: 2) {
-                                    ForEach(Array(dataManager.topics.enumerated()), id: \.element.id) { index, topic in
-                                        NavigationLink(
-                                            destination: TopicPreviewView(
-                                                topic: topic,
-                                                isPresented: $isPresented,
-                                                dataManager: dataManager
-                                            )
-                                            .environmentObject(searchState)
-                                        ) {
-                                            TopicCardView(topic: topic, dataManager: dataManager)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .staggeredCardPopIn(delay: Double(index) * 0.05)
-                                        .contextMenu {
-                                            Button {
-                                                selectedTopic = topic
-                                                isShowingEditTopicSheet = true
-                                            } label: {
-                                                Label("Edit Topic", systemImage: "pencil")
+                                    if librarySectionFilter != .sharedOnly {
+                                        ForEach(Array(dataManager.topics.enumerated()), id: \.element.id) { index, topic in
+                                            NavigationLink(
+                                                destination: TopicPreviewView(
+                                                    topic: topic,
+                                                    isReadOnlySharedNotebook: false,
+                                                    isPresented: $isPresented,
+                                                    dataManager: dataManager
+                                                )
+                                                .environmentObject(searchState)
+                                            ) {
+                                                TopicCardView(topic: topic, dataManager: dataManager)
                                             }
-                                            Button(role: .destructive) {
-                                                topicToDelete = topic
-                                            } label: {
-                                                Label("Delete Topic", systemImage: "trash")
+                                            .buttonStyle(.plain)
+                                            .staggeredCardPopIn(delay: Double(index) * 0.04, style: .bounce)
+                                            .contextMenu {
+                                                Button {
+                                                    selectedTopic = topic
+                                                    isShowingEditTopicSheet = true
+                                                } label: {
+                                                    Label("Edit Topic", systemImage: "pencil")
+                                                }
+                                                Button(role: .destructive) {
+                                                    topicToDelete = topic
+                                                } label: {
+                                                    Label("Delete Topic", systemImage: "trash")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if librarySectionFilter != .mineOnly {
+                                        ForEach(Array(dataManager.savedSharedNotebookEntries.enumerated()), id: \.element.id) { index, entry in
+                                            NavigationLink(
+                                                destination: SharedNotebookDetailLoaderView(entry: entry, dataManager: dataManager)
+                                                    .environmentObject(searchState)
+                                                    .environmentObject(noteDisplayState)
+                                            ) {
+                                                SharedNotebookLibraryCardView(entry: entry)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .staggeredCardPopIn(
+                                                delay: Double(
+                                                    (librarySectionFilter == .all ? dataManager.topics.count : 0) + index
+                                                ) * 0.04,
+                                                style: .bounce
+                                            )
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    Task { await dataManager.removeSavedSharedNotebook(shareToken: entry.shareToken) }
+                                                } label: {
+                                                    Label("Remove from my notebooks", systemImage: "trash")
+                                                }
                                             }
                                         }
                                     }
@@ -1477,12 +1677,22 @@ struct NotebookView: View {
                             .padding(.vertical)
                         }
                         .background(Color.appBackground)
+                        .onChange(of: dataManager.savedSharedNotebookEntries.count) { _, count in
+                            if librarySectionFilter == .sharedOnly && count == 0 {
+                                librarySectionFilter = .all
+                            }
+                        }
+                        .onChange(of: dataManager.topics.count) { _, count in
+                            if librarySectionFilter == .mineOnly && count == 0 {
+                                librarySectionFilter = hasSharedNotebookEntries ? .sharedOnly : .all
+                            }
+                        }
                     }
                 }
                 .overlay(alignment: .bottom) {
                     TabBarContentBottomFade()
                 }
-                if !dataManager.topics.isEmpty {
+                if hasNotebookLibraryContent {
                     Button(action: { isShowingCreateNewNotebookFlow = true }) {
                         Image(systemName: "plus")
                             .font(.system(size: 20, weight: .semibold))
@@ -1574,9 +1784,31 @@ struct NotebookView: View {
             } message: {
                 Text("Are you sure you want to delete this note?")
             }
+            .onAppear { presentTopicFromPendingQRIfNeeded() }
+            .onChange(of: noteDisplayState.pendingNotebookTopicToPresent?.id) { _, _ in
+                presentTopicFromPendingQRIfNeeded()
+            }
+            .fullScreenCover(item: $topicPresentedFromQR) { topic in
+                TopicPreviewView(
+                    topic: topic,
+                    isReadOnlySharedNotebook: false,
+                    isPresented: Binding(
+                        get: { topicPresentedFromQR != nil },
+                        set: { if !$0 { topicPresentedFromQR = nil } }
+                    ),
+                    dataManager: dataManager
+                )
+                .environmentObject(searchState)
+            }
         }
         .background(Color.appBackground)
         .environmentObject(searchState)
+    }
+
+    private func presentTopicFromPendingQRIfNeeded() {
+        guard let topic = noteDisplayState.pendingNotebookTopicToPresent else { return }
+        topicPresentedFromQR = topic
+        noteDisplayState.pendingNotebookTopicToPresent = nil
     }
 }
 
@@ -2116,5 +2348,6 @@ struct EditSubtopicView: View {
 struct NotebookView_Previews: PreviewProvider {
     static var previews: some View {
         NotebookView(isPresented: .constant(true))
+            .environmentObject(NoteDisplayState())
     }
 }

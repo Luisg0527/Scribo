@@ -94,6 +94,13 @@ private struct NoteImageFullscreenSelection: Identifiable, Hashable {
     let id: Int
 }
 
+private struct ShareInviteSheetItem: Identifiable {
+    let id = UUID()
+    let url: String
+    /// Notebook (topic) title — link shares the whole notebook, not just this note.
+    let sheetTitle: String
+}
+
 /// Drag-based stacked carousel: center card full size, side cards peek with scale and spring snap.
 private struct Carousel: View {
     let images: [UIImage]
@@ -206,7 +213,7 @@ struct NoteView: View {
     @State private var showAddTagAlert = false
     @State private var newTagText = ""
     @State private var showDeleteConfirm = false
-    @State private var showShareQR = false
+    @State private var shareInviteSheetItem: ShareInviteSheetItem?
     @State private var lastSavedText = "Just now"
     @State private var showingSaveAlert = false
     @State private var hasChanges: Bool = false
@@ -240,6 +247,24 @@ struct NoteView: View {
 
     private var noteIdForAttachments: UUID? {
         noteDisplayState.currentNote?.id ?? sourceNote?.id
+    }
+
+    private var isReadOnlyShare: Bool {
+        noteDisplayState.isReadOnlySharePresentation
+    }
+
+    private func closeNotePresentation() {
+        if noteDisplayState.isReadOnlySharePresentation {
+            noteDisplayState.isReadOnlySharePresentation = false
+        }
+        if isFromChatView {
+            noteDisplayState.isShowingNote = false
+            noteDisplayState.currentNote = nil
+            noteDisplayState.currentTopic = nil
+            noteDisplayState.currentSubtopic = nil
+        } else {
+            dismiss()
+        }
     }
 
     // Match EverythingCardSheetView styling
@@ -346,27 +371,14 @@ struct NoteView: View {
         .toolbarBackground(attachmentDisplayPhase == .images ? .hidden : .automatic, for: .navigationBar)
         .alert("Save Changes?", isPresented: $showingSaveAlert) {
             Button("Don't Save", role: .destructive) {
-                if isFromChatView {
-                    noteDisplayState.isShowingNote = false
-                    noteDisplayState.currentNote = nil
-                    noteDisplayState.currentTopic = nil
-                    noteDisplayState.currentSubtopic = nil
-                } else {
-                    dismiss()
-                }
+                hasChanges = false
+                closeNotePresentation()
             }
             Button("Cancel", role: .cancel) { }
             Button("Save") {
                 Task {
                     await saveNote()
-                    if isFromChatView {
-                        noteDisplayState.isShowingNote = false
-                        noteDisplayState.currentNote = nil
-                        noteDisplayState.currentTopic = nil
-                        noteDisplayState.currentSubtopic = nil
-                    } else {
-                        dismiss()
-                    }
+                    closeNotePresentation()
                 }
             }
         }
@@ -401,11 +413,14 @@ struct NoteView: View {
         } message: {
             Text("Are you sure you want to delete this note?")
         }
-        .fullScreenCover(isPresented: $showShareQR) {
+        .fullScreenCover(item: $shareInviteSheetItem) { item in
             ShareQRSheetView(
-                title: editedTitle.isEmpty ? "Untitled" : editedTitle,
-                inviteURL: noteDisplayState.currentNote.map { "https://scribo.app/note/\($0.id.uuidString)" } ?? "https://scribo.app",
-                isPresented: $showShareQR
+                title: item.sheetTitle,
+                inviteURL: item.url,
+                isPresented: Binding(
+                    get: { shareInviteSheetItem != nil },
+                    set: { if !$0 { shareInviteSheetItem = nil } }
+                )
             )
         }
         .fullScreenCover(item: $fullscreenImageSelection) { selection in
@@ -437,17 +452,10 @@ struct NoteView: View {
     private var headerView: some View {
         HStack {
             Button(action: {
-                if hasChanges {
+                if hasChanges && !isReadOnlyShare {
                     showingSaveAlert = true
                 } else {
-                    if isFromChatView {
-                        noteDisplayState.isShowingNote = false
-                        noteDisplayState.currentNote = nil
-                        noteDisplayState.currentTopic = nil
-                        noteDisplayState.currentSubtopic = nil
-                    } else {
-                        dismiss()
-                    }
+                    closeNotePresentation()
                 }
             }) {
                 Image(systemName: "chevron.left")
@@ -456,37 +464,53 @@ struct NoteView: View {
                     .frame(width: 44, height: 44)
             }
             Spacer()
-            TextField("Untitled", text: $editedTitle)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(.appText)
-                .multilineTextAlignment(.center)
-                .focused($isTitleFocused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.appText, lineWidth: 2)
-                        .opacity(isTitleFocused ? 1 : 0)
-                )
-                .animation(.easeInOut(duration: 0.25), value: isTitleFocused)
-                .onChange(of: editedTitle) { _, _ in hasChanges = true }
-                .onChange(of: isTitleFocused) { _, focused in
-                    if !focused && hasChanges { Task { await saveNote() } }
+            Group {
+                if isReadOnlyShare {
+                    Text(editedTitle.isEmpty ? "Untitled" : editedTitle)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                } else {
+                    TextField("Untitled", text: $editedTitle)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.appText)
+                        .multilineTextAlignment(.center)
+                        .focused($isTitleFocused)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(Color.appText, lineWidth: 2)
+                                .opacity(isTitleFocused ? 1 : 0)
+                        )
+                        .animation(.easeInOut(duration: 0.25), value: isTitleFocused)
+                        .onChange(of: editedTitle) { _, _ in hasChanges = true }
+                        .onChange(of: isTitleFocused) { _, focused in
+                            if !focused && hasChanges { Task { await saveNote() } }
+                        }
                 }
+            }
             Spacer()
-            Menu {
-                Button(action: { showShareQR = true }) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+            if isReadOnlyShare {
+                Color.clear.frame(width: 44, height: 44)
+            } else {
+                Menu {
+                    Button(action: { beginShareFlow() }) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive, action: { showDeleteConfirm = true }) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.appText)
+                        .frame(width: 44, height: 44)
                 }
-                Button(role: .destructive, action: { showDeleteConfirm = true }) {
-                    Label("Delete", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.appText)
-                    .frame(width: 44, height: 44)
             }
         }
         .padding(.horizontal, 16)
@@ -512,13 +536,21 @@ struct NoteView: View {
     private var textOnlyMainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             Divider()
-            TextEditor(text: $editedContent)
-                .font(.body)
-                .foregroundColor(.appText)
-                .scrollContentBackground(.hidden)
-                .frame(maxWidth: .infinity, minHeight: 252, alignment: .topLeading)
-                .padding(16)
-                .onChange(of: editedContent) { _, _ in hasChanges = true }
+            if isReadOnlyShare {
+                Text(editedContent)
+                    .font(.body)
+                    .foregroundColor(.appText)
+                    .frame(maxWidth: .infinity, minHeight: 252, alignment: .topLeading)
+                    .padding(16)
+            } else {
+                TextEditor(text: $editedContent)
+                    .font(.body)
+                    .foregroundColor(.appText)
+                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: .infinity, minHeight: 252, alignment: .topLeading)
+                    .padding(16)
+                    .onChange(of: editedContent) { _, _ in hasChanges = true }
+            }
             Divider()
         }
         .background(sheetBg)
@@ -641,6 +673,7 @@ struct NoteView: View {
                     .cornerRadius(10)
                 }
                 .buttonStyle(.plain)
+                .disabled(isReadOnlyShare)
                 ForEach(tags, id: \.self) { tag in
                     Text("#\(tag)")
                         .font(.subheadline)
@@ -676,6 +709,7 @@ struct NoteView: View {
             .padding(12)
             .background(cardBg)
             .cornerRadius(12)
+            .disabled(isReadOnlyShare)
             .onChange(of: editedContent) { _, _ in
                 if attachmentDisplayPhase == .images { hasChanges = true }
             }
@@ -686,55 +720,66 @@ struct NoteView: View {
     }
 
     private var bottomBarView: some View {
-        HStack(spacing: 10) {
-            Button(action: {
-                Task { await saveNote() }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "circle.grid.2x2")
-                        .font(.system(size: 16))
-                    Text("Save")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(.appText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(cardBg)
-                .cornerRadius(16)
-            }
-            .buttonStyle(.plain)
-            Button(action: { showShareQR = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 16))
-                    Text("Share")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(.appText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(cardBg)
-                .cornerRadius(16)
-            }
-            .buttonStyle(.plain)
-            if !isNewNote {
-                Button(action: { showDeleteConfirm = true }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 16))
-                        Text("Delete")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(.white)
+        Group {
+            if isReadOnlyShare {
+                Text("Viewing a shared note (read-only)")
+                    .font(.subheadline)
+                    .foregroundColor(.appTextSecondary)
+                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(16)
+                    .padding(.vertical, 16)
+            } else {
+                HStack(spacing: 10) {
+                    Button(action: {
+                        Task { await saveNote() }
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "circle.grid.2x2")
+                                .font(.system(size: 16))
+                            Text("Save")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(.appText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(cardBg)
+                        .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                    Button(action: { beginShareFlow() }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16))
+                            Text("Share notebook")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(.appText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(cardBg)
+                        .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                    if !isNewNote {
+                        Button(action: { showDeleteConfirm = true }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 16))
+                                Text("Delete")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.red.opacity(0.8))
+                            .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
@@ -743,10 +788,44 @@ struct NoteView: View {
     }
 
     private var statusView: some View {
-        Text("Saved to your notebook, \(lastSavedText)")
+        Text(isReadOnlyShare ? "Opened from a share link" : "Saved to your notebook, \(lastSavedText)")
             .font(.caption)
             .foregroundColor(.appTextSecondary)
             .padding(.vertical, 12)
+    }
+
+    /// Share is Drive-style: one link for the whole notebook (topic) that contains this note.
+    private func beginShareFlow() {
+        guard !isReadOnlyShare else { return }
+        guard let topicId = topicIdForNotebookShare() else { return }
+        Task {
+            do {
+                let token = try await dataManager.ensureActiveTopicShareLink(forTopicId: topicId)
+                let url = NoteShareInviteURL.httpsNotebookInviteURL(for: token)
+                let title = notebookShareSheetTitle(forTopicId: topicId)
+                await MainActor.run {
+                    shareInviteSheetItem = ShareInviteSheetItem(url: url, sheetTitle: title)
+                }
+            } catch {
+                await MainActor.run { notificationManager.playSound(.error) }
+                print("Share link error: \(error)")
+            }
+        }
+    }
+
+    private func topicIdForNotebookShare() -> UUID? {
+        if let t = noteDisplayState.currentTopic { return t.id }
+        guard let noteId = noteIdForAttachments else { return nil }
+        for topic in dataManager.topics {
+            for sub in topic.subtopics where sub.notes.contains(where: { $0.id == noteId }) {
+                return topic.id
+            }
+        }
+        return nil
+    }
+
+    private func notebookShareSheetTitle(forTopicId topicId: UUID) -> String {
+        dataManager.topics.first(where: { $0.id == topicId })?.title ?? "Shared notebook"
     }
 
     private func loadNoteImages() async {
@@ -797,6 +876,7 @@ struct NoteView: View {
     }
 
     private func saveNote() async {
+        guard !noteDisplayState.isReadOnlySharePresentation else { return }
         do {
             guard let topic = noteDisplayState.currentTopic,
                   let subtopic = noteDisplayState.currentSubtopic else { return }

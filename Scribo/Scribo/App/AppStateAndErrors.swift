@@ -6,6 +6,16 @@ class NoteDisplayState: ObservableObject {
     @Published var currentNote: Note?
     @Published var currentTopic: Topic?
     @Published var currentSubtopic: Subtopic?
+    /// Note opened via share link (`get_note_by_share_token`): no topic/subtopic; editing and cloud images may be unavailable.
+    @Published var isReadOnlySharePresentation: Bool = false
+    /// If user opens a share link before signing in, consume this after `isAuthenticated` becomes true.
+    @Published var pendingShareToken: UUID?
+    /// Same, for whole-notebook (`/b/…`) links.
+    @Published var pendingNotebookShareToken: UUID?
+    /// Topic to open after QR scan / deep link: `ContentView` switches to Notebook tab; `NotebookView` presents it.
+    @Published var pendingNotebookTopicToPresent: Topic?
+    /// Read-only notebook from `get_notebook_by_share_token` (full-screen, not in `DataManager`).
+    @Published var sharedReadOnlyNotebook: Topic?
 }
 
 // MARK: - App Error

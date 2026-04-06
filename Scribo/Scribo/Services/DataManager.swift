@@ -45,16 +45,216 @@ struct NoteAttachmentInsert: Encodable {
     let size_bytes: Int?
 }
 
+// MARK: - Note sharing (link + public RPC)
+
+enum NoteShareInviteURL {
+    static let httpsBase = "https://scribo.app"
+
+    /// Legacy single-note share (`get_note_by_share_token`).
+    static func httpsInviteURL(for token: UUID) -> String {
+        "\(httpsBase)/n/\(token.uuidString)"
+    }
+
+    /// Whole notebook (topic + subtopics + notes) — `get_notebook_by_share_token`.
+    static func httpsNotebookInviteURL(for token: UUID) -> String {
+        "\(httpsBase)/b/\(token.uuidString)"
+    }
+
+    /// Legacy: note-only custom scheme.
+    static func customSchemeInviteURL(for token: UUID) -> String {
+        var c = URLComponents()
+        c.scheme = "scribo"
+        c.host = "share"
+        c.queryItems = [URLQueryItem(name: "token", value: token.uuidString)]
+        return c.url?.absoluteString ?? "scribo://share?token=\(token.uuidString)"
+    }
+
+    /// Whole notebook on custom scheme (`scribo://notebook?token=`).
+    static func customSchemeNotebookInviteURL(for token: UUID) -> String {
+        var c = URLComponents()
+        c.scheme = "scribo"
+        c.host = "notebook"
+        c.queryItems = [URLQueryItem(name: "token", value: token.uuidString)]
+        return c.url?.absoluteString ?? "scribo://notebook?token=\(token.uuidString)"
+    }
+}
+
+private struct NoteShareLinkTokenRow: Codable {
+    let token: UUID
+    let revoked_at: String?
+}
+
+struct SharedNotePayload: Codable {
+    let note_id: UUID
+    let title: String
+    let content: String
+    let updated_at: String
+    let share_role: String?
+    let workspace_id: UUID?
+}
+
+private struct NoteShareLinkInsert: Encodable {
+    let note_id: UUID
+    let created_by: UUID
+}
+
+private struct TopicShareLinkTokenRow: Codable {
+    let token: UUID
+    let revoked_at: String?
+}
+
+private struct TopicShareLinkInsert: Encodable {
+    let topic_id: UUID
+    let created_by: UUID
+}
+
+private struct ShareTokenRPCParams: Encodable {
+    let p_token: UUID
+}
+
+/// Response from `get_notebook_by_share_token` — build a local `Topic` for read-only UI.
+struct SharedNotebookPayload: Codable {
+    let topic: SharedNotebookTopicRow
+    let subtopics: [SharedNotebookSubtopicRow]
+
+    struct SharedNotebookTopicRow: Codable {
+        let id: UUID
+        let user_id: UUID
+        let title: String
+        let created_at: String
+        let updated_at: String
+    }
+
+    struct SharedNotebookSubtopicRow: Codable {
+        let id: UUID
+        let topic_id: UUID
+        let title: String
+        let created_at: String
+        let updated_at: String
+        let notes: [Note]
+    }
+
+    func asTopic() -> Topic {
+        let subs = subtopics.map { row in
+            Subtopic(
+                id: row.id,
+                topic_id: row.topic_id,
+                title: row.title,
+                notes: row.notes,
+                created_at: row.created_at,
+                updated_at: row.updated_at
+            )
+        }
+        return Topic(
+            id: topic.id,
+            user_id: topic.user_id,
+            title: topic.title,
+            subtopics: subs,
+            created_at: topic.created_at,
+            updated_at: topic.updated_at
+        )
+    }
+
+    func makeLibraryEntry(shareToken: UUID, addedAt: Date = Date()) -> SavedSharedNotebookEntry {
+        let t = asTopic()
+        let notes = t.subtopics.flatMap(\.notes)
+        let snippet = notes.first(where: { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            .map { String($0.content.prefix(160)) }
+        return SavedSharedNotebookEntry(
+            shareToken: shareToken,
+            title: t.title,
+            subtopicCount: t.subtopics.count,
+            noteCount: notes.count,
+            previewSnippet: snippet,
+            addedAt: addedAt
+        )
+    }
+}
+
+/// A notebook someone opened via share link (`/b/…`), kept in the Notebook tab for quick access (still view-only).
+struct SavedSharedNotebookEntry: Codable, Identifiable, Equatable {
+    let shareToken: UUID
+    var title: String
+    var subtopicCount: Int
+    var noteCount: Int
+    var previewSnippet: String?
+    var addedAt: Date
+
+    var id: UUID { shareToken }
+}
+
 class DataManager: ObservableObject {
     static let shared = DataManager()
 
     @Published var topics: [Topic] = []
+    @Published var savedSharedNotebookEntries: [SavedSharedNotebookEntry] = []
     private let supabase = SupabaseConfig.shared.client
     private let notificationManager = NotificationManager.shared
 
     private init() {
-        Task {
-            await loadTopics()
+        Task { await loadTopics() }
+    }
+
+    /// Call on sign-out so the next user never sees the previous account’s notebook.
+    @MainActor
+    func clearNotebookData() {
+        topics = []
+        savedSharedNotebookEntries = []
+    }
+
+    private func savedSharedNotebooksKey(_ userId: UUID) -> String {
+        "scribo.savedSharedNotebooks.\(userId.uuidString)"
+    }
+
+    @MainActor
+    private func loadSavedSharedNotebooks(userId: UUID) {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        guard let data = UserDefaults.standard.data(forKey: savedSharedNotebooksKey(userId)),
+              let list = try? dec.decode([SavedSharedNotebookEntry].self, from: data) else {
+            savedSharedNotebookEntries = []
+            return
+        }
+        savedSharedNotebookEntries = list.sorted { $0.addedAt > $1.addedAt }
+    }
+
+    @MainActor
+    private func persistSavedSharedNotebooks(userId: UUID) {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        guard let data = try? enc.encode(savedSharedNotebookEntries) else { return }
+        UserDefaults.standard.set(data, forKey: savedSharedNotebooksKey(userId))
+    }
+
+    /// Upsert metadata when a shared notebook is opened (scan, link, or library).
+    func addOrUpdateSharedNotebookInLibrary(shareToken: UUID, payload: SharedNotebookPayload) async {
+        let userId: UUID
+        do {
+            userId = try await supabase.auth.session.user.id
+        } catch { return }
+        let existingAdded = await MainActor.run {
+            savedSharedNotebookEntries.first(where: { $0.shareToken == shareToken })?.addedAt
+        }
+        let addedAt = existingAdded ?? Date()
+        let newEntry = payload.makeLibraryEntry(shareToken: shareToken, addedAt: addedAt)
+        await MainActor.run {
+            if let idx = savedSharedNotebookEntries.firstIndex(where: { $0.shareToken == shareToken }) {
+                savedSharedNotebookEntries[idx] = newEntry
+            } else {
+                savedSharedNotebookEntries.insert(newEntry, at: 0)
+            }
+            persistSavedSharedNotebooks(userId: userId)
+        }
+    }
+
+    func removeSavedSharedNotebook(shareToken: UUID) async {
+        let userId: UUID
+        do {
+            userId = try await supabase.auth.session.user.id
+        } catch { return }
+        await MainActor.run {
+            savedSharedNotebookEntries.removeAll { $0.shareToken == shareToken }
+            persistSavedSharedNotebooks(userId: userId)
         }
     }
 
@@ -357,6 +557,8 @@ class DataManager: ObservableObject {
     @MainActor
     func loadTopics() async {
         do {
+            let session = try await supabase.auth.session
+            let userId = session.user.id
             let response = try await supabase
                 .from("topics")
                 .select("""
@@ -383,12 +585,15 @@ class DataManager: ObservableObject {
                         )
                     )
                 """)
+                .eq("user_id", value: userId)
                 .execute()
 
             let topics = try JSONDecoder().decode([Topic].self, from: response.data)
             self.topics = topics
+            loadSavedSharedNotebooks(userId: userId)
         } catch {
             print("Error loading topics: \(error)")
+            topics = []
         }
     }
 
@@ -853,5 +1058,95 @@ class DataManager: ObservableObject {
         let limit = subscriptionStatus.tier.limits.maxSubtopics
 
         return limit == -1 || subtopicCount < limit
+    }
+
+    // MARK: - Note sharing
+
+    /// Reuses an active (non-revoked) link for the note or inserts one; requires sign-in and note ownership per RLS.
+    func ensureActiveShareLink(forNoteId noteId: UUID) async throws -> UUID {
+        let session = try await supabase.auth.session
+
+        let listResponse = try await supabase
+            .from("note_share_links")
+            .select("token,revoked_at")
+            .eq("note_id", value: noteId.uuidString)
+            .execute()
+
+        let rows = try JSONDecoder().decode([NoteShareLinkTokenRow].self, from: listResponse.data)
+        if let active = rows.first(where: { $0.revoked_at == nil }) {
+            return active.token
+        }
+
+        let insert = NoteShareLinkInsert(note_id: noteId, created_by: session.user.id)
+        let insertResponse = try await supabase
+            .from("note_share_links")
+            .insert(insert)
+            .select("token")
+            .single()
+            .execute()
+
+        struct TokenOnly: Codable { let token: UUID }
+        let row = try JSONDecoder().decode(TokenOnly.self, from: insertResponse.data)
+        return row.token
+    }
+
+    /// Public payload for a valid, non-revoked share token (`get_note_by_share_token`). Callable with anon or user JWT.
+    func fetchSharedNotePayload(shareToken: UUID) async throws -> SharedNotePayload? {
+        let response = try await supabase
+            .rpc("get_note_by_share_token", params: ShareTokenRPCParams(p_token: shareToken))
+            .execute()
+
+        let raw = response.data
+        if raw.isEmpty { return nil }
+        if let str = String(data: raw, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           str == "null" {
+            return nil
+        }
+
+        return try JSONDecoder().decode(SharedNotePayload.self, from: raw)
+    }
+
+    /// Reuses an active (non-revoked) notebook link or inserts one; owner only per RLS.
+    func ensureActiveTopicShareLink(forTopicId topicId: UUID) async throws -> UUID {
+        let session = try await supabase.auth.session
+
+        let listResponse = try await supabase
+            .from("topic_share_links")
+            .select("token,revoked_at")
+            .eq("topic_id", value: topicId.uuidString)
+            .execute()
+
+        let rows = try JSONDecoder().decode([TopicShareLinkTokenRow].self, from: listResponse.data)
+        if let active = rows.first(where: { $0.revoked_at == nil }) {
+            return active.token
+        }
+
+        let insert = TopicShareLinkInsert(topic_id: topicId, created_by: session.user.id)
+        let insertResponse = try await supabase
+            .from("topic_share_links")
+            .insert(insert)
+            .select("token")
+            .single()
+            .execute()
+
+        struct TokenOnly: Codable { let token: UUID }
+        let row = try JSONDecoder().decode(TokenOnly.self, from: insertResponse.data)
+        return row.token
+    }
+
+    /// Full notebook tree for a valid share token (`get_notebook_by_share_token`).
+    func fetchSharedNotebookPayload(shareToken: UUID) async throws -> SharedNotebookPayload? {
+        let response = try await supabase
+            .rpc("get_notebook_by_share_token", params: ShareTokenRPCParams(p_token: shareToken))
+            .execute()
+
+        let raw = response.data
+        if raw.isEmpty { return nil }
+        if let str = String(data: raw, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           str == "null" {
+            return nil
+        }
+
+        return try JSONDecoder().decode(SharedNotebookPayload.self, from: raw)
     }
 }

@@ -22,6 +22,7 @@ struct ContentView: View {
     @AppStorage("isDarkMode") private var isDarkMode = true
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var alertManager = AlertManager()
+    @StateObject private var sharedNotebookSearchState = SearchState()
     @State private var sidebarDragOffset: CGFloat = 0
 
     var body: some View {
@@ -48,6 +49,17 @@ struct ContentView: View {
         .onChange(of: authManager.isAuthenticated) { oldValue, newValue in
             if !newValue {
                 isSidebarShowing = false
+                dataManager.clearNotebookData()
+            } else {
+                Task { await dataManager.loadTopics() }
+            }
+            if newValue, let token = noteDisplayState.pendingShareToken {
+                noteDisplayState.pendingShareToken = nil
+                Task { await openSharedNote(token: token) }
+            }
+            if newValue, let token = noteDisplayState.pendingNotebookShareToken {
+                noteDisplayState.pendingNotebookShareToken = nil
+                Task { await openSharedNotebook(token: token) }
             }
         }
         .alert(alertManager.alertTitle, isPresented: $alertManager.showAlert) {
@@ -84,33 +96,113 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
-            // Handle deep link for password reset and OAuth
             print("🔗 Received deep link: \(url)")
             if url.scheme == "scribo" {
                 if url.host == "reset-password" {
                     print("✅ Valid reset password URL detected")
-                    Task {
-                        await authManager.handlePasswordReset(url: url)
-                    }
-                } else if url.host == "auth-callback" {
+                    Task { await authManager.handlePasswordReset(url: url) }
+                    return
+                }
+                if url.host == "auth-callback" {
                     print("✅ Valid OAuth callback URL detected")
-                    Task {
-                        await authManager.checkSession()
-                    }
-                } else if url.host == "camera" {
+                    Task { await authManager.checkSession() }
+                    return
+                }
+                if url.host == "camera" {
                     print("✅ Valid camera URL detected")
-                    // Camera handling is done in ScriboApp.swift
-                } else {
-                    print("❌ Invalid URL host: \(url.host ?? "nil")")
+                    return
                 }
-            } else if url.absoluteString.contains("supabase.co/auth/v1/callback") {
-                print("✅ Valid Supabase callback URL detected")
-                Task {
-                    await authManager.checkSession()
-                }
-            } else {
-                print("❌ Invalid URL scheme: \(url.scheme ?? "nil")")
             }
+            if url.absoluteString.contains("supabase.co/auth/v1/callback") {
+                print("✅ Valid Supabase callback URL detected")
+                Task { await authManager.checkSession() }
+                return
+            }
+            if let link = ShareLinkTokenParser.sharedLink(from: url) {
+                switch link {
+                case .noteShare(let token):
+                    handleIncomingShareToken(token)
+                case .notebookShare(let token):
+                    handleIncomingNotebookShareToken(token)
+                case .topicInvite:
+                    break
+                }
+                return
+            }
+            if url.scheme == "scribo" {
+                print("❌ Unhandled scribo URL: \(url)")
+            }
+        }
+    }
+
+    private func handleIncomingShareToken(_ token: UUID) {
+        if authManager.isAuthenticated {
+            Task { await openSharedNote(token: token) }
+        } else {
+            noteDisplayState.pendingShareToken = token
+        }
+    }
+
+    private func handleIncomingNotebookShareToken(_ token: UUID) {
+        if authManager.isAuthenticated {
+            Task { await openSharedNotebook(token: token) }
+        } else {
+            noteDisplayState.pendingNotebookShareToken = token
+        }
+    }
+
+    private func openSharedNote(token: UUID) async {
+        do {
+            guard let payload = try await dataManager.fetchSharedNotePayload(shareToken: token) else {
+                await MainActor.run {
+                    alertManager.alertTitle = "Link unavailable"
+                    alertManager.alertMessage = "This share link may have been revoked or is invalid."
+                    alertManager.alertRecoverySuggestion = ""
+                    alertManager.showAlert = true
+                }
+                return
+            }
+            let note = Note(
+                id: payload.note_id,
+                subtopic_id: nil,
+                workspace_id: payload.workspace_id,
+                user_id: nil,
+                title: payload.title,
+                content: payload.content,
+                created_at: payload.updated_at,
+                updated_at: payload.updated_at
+            )
+            await MainActor.run {
+                noteDisplayState.currentTopic = nil
+                noteDisplayState.currentSubtopic = nil
+                noteDisplayState.currentNote = note
+                noteDisplayState.isReadOnlySharePresentation = true
+                noteDisplayState.isShowingNote = true
+            }
+        } catch {
+            await MainActor.run { alertManager.showError(error) }
+        }
+    }
+
+    private func openSharedNotebook(token: UUID) async {
+        do {
+            guard let payload = try await dataManager.fetchSharedNotebookPayload(shareToken: token) else {
+                await MainActor.run {
+                    alertManager.alertTitle = "Link unavailable"
+                    alertManager.alertMessage = "This notebook link may have been revoked or is invalid."
+                    alertManager.alertRecoverySuggestion = ""
+                    alertManager.showAlert = true
+                }
+                return
+            }
+            await dataManager.addOrUpdateSharedNotebookInLibrary(shareToken: token, payload: payload)
+            let topic = payload.asTopic()
+            await MainActor.run {
+                noteDisplayState.isReadOnlySharePresentation = true
+                noteDisplayState.sharedReadOnlyNotebook = topic
+            }
+        } catch {
+            await MainActor.run { alertManager.showError(error) }
         }
     }
 
@@ -217,6 +309,30 @@ struct ContentView: View {
             }
             .environment(\.layoutDirection, .leftToRight)
             .preferredColorScheme(isDarkMode ? .dark : .light)
+            .onChange(of: noteDisplayState.pendingNotebookTopicToPresent?.id) { _, newId in
+                if newId != nil {
+                    selectedTab = 1
+                }
+            }
+            .onChange(of: noteDisplayState.sharedReadOnlyNotebook?.id) { _, newId in
+                if newId == nil {
+                    noteDisplayState.isReadOnlySharePresentation = false
+                }
+            }
+            .fullScreenCover(item: Binding(
+                get: { noteDisplayState.sharedReadOnlyNotebook },
+                set: { noteDisplayState.sharedReadOnlyNotebook = $0 }
+            )) { topic in
+                NavigationView {
+                    TopicPreviewView(
+                        topic: topic,
+                        isReadOnlySharedNotebook: true,
+                        isPresented: .constant(true),
+                        dataManager: dataManager
+                    )
+                    .environmentObject(sharedNotebookSearchState)
+                }
+            }
             .fullScreenCover(isPresented: $everythingCreateNotePresented) {
                 CreateNoteSheetView(
                     isPresented: $everythingCreateNotePresented,
@@ -297,7 +413,13 @@ struct ContentView: View {
                         note: noteDisplayState.currentNote!,
                         isPresented: Binding(
                             get: { noteDisplayState.isShowingNote },
-                            set: { if !$0 { noteDisplayState.isShowingNote = false; noteDisplayState.currentNote = nil } }
+                            set: { newValue in
+                                if !newValue {
+                                    noteDisplayState.isShowingNote = false
+                                    noteDisplayState.currentNote = nil
+                                    noteDisplayState.isReadOnlySharePresentation = false
+                                }
+                            }
                         ),
                         dataManager: dataManager
                     )

@@ -242,6 +242,7 @@ class AuthManager: ObservableObject {
             isAuthenticated = false
             currentUser = nil
             self.error = nil
+            DataManager.shared.clearNotebookData()
 
             // Verify session is cleared
             _ = try? await supabase.auth.session

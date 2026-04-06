@@ -23,6 +23,7 @@ struct SidebarView: View {
     @ObservedObject var authManager: AuthManager
     let topInset: CGFloat
 
+    @EnvironmentObject private var noteDisplayState: NoteDisplayState
     @AppStorage("isDarkMode") private var isDarkMode = false
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var dataManager = DataManager.shared
@@ -39,6 +40,8 @@ struct SidebarView: View {
     @AppStorage("spotlightSearchEnabled") private var spotlightSearchEnabled = false
     @State private var showDeleteAccountAlert = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var isQRScannerPresented = false
+    @State private var showCameraDeniedAlert = false
 
     var body: some View {
         GeometryReader { geo in
@@ -145,6 +148,22 @@ struct SidebarView: View {
                             }) {
                                 sidebarRow(title: "Settings", trailing: {
                                     Image(systemName: "gearshape.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.white.opacity(0.6))
+                                })
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider()
+                                .background(Color.white.opacity(0.12))
+                                .padding(.horizontal, 18)
+
+                            Button(action: {
+                                performHapticFeedback(style: .light)
+                                isQRScannerPresented = true
+                            }) {
+                                sidebarRow(title: "Scan share QR", trailing: {
+                                    Image(systemName: "qrcode.viewfinder")
                                         .font(.system(size: 18))
                                         .foregroundColor(.white.opacity(0.6))
                                 })
@@ -291,6 +310,44 @@ struct SidebarView: View {
                     }
             }
         }
+        .fullScreenCover(isPresented: $isQRScannerPresented) {
+            QRCodeScannerView(
+                onScan: { raw in
+                    isQRScannerPresented = false
+                    openSharedNoteFromScannedQR(raw)
+                },
+                onClose: { isQRScannerPresented = false },
+                onAccessFailed: {
+                    isQRScannerPresented = false
+                    showCameraDeniedAlert = true
+                }
+            )
+        }
+        .alert("Camera access", isPresented: $showCameraDeniedAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("Allow camera access in Settings to scan a Scribo share QR code.")
+        }
+        .alert(alertManager.alertTitle, isPresented: $alertManager.showAlert) {
+            Button("OK", role: .cancel) { }
+            if !alertManager.alertRecoverySuggestion.isEmpty {
+                Button("Try Again") { }
+            }
+        } message: {
+            VStack {
+                Text(alertManager.alertMessage)
+                if !alertManager.alertRecoverySuggestion.isEmpty {
+                    Text(alertManager.alertRecoverySuggestion)
+                        .font(.caption)
+                        .foregroundColor(.featureCalloutText.opacity(0.7))
+                }
+            }
+        }
         .alert("Delete account", isPresented: $showDeleteAccountAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -312,6 +369,97 @@ struct SidebarView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+
+    private func openSharedNoteFromScannedQR(_ raw: String) {
+        guard let link = ShareLinkTokenParser.sharedLink(fromScannedRaw: raw) else {
+            alertManager.alertTitle = "Not a Scribo link"
+            alertManager.alertMessage = "This QR code is not a Scribo notebook share link."
+            alertManager.alertRecoverySuggestion = ""
+            alertManager.showAlert = true
+            return
+        }
+        switch link {
+        case .notebookShare(let token):
+            Task {
+                do {
+                    guard let payload = try await dataManager.fetchSharedNotebookPayload(shareToken: token) else {
+                        await MainActor.run {
+                            alertManager.alertTitle = "Link unavailable"
+                            alertManager.alertMessage = "This notebook link may have been revoked or is invalid."
+                            alertManager.alertRecoverySuggestion = ""
+                            alertManager.showAlert = true
+                        }
+                        return
+                    }
+                    await dataManager.addOrUpdateSharedNotebookInLibrary(shareToken: token, payload: payload)
+                    let topic = payload.asTopic()
+                    await MainActor.run {
+                        noteDisplayState.isReadOnlySharePresentation = true
+                        noteDisplayState.sharedReadOnlyNotebook = topic
+                        isShowing = false
+                    }
+                } catch {
+                    await MainActor.run { alertManager.showError(error) }
+                }
+            }
+        case .topicInvite(let topicId):
+            Task {
+                await dataManager.loadTopics()
+                await MainActor.run {
+                    guard let topic = dataManager.topics.first(where: { $0.id == topicId }) else {
+                        alertManager.alertTitle = "Couldn’t open this topic"
+                        alertManager.alertMessage =
+                            "This QR links to a notebook topic on your Scribo account. After syncing, we still couldn’t find it."
+                        alertManager.alertRecoverySuggestion =
+                            "Make sure you’re signed into the account that created this notebook. To share the full notebook with others, use Share in the Notebook tab (link looks like …/b/…)."
+                        alertManager.showAlert = true
+                        return
+                    }
+                    noteDisplayState.isReadOnlySharePresentation = false
+                    noteDisplayState.currentSubtopic = nil
+                    noteDisplayState.currentNote = nil
+                    noteDisplayState.isShowingNote = false
+                    noteDisplayState.currentTopic = topic
+                    noteDisplayState.pendingNotebookTopicToPresent = topic
+                    isShowing = false
+                }
+            }
+        case .noteShare(let token):
+            Task {
+                do {
+                    guard let payload = try await dataManager.fetchSharedNotePayload(shareToken: token) else {
+                        await MainActor.run {
+                            alertManager.alertTitle = "Link unavailable"
+                            alertManager.alertMessage = "This share link may have been revoked or is invalid."
+                            alertManager.alertRecoverySuggestion = ""
+                            alertManager.showAlert = true
+                        }
+                        return
+                    }
+                    let note = Note(
+                        id: payload.note_id,
+                        subtopic_id: nil,
+                        workspace_id: payload.workspace_id,
+                        user_id: nil,
+                        title: payload.title,
+                        content: payload.content,
+                        created_at: payload.updated_at,
+                        updated_at: payload.updated_at
+                    )
+                    await MainActor.run {
+                        noteDisplayState.currentTopic = nil
+                        noteDisplayState.currentSubtopic = nil
+                        noteDisplayState.currentNote = note
+                        noteDisplayState.isReadOnlySharePresentation = true
+                        noteDisplayState.isShowingNote = true
+                        isShowing = false
+                    }
+                } catch {
+                    await MainActor.run { alertManager.showError(error) }
+                }
+            }
+        }
     }
 
     private func loadUserInfo() async {
