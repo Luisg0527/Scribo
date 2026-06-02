@@ -96,42 +96,52 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
-            print("🔗 Received deep link: \(url)")
-            if url.scheme == "scribo" {
-                if url.host == "reset-password" {
-                    print("✅ Valid reset password URL detected")
-                    Task { await authManager.handlePasswordReset(url: url) }
-                    return
-                }
-                if url.host == "auth-callback" {
-                    print("✅ Valid OAuth callback URL detected")
-                    Task { await authManager.checkSession() }
-                    return
-                }
-                if url.host == "camera" {
-                    print("✅ Valid camera URL detected")
-                    return
-                }
+            handleIncomingURL(url, source: "openURL")
+        }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
+            if let url = userActivity.webpageURL {
+                handleIncomingURL(url, source: "universalLink")
             }
-            if url.absoluteString.contains("supabase.co/auth/v1/callback") {
-                print("✅ Valid Supabase callback URL detected")
+        }
+    }
+
+    /// Handles custom-scheme deep links, HTTPS share URLs opened in-app, and Universal Links (`applinks`).
+    private func handleIncomingURL(_ url: URL, source: String) {
+        print("🔗 Received deep link (\(source)): \(url)")
+        if url.scheme == "scribo" {
+            if url.host == "reset-password" {
+                print("✅ Valid reset password URL detected")
+                Task { await authManager.handlePasswordReset(url: url) }
+                return
+            }
+            if url.host == "auth-callback" {
+                print("✅ Valid OAuth callback URL detected")
                 Task { await authManager.checkSession() }
                 return
             }
-            if let link = ShareLinkTokenParser.sharedLink(from: url) {
-                switch link {
-                case .noteShare(let token):
-                    handleIncomingShareToken(token)
-                case .notebookShare(let token):
-                    handleIncomingNotebookShareToken(token)
-                case .topicInvite:
-                    break
-                }
+            if url.host == "camera" {
+                print("✅ Valid camera URL detected")
                 return
             }
-            if url.scheme == "scribo" {
-                print("❌ Unhandled scribo URL: \(url)")
+        }
+        if url.absoluteString.contains("supabase.co/auth/v1/callback") {
+            print("✅ Valid Supabase callback URL detected")
+            Task { await authManager.checkSession() }
+            return
+        }
+        if let link = ShareLinkTokenParser.sharedLink(from: url) {
+            switch link {
+            case .noteShare(let token):
+                handleIncomingShareToken(token)
+            case .notebookShare(let token):
+                handleIncomingNotebookShareToken(token)
+            case .topicInvite:
+                break
             }
+            return
+        }
+        if url.scheme == "scribo" {
+            print("❌ Unhandled scribo URL: \(url)")
         }
     }
 

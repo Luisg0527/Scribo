@@ -183,6 +183,46 @@ struct SavedSharedNotebookEntry: Codable, Identifiable, Equatable {
     var id: UUID { shareToken }
 }
 
+private struct UserSavedSharedNotebookRow: Codable {
+    let user_id: UUID
+    let share_token: UUID
+    let title: String
+    let subtopic_count: Int
+    let note_count: Int
+    let preview_snippet: String?
+    let added_at: String
+
+    func asSavedEntry() -> SavedSharedNotebookEntry {
+        SavedSharedNotebookEntry(
+            shareToken: share_token,
+            title: title,
+            subtopicCount: subtopic_count,
+            noteCount: note_count,
+            previewSnippet: preview_snippet,
+            addedAt: Self.parseSupabaseISO8601(added_at)
+        )
+    }
+
+    private static func parseSupabaseISO8601(_ s: String) -> Date {
+        let withFrac = ISO8601DateFormatter()
+        withFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFrac.date(from: s) { return d }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: s) ?? Date()
+    }
+}
+
+private struct UserSavedSharedNotebookUpsert: Encodable {
+    let user_id: UUID
+    let share_token: UUID
+    let title: String
+    let subtopic_count: Int
+    let note_count: Int
+    let preview_snippet: String?
+    let added_at: String
+}
+
 class DataManager: ObservableObject {
     static let shared = DataManager()
 
@@ -206,24 +246,81 @@ class DataManager: ObservableObject {
         "scribo.savedSharedNotebooks.\(userId.uuidString)"
     }
 
-    @MainActor
-    private func loadSavedSharedNotebooks(userId: UUID) {
-        let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .iso8601
-        guard let data = UserDefaults.standard.data(forKey: savedSharedNotebooksKey(userId)),
-              let list = try? dec.decode([SavedSharedNotebookEntry].self, from: data) else {
-            savedSharedNotebookEntries = []
-            return
-        }
-        savedSharedNotebookEntries = list.sorted { $0.addedAt > $1.addedAt }
+    private func savedSharedAddedAtEncoder() -> ISO8601DateFormatter {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fmt
     }
 
-    @MainActor
-    private func persistSavedSharedNotebooks(userId: UUID) {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        guard let data = try? enc.encode(savedSharedNotebookEntries) else { return }
-        UserDefaults.standard.set(data, forKey: savedSharedNotebooksKey(userId))
+    private func fetchSavedSharedNotebookEntries(userId: UUID) async throws -> [SavedSharedNotebookEntry] {
+        let response = try await supabase
+            .from("user_saved_shared_notebooks")
+            .select()
+            .eq("user_id", value: userId)
+            .order("added_at", ascending: false)
+            .execute()
+        let rows = try JSONDecoder().decode([UserSavedSharedNotebookRow].self, from: response.data)
+        return rows.map { $0.asSavedEntry() }
+    }
+
+    private func upsertSavedSharedNotebookRow(userId: UUID, entry: SavedSharedNotebookEntry) async throws {
+        let row = UserSavedSharedNotebookUpsert(
+            user_id: userId,
+            share_token: entry.shareToken,
+            title: entry.title,
+            subtopic_count: entry.subtopicCount,
+            note_count: entry.noteCount,
+            preview_snippet: entry.previewSnippet,
+            added_at: savedSharedAddedAtEncoder().string(from: entry.addedAt)
+        )
+        try await supabase
+            .from("user_saved_shared_notebooks")
+            .upsert(row, onConflict: "user_id,share_token")
+            .execute()
+    }
+
+    /// Loads bookmarks from Supabase; migrates legacy `UserDefaults` list once, then removes that key.
+    private func loadSavedSharedNotebooksFromSupabase(userId: UUID) async {
+        do {
+            var entries = try await fetchSavedSharedNotebookEntries(userId: userId)
+            let legacy = await MainActor.run { () -> [SavedSharedNotebookEntry]? in
+                let dec = JSONDecoder()
+                dec.dateDecodingStrategy = .iso8601
+                guard let data = UserDefaults.standard.data(forKey: savedSharedNotebooksKey(userId)),
+                      let list = try? dec.decode([SavedSharedNotebookEntry].self, from: data),
+                      !list.isEmpty else { return nil }
+                return list
+            }
+            if let legacy, !legacy.isEmpty {
+                for entry in legacy {
+                    do {
+                        try await upsertSavedSharedNotebookRow(userId: userId, entry: entry)
+                    } catch {
+                        print("Saved shared notebook migration upsert failed: \(error)")
+                    }
+                }
+                await MainActor.run {
+                    UserDefaults.standard.removeObject(forKey: savedSharedNotebooksKey(userId))
+                }
+                entries = try await fetchSavedSharedNotebookEntries(userId: userId)
+            }
+            await MainActor.run {
+                savedSharedNotebookEntries = entries.sorted { $0.addedAt > $1.addedAt }
+            }
+        } catch {
+            print("Error loading saved shared notebooks from Supabase: \(error)")
+            await MainActor.run {
+                let dec = JSONDecoder()
+                dec.dateDecodingStrategy = .iso8601
+                if let data = UserDefaults.standard.data(forKey: savedSharedNotebooksKey(userId)),
+                   let list = try? dec.decode([SavedSharedNotebookEntry].self, from: data),
+                   !list.isEmpty {
+                    savedSharedNotebookEntries = list.sorted { $0.addedAt > $1.addedAt }
+                } else {
+                    savedSharedNotebookEntries = []
+                }
+            }
+        }
     }
 
     /// Upsert metadata when a shared notebook is opened (scan, link, or library).
@@ -237,13 +334,17 @@ class DataManager: ObservableObject {
         }
         let addedAt = existingAdded ?? Date()
         let newEntry = payload.makeLibraryEntry(shareToken: shareToken, addedAt: addedAt)
-        await MainActor.run {
-            if let idx = savedSharedNotebookEntries.firstIndex(where: { $0.shareToken == shareToken }) {
-                savedSharedNotebookEntries[idx] = newEntry
-            } else {
-                savedSharedNotebookEntries.insert(newEntry, at: 0)
+        do {
+            try await upsertSavedSharedNotebookRow(userId: userId, entry: newEntry)
+            await MainActor.run {
+                if let idx = savedSharedNotebookEntries.firstIndex(where: { $0.shareToken == shareToken }) {
+                    savedSharedNotebookEntries[idx] = newEntry
+                } else {
+                    savedSharedNotebookEntries.insert(newEntry, at: 0)
+                }
             }
-            persistSavedSharedNotebooks(userId: userId)
+        } catch {
+            print("Error saving shared notebook to library: \(error)")
         }
     }
 
@@ -252,9 +353,44 @@ class DataManager: ObservableObject {
         do {
             userId = try await supabase.auth.session.user.id
         } catch { return }
-        await MainActor.run {
-            savedSharedNotebookEntries.removeAll { $0.shareToken == shareToken }
-            persistSavedSharedNotebooks(userId: userId)
+        do {
+            try await supabase
+                .from("user_saved_shared_notebooks")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("share_token", value: shareToken)
+                .execute()
+            await MainActor.run {
+                savedSharedNotebookEntries.removeAll { $0.shareToken == shareToken }
+            }
+        } catch {
+            print("Error removing saved shared notebook: \(error)")
+        }
+    }
+
+    /// Updates the display title for a saved shared notebook in the user's library.
+    func renameSavedSharedNotebook(shareToken: UUID, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let userId: UUID
+        do {
+            userId = try await supabase.auth.session.user.id
+        } catch { return }
+        let entry: SavedSharedNotebookEntry? = await MainActor.run {
+            guard let idx = savedSharedNotebookEntries.firstIndex(where: { $0.shareToken == shareToken }) else {
+                return nil
+            }
+            var updated = savedSharedNotebookEntries[idx]
+            updated.title = trimmed
+            savedSharedNotebookEntries[idx] = updated
+            return updated
+        }
+        guard let entry else { return }
+        do {
+            try await upsertSavedSharedNotebookRow(userId: userId, entry: entry)
+        } catch {
+            print("Error renaming saved shared notebook: \(error)")
+            await loadSavedSharedNotebooksFromSupabase(userId: userId)
         }
     }
 
@@ -590,7 +726,7 @@ class DataManager: ObservableObject {
 
             let topics = try JSONDecoder().decode([Topic].self, from: response.data)
             self.topics = topics
-            loadSavedSharedNotebooks(userId: userId)
+            await loadSavedSharedNotebooksFromSupabase(userId: userId)
         } catch {
             print("Error loading topics: \(error)")
             topics = []
@@ -740,7 +876,7 @@ class DataManager: ObservableObject {
         let hasAssetId = !(trimmedAsset?.isEmpty ?? true)
 
         switch tier {
-        case .pro, .premium:
+        case .premium:
             let objectKey = "\(userId.uuidString.lowercased())/\(noteId.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
             try await supabase.storage
                 .from(NoteAttachmentBuckets.supabase)
@@ -972,7 +1108,7 @@ class DataManager: ObservableObject {
 
         // Handle optional subscription tier
         let tierString = (userData["subscription_tier"] as? String) ?? "free"
-        let tier = SubscriptionTier(rawValue: tierString) ?? .free
+        let tier = SubscriptionTier.fromStoredValue(tierString)
 
         // Handle optional expiration date
         var expiresAt: Date?

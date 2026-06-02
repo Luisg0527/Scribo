@@ -81,35 +81,125 @@ private func bulkSelectionBadge(isSelected: Bool) -> some View {
         .padding(8)
 }
 
-/// Trailing header badge for shared notebooks opened in read-only mode.
-private struct ViewOnlyHeaderBadge: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 13, weight: .semibold))
-            Text("View only")
-                .font(.caption)
-                .fontWeight(.semibold)
-        }
-        .foregroundColor(.appTextSecondary)
+// MARK: - Shared notebook in “My notebooks” (library card + detail loader)
+
+/// Title + menu sit outside the navigation link so the menu does not open the notebook.
+private enum NotebookLibraryCardLayout {
+    static var subheadlineLineHeight: CGFloat {
+        UIFont.preferredFont(forTextStyle: .subheadline).lineHeight
+    }
+
+    /// Reserved height for up to two `.subheadline` lines; ellipsis is centered in this band on every card.
+    static var titleRowHeight: CGFloat {
+        ceil(subheadlineLineHeight * 2)
+    }
+
+    static let previewHeight: CGFloat = 130
+    static let titleTopPadding: CGFloat = 8
+    static let gridSpacing: CGFloat = 8
+
+    static var gridCellHeight: CGFloat {
+        previewHeight + gridSpacing + titleTopPadding + titleRowHeight
     }
 }
 
-// MARK: - Shared notebook in “My notebooks” (library card + detail loader)
+private struct NotebookLibraryTitleMeasuredHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
 
-private struct SharedNotebookLibraryCardView: View {
+private struct NotebookLibraryCardTitleRow: View {
+    let title: String
+    let allowsRename: Bool
+    var showsShare: Bool = true
+    let onRename: () -> Void
+    let onDelete: () -> Void
+    let onShare: () -> Void
+
+    @State private var measuredTitleHeight: CGFloat = 0
+
+    private var isTwoLineTitle: Bool {
+        measuredTitleHeight > NotebookLibraryCardLayout.subheadlineLineHeight + 1
+    }
+
+    private var rowAlignment: VerticalAlignment {
+        isTwoLineTitle ? .top : .center
+    }
+
+    var body: some View {
+        HStack(alignment: rowAlignment, spacing: 4) {
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.regular)
+                .foregroundColor(Color(.secondaryLabel))
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: isTwoLineTitle ? .topLeading : .leading)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: NotebookLibraryTitleMeasuredHeightKey.self,
+                            value: geometry.size.height
+                        )
+                    }
+                }
+
+            Menu {
+                notebookLibraryMenuActions(
+                    allowsRename: allowsRename,
+                    showsShare: showsShare,
+                    onRename: onRename,
+                    onShare: onShare,
+                    onDelete: onDelete
+                )
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(Color(.secondaryLabel))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: 24, height: NotebookLibraryCardLayout.titleRowHeight, alignment: .center)
+        }
+        .frame(height: NotebookLibraryCardLayout.titleRowHeight, alignment: isTwoLineTitle ? .top : .center)
+        .onPreferenceChange(NotebookLibraryTitleMeasuredHeightKey.self) { measuredTitleHeight = $0 }
+        .onChange(of: title) { _, _ in measuredTitleHeight = 0 }
+        .padding(.top, 8)
+        .padding(.leading, 4)
+        .padding(.trailing, 16)
+        .frame(width: 168, alignment: .leading)
+    }
+}
+
+private struct NotebookLibrarySharedBadge: View {
+    var body: some View {
+        Image(systemName: "person.2.circle.fill")
+            .font(.system(size: 18, weight: .medium))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(Color(.secondaryLabel))
+            .padding(8)
+    }
+}
+
+/// Tappable stacked-card preview — opens the shared notebook.
+private struct SharedNotebookLibraryCardPreview: View {
     let entry: SavedSharedNotebookEntry
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .center, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.appAccent2.opacity(colorScheme == .dark ? 0.35 : 0.45))
-                    .frame(width: 160, height: 124)
-                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-                    .rotationEffect(.degrees(-6))
-                    .offset(x: -6, y: 4)
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(colorScheme == .dark ? .systemGray3 : .systemGray4))
+                .frame(width: 160, height: 124)
+                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                .rotationEffect(.degrees(-6))
+                .offset(x: -6, y: 4)
+            ZStack(alignment: .bottomTrailing) {
                 Group {
                     if let snippet = entry.previewSnippet, !snippet.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(snippet)
@@ -121,44 +211,39 @@ private struct SharedNotebookLibraryCardView: View {
                             .padding(14)
                             .background(Color(.systemBackground))
                     } else {
-                        ZStack {
-                            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
-                            Image(systemName: "eye.circle.fill")
-                                .font(.system(size: 44, weight: .light))
-                                .foregroundColor(.gray.opacity(0.55))
-                        }
+                        Color.white
                     }
                 }
-                .frame(width: 160, height: 124)
-                .clipped()
-                .cornerRadius(8)
-                Image(systemName: "eye.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(5)
-                    .background(Circle().fill(Color.black.opacity(0.5)))
-                    .padding(8)
+                NotebookLibrarySharedBadge()
             }
-            .frame(width: 168, height: 130)
-
-            Text(entry.title)
-                .font(.subheadline)
-                .fontWeight(.regular)
-                .foregroundColor(Color(.secondaryLabel))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(width: 168, alignment: .center)
-
-            Text("\(entry.noteCount) notes · shared")
-                .font(.caption)
-                .foregroundColor(Color(.secondaryLabel))
-                .frame(width: 168, alignment: .center)
+            .frame(width: 160, height: 124)
+            .clipped()
+            .cornerRadius(8)
         }
-        .frame(width: 168, height: 184)
-        .padding()
-        .background(Color.clear)
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .frame(width: 168, height: 130)
+    }
+}
+
+@ViewBuilder
+private func notebookLibraryMenuActions(
+    allowsRename: Bool,
+    showsShare: Bool = true,
+    onRename: @escaping () -> Void,
+    onShare: @escaping () -> Void,
+    onDelete: @escaping () -> Void
+) -> some View {
+    if allowsRename {
+        Button(action: onRename) {
+            Label("Rename", systemImage: "pencil")
+        }
+    }
+    if showsShare {
+        Button(action: onShare) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+    }
+    Button(role: .destructive, action: onDelete) {
+        Label("Delete", systemImage: "trash")
     }
 }
 
@@ -227,6 +312,9 @@ struct TopicPreviewView: View {
     @State private var selectedSubtopicIdsForDeletion: Set<UUID> = []
     @State private var confirmBulkDeleteSubtopics = false
     @State private var isShowingNewSubtopicSheet = false
+    @State private var isShowingEditSubtopicSheet = false
+    @State private var subtopicForEdit: Subtopic?
+    @State private var subtopicToDelete: Subtopic?
     @State private var editedTopicTitle = ""
     @FocusState private var isTopicTitleFocused: Bool
     @State private var topicTitleHasChanges = false
@@ -302,8 +390,32 @@ struct TopicPreviewView: View {
         .fullScreenCover(isPresented: $isShowingNewSubtopicSheet) {
             NewSubtopicView(topic: topic, dataManager: dataManager)
         }
+        .sheet(isPresented: $isShowingEditSubtopicSheet) {
+            if let subtopic = subtopicForEdit,
+               let currentTopic = dataManager.topics.first(where: { $0.id == topic.id }),
+               let currentSubtopic = currentTopic.subtopics.first(where: { $0.id == subtopic.id }) {
+                EditSubtopicView(subtopic: currentSubtopic, topic: currentTopic, dataManager: dataManager)
+            }
+        }
         .onAppear {
             syncTopicTitleFromDataManager()
+        }
+        .alert("Delete Subtopic", isPresented: .init(
+            get: { subtopicToDelete != nil },
+            set: { if !$0 { subtopicToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                subtopicToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let subtopic = subtopicToDelete,
+                   let currentTopic = dataManager.topics.first(where: { $0.id == topic.id }) {
+                    dataManager.deleteSubtopic(subtopic, from: currentTopic)
+                }
+                subtopicToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this subtopic? This will also delete all its notes.")
         }
         .alert("Delete selected subtopics?", isPresented: $confirmBulkDeleteSubtopics) {
             Button("Cancel", role: .cancel) {}
@@ -371,8 +483,8 @@ struct TopicPreviewView: View {
                 .foregroundColor(.appAccent1)
                 .frame(width: 60, alignment: .trailing)
             } else if isReadOnlySharedNotebook {
-                ViewOnlyHeaderBadge()
-                    .frame(width: 104, alignment: .trailing)
+                Color.clear
+                    .frame(width: 44, height: 44)
             } else {
                 Menu {
                     Button(action: { Task { await beginNotebookShareFlow() } }) {
@@ -462,31 +574,68 @@ struct TopicPreviewView: View {
     }
     
     private func subtopicCard(_ subtopic: Subtopic) -> some View {
-        Group {
-            if isBulkSelectingSubtopics {
-                Button {
-                    if selectedSubtopicIdsForDeletion.contains(subtopic.id) {
-                        selectedSubtopicIdsForDeletion.remove(subtopic.id)
-                    } else {
-                        selectedSubtopicIdsForDeletion.insert(subtopic.id)
+        let displayTitle = dataManager.topics.first(where: { $0.id == topic.id })?
+            .subtopics.first(where: { $0.id == subtopic.id })?.title ?? subtopic.title
+
+        return VStack(spacing: 8) {
+            Group {
+                if isBulkSelectingSubtopics {
+                    Button {
+                        if selectedSubtopicIdsForDeletion.contains(subtopic.id) {
+                            selectedSubtopicIdsForDeletion.remove(subtopic.id)
+                        } else {
+                            selectedSubtopicIdsForDeletion.insert(subtopic.id)
+                        }
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            SubtopicCardPreview(subtopic: subtopic, dataManager: dataManager)
+                            bulkSelectionBadge(isSelected: selectedSubtopicIdsForDeletion.contains(subtopic.id))
+                        }
                     }
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
-                        bulkSelectionBadge(isSelected: selectedSubtopicIdsForDeletion.contains(subtopic.id))
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(destination: SubtopicPreviewView(
+                        subtopic: subtopic,
+                        topic: topic,
+                        isPresented: $isPresented,
+                        dataManager: dataManager,
+                        isReadOnlySharedNotebook: isReadOnlySharedNotebook
+                    )) {
+                        SubtopicCardPreview(subtopic: subtopic, dataManager: dataManager)
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            } else {
-                NavigationLink(destination: SubtopicPreviewView(
-                    subtopic: subtopic,
-                    topic: topic,
-                    isPresented: $isPresented,
-                    dataManager: dataManager,
-                    isReadOnlySharedNotebook: isReadOnlySharedNotebook
-                )) {
-                    SubtopicCardView(subtopic: subtopic, dataManager: dataManager)
-                }
+            }
+
+            NotebookLibraryCardTitleRow(
+                title: displayTitle,
+                allowsRename: !isReadOnlySharedNotebook,
+                showsShare: false,
+                onRename: {
+                    subtopicForEdit = subtopic
+                    isShowingEditSubtopicSheet = true
+                },
+                onDelete: { subtopicToDelete = subtopic },
+                onShare: {}
+            )
+        }
+        .frame(width: 168, height: NotebookLibraryCardLayout.gridCellHeight)
+        .padding()
+        .background(Color.clear)
+        .cornerRadius(14)
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .contextMenu {
+            if !isBulkSelectingSubtopics {
+                notebookLibraryMenuActions(
+                    allowsRename: !isReadOnlySharedNotebook,
+                    showsShare: false,
+                    onRename: {
+                        subtopicForEdit = subtopic
+                        isShowingEditSubtopicSheet = true
+                    },
+                    onShare: {},
+                    onDelete: { subtopicToDelete = subtopic }
+                )
             }
         }
     }
@@ -781,8 +930,8 @@ struct SubtopicPreviewView: View {
                 .foregroundColor(.appAccent1)
                 .frame(width: 60, alignment: .trailing)
             } else if isReadOnlySharedNotebook {
-                ViewOnlyHeaderBadge()
-                    .frame(width: 104, alignment: .trailing)
+                Color.clear
+                    .frame(width: 44, height: 44)
             } else {
                 Menu {
                     Button(role: .destructive, action: {
@@ -889,8 +1038,8 @@ private func resolvePreviewNoteForTopic(_ topic: Topic, dataManager: DataManager
     return ordered.first
 }
 
-// MARK: - Subtopic Card View (same look as note cards: first note preview, centered title & count)
-struct SubtopicCardView: View {
+// MARK: - Subtopic Card Preview (stacked note preview only; title + menu live on the grid cell)
+private struct SubtopicCardPreview: View {
     let subtopic: Subtopic
     @ObservedObject var dataManager: DataManager
     @Environment(\.colorScheme) var colorScheme
@@ -898,41 +1047,19 @@ struct SubtopicCardView: View {
     @State private var previewNote: Note?
 
     var body: some View {
-        VStack(alignment: .center, spacing: 8) {
-            // Note square with stacked card effect (second card behind, rotated left)
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(colorScheme == .dark ? .systemGray3 : .systemGray4))
-                    .frame(width: 160, height: 124)
-                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-                    .rotationEffect(.degrees(-6))
-                    .offset(x: -6, y: 4)
-                cardMediaBlock
-                    .frame(width: 160, height: 124)
-                    .clipped()
-                    .cornerRadius(8)
-            }
-            .frame(width: 168, height: 130)
-            
-            Text(subtopic.title)
-                .font(.subheadline)
-                .fontWeight(.regular)
-                .foregroundColor(Color(.secondaryLabel))
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(width: 168, alignment: .center)
-                .multilineTextAlignment(.center)
-            
-            Text("\(subtopic.notes.count) notes")
-                .font(.caption)
-                .foregroundColor(Color(.secondaryLabel))
-                .frame(width: 168, alignment: .center)
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(colorScheme == .dark ? .systemGray3 : .systemGray4))
+                .frame(width: 160, height: 124)
+                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                .rotationEffect(.degrees(-6))
+                .offset(x: -6, y: 4)
+            cardMediaBlock
+                .frame(width: 160, height: 124)
+                .clipped()
+                .cornerRadius(8)
         }
-        .frame(width: 168, height: 184)
-        .padding()
-        .background(Color.clear)
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .frame(width: 168, height: 130)
         .task(id: "\(subtopic.id.uuidString)-\(subtopic.notes.count)") {
             await MainActor.run {
                 thumbnailImage = nil
@@ -993,19 +1120,13 @@ struct SubtopicCardView: View {
     }
     
     private var placeholderBlock: some View {
-        ZStack {
-            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
-            Image(systemName: "photo.on.rectangle")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 40, height: 40)
-                .foregroundColor(.gray.opacity(0.6))
-        }
+        Color.white
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Topic Card View (All Notebooks — same stacked-card layout as SubtopicCardView)
-struct TopicCardView: View {
+// MARK: - Topic Card View (All Notebooks — same stacked-card layout as SubtopicCardPreview)
+private struct TopicCardPreview: View {
     let topic: Topic
     @ObservedObject var dataManager: DataManager
     @Environment(\.colorScheme) var colorScheme
@@ -1014,10 +1135,6 @@ struct TopicCardView: View {
 
     private var orderedNotes: [Note] {
         topic.subtopics.flatMap(\.notes)
-    }
-
-    private var totalNoteCount: Int {
-        topic.subtopics.reduce(0) { $0 + $1.notes.count }
     }
 
     /// Rear “peek” card uses the notebook color; falls back to neutral gray if unset.
@@ -1029,48 +1146,19 @@ struct TopicCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .center, spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(stackedBackCardFill)
-                    .frame(width: 160, height: 124)
-                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-                    .rotationEffect(.degrees(-6))
-                    .offset(x: -6, y: 4)
-                cardMediaBlock
-                    .frame(width: 160, height: 124)
-                    .clipped()
-                    .cornerRadius(8)
-            }
-            .frame(width: 168, height: 130)
-
-            HStack(alignment: .center, spacing: 0) {
-                Spacer(minLength: 0)
-                HStack(alignment: .center, spacing: 6) {
-                    Text(topic.title)
-                        .font(.subheadline)
-                        .fontWeight(.regular)
-                        .foregroundColor(Color(.secondaryLabel))
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 146, alignment: .center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(width: 168)
-
-            Text("\(totalNoteCount) notes")
-                .font(.caption)
-                .foregroundColor(Color(.secondaryLabel))
-                .frame(width: 168, alignment: .center)
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(stackedBackCardFill)
+                .frame(width: 160, height: 124)
+                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                .rotationEffect(.degrees(-6))
+                .offset(x: -6, y: 4)
+            cardMediaBlock
+                .frame(width: 160, height: 124)
+                .clipped()
+                .cornerRadius(8)
         }
-        .frame(width: 168, height: 184)
-        .padding()
-        .background(Color.clear)
-        .cornerRadius(14)
-        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .frame(width: 168, height: 130)
         .task(id: "\(topic.id.uuidString)-\(orderedNotes.count)") {
             await MainActor.run {
                 thumbnailImage = nil
@@ -1131,14 +1219,8 @@ struct TopicCardView: View {
     }
 
     private var placeholderBlock: some View {
-        ZStack {
-            Color(colorScheme == .dark ? .systemGray5 : .systemGray6)
-            Image(systemName: "photo.on.rectangle")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 40, height: 40)
-                .foregroundColor(.gray.opacity(0.6))
-        }
+        Color.white
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -1530,6 +1612,12 @@ struct NotebookView: View {
     @State private var isShowingEditSubtopicSheet = false
     /// Tap the section title to cycle: All → My → Shared → All (skips empty legs).
     @State private var librarySectionFilter: NotebookLibrarySectionFilter = .all
+    /// Bumps on every real filter change so grid `.id` never repeats when cycling back to the same mode (.all, etc.).
+    @State private var libraryGridAnimationEpoch = 0
+    @State private var sharedEntryToDelete: SavedSharedNotebookEntry?
+    @State private var isShowingLibraryShareSheet = false
+    @State private var libraryShareSheetURL: String?
+    @State private var libraryShareSheetTitle = ""
 
     private var hasNotebookLibraryContent: Bool {
         !dataManager.topics.isEmpty || !dataManager.savedSharedNotebookEntries.isEmpty
@@ -1551,6 +1639,12 @@ struct NotebookView: View {
         }
     }
 
+    private func updateLibrarySectionFilter(_ new: NotebookLibrarySectionFilter) {
+        guard new != librarySectionFilter else { return }
+        librarySectionFilter = new
+        libraryGridAnimationEpoch += 1
+    }
+
     private func advanceNotebookLibrarySectionFilter() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -1560,18 +1654,18 @@ struct NotebookView: View {
             switch librarySectionFilter {
             case .all:
                 if hasMine {
-                    librarySectionFilter = .mineOnly
+                    updateLibrarySectionFilter(.mineOnly)
                 } else if hasShared {
-                    librarySectionFilter = .sharedOnly
+                    updateLibrarySectionFilter(.sharedOnly)
                 }
             case .mineOnly:
                 if hasShared {
-                    librarySectionFilter = .sharedOnly
+                    updateLibrarySectionFilter(.sharedOnly)
                 } else {
-                    librarySectionFilter = .all
+                    updateLibrarySectionFilter(.all)
                 }
             case .sharedOnly:
-                librarySectionFilter = .all
+                updateLibrarySectionFilter(.all)
             }
         }
     }
@@ -1618,56 +1712,86 @@ struct NotebookView: View {
                                 ], spacing: 2) {
                                     if librarySectionFilter != .sharedOnly {
                                         ForEach(Array(dataManager.topics.enumerated()), id: \.element.id) { index, topic in
-                                            NavigationLink(
-                                                destination: TopicPreviewView(
-                                                    topic: topic,
-                                                    isReadOnlySharedNotebook: false,
-                                                    isPresented: $isPresented,
-                                                    dataManager: dataManager
+                                            let displayTitle = dataManager.topics.first(where: { $0.id == topic.id })?.title ?? topic.title
+                                            VStack(spacing: 8) {
+                                                NavigationLink(
+                                                    destination: TopicPreviewView(
+                                                        topic: topic,
+                                                        isReadOnlySharedNotebook: false,
+                                                        isPresented: $isPresented,
+                                                        dataManager: dataManager
+                                                    )
+                                                    .environmentObject(searchState)
+                                                ) {
+                                                    TopicCardPreview(topic: topic, dataManager: dataManager)
+                                                }
+                                                .buttonStyle(.plain)
+
+                                                NotebookLibraryCardTitleRow(
+                                                    title: displayTitle,
+                                                    allowsRename: true,
+                                                    onRename: { beginRenameOwnedTopic(topic) },
+                                                    onDelete: { topicToDelete = topic },
+                                                    onShare: { presentShareSheetForOwnedTopic(topic) }
                                                 )
-                                                .environmentObject(searchState)
-                                            ) {
-                                                TopicCardView(topic: topic, dataManager: dataManager)
                                             }
-                                            .buttonStyle(.plain)
+                                            .frame(width: 168, height: NotebookLibraryCardLayout.gridCellHeight)
+                                            .padding()
+                                            .background(Color.clear)
+                                            .cornerRadius(14)
+                                            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                                             .staggeredCardPopIn(delay: Double(index) * 0.04, style: .bounce)
+                                            // Identity includes a monotonic epoch so returning to .all still replays the pop-in.
+                                            .id("owned-\(topic.id)-\(libraryGridAnimationEpoch)")
                                             .contextMenu {
-                                                Button {
-                                                    selectedTopic = topic
-                                                    isShowingEditTopicSheet = true
-                                                } label: {
-                                                    Label("Edit Topic", systemImage: "pencil")
-                                                }
-                                                Button(role: .destructive) {
-                                                    topicToDelete = topic
-                                                } label: {
-                                                    Label("Delete Topic", systemImage: "trash")
-                                                }
+                                                notebookLibraryMenuActions(
+                                                    allowsRename: true,
+                                                    onRename: { beginRenameOwnedTopic(topic) },
+                                                    onShare: { presentShareSheetForOwnedTopic(topic) },
+                                                    onDelete: { topicToDelete = topic }
+                                                )
                                             }
                                         }
                                     }
                                     if librarySectionFilter != .mineOnly {
                                         ForEach(Array(dataManager.savedSharedNotebookEntries.enumerated()), id: \.element.id) { index, entry in
-                                            NavigationLink(
-                                                destination: SharedNotebookDetailLoaderView(entry: entry, dataManager: dataManager)
-                                                    .environmentObject(searchState)
-                                                    .environmentObject(noteDisplayState)
-                                            ) {
-                                                SharedNotebookLibraryCardView(entry: entry)
+                                            VStack(spacing: 8) {
+                                                NavigationLink(
+                                                    destination: SharedNotebookDetailLoaderView(entry: entry, dataManager: dataManager)
+                                                        .environmentObject(searchState)
+                                                        .environmentObject(noteDisplayState)
+                                                ) {
+                                                    SharedNotebookLibraryCardPreview(entry: entry)
+                                                }
+                                                .buttonStyle(.plain)
+
+                                                NotebookLibraryCardTitleRow(
+                                                    title: entry.title,
+                                                    allowsRename: false,
+                                                    onRename: {},
+                                                    onDelete: { sharedEntryToDelete = entry },
+                                                    onShare: { presentShareSheetForSharedNotebook(entry) }
+                                                )
                                             }
-                                            .buttonStyle(.plain)
+                                            .frame(width: 168, height: NotebookLibraryCardLayout.gridCellHeight)
+                                            .padding()
+                                            .background(Color.clear)
+                                            .cornerRadius(14)
+                                            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
                                             .staggeredCardPopIn(
                                                 delay: Double(
                                                     (librarySectionFilter == .all ? dataManager.topics.count : 0) + index
                                                 ) * 0.04,
                                                 style: .bounce
                                             )
+                                            .id("shared-\(entry.id)-\(libraryGridAnimationEpoch)")
                                             .contextMenu {
-                                                Button(role: .destructive) {
-                                                    Task { await dataManager.removeSavedSharedNotebook(shareToken: entry.shareToken) }
-                                                } label: {
-                                                    Label("Remove from my notebooks", systemImage: "trash")
-                                                }
+                                                notebookLibraryMenuActions(
+                                                    allowsRename: false,
+                                                    onRename: {},
+                                                    onShare: { presentShareSheetForSharedNotebook(entry) },
+                                                    onDelete: { sharedEntryToDelete = entry }
+                                                )
                                             }
                                         }
                                     }
@@ -1679,12 +1803,12 @@ struct NotebookView: View {
                         .background(Color.appBackground)
                         .onChange(of: dataManager.savedSharedNotebookEntries.count) { _, count in
                             if librarySectionFilter == .sharedOnly && count == 0 {
-                                librarySectionFilter = .all
+                                updateLibrarySectionFilter(.all)
                             }
                         }
                         .onChange(of: dataManager.topics.count) { _, count in
                             if librarySectionFilter == .mineOnly && count == 0 {
-                                librarySectionFilter = hasSharedNotebookEntries ? .sharedOnly : .all
+                                updateLibrarySectionFilter(hasSharedNotebookEntries ? .sharedOnly : .all)
                             }
                         }
                     }
@@ -1784,6 +1908,38 @@ struct NotebookView: View {
             } message: {
                 Text("Are you sure you want to delete this note?")
             }
+            .alert("Remove notebook?", isPresented: .init(
+                get: { sharedEntryToDelete != nil },
+                set: { if !$0 { sharedEntryToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    sharedEntryToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let entry = sharedEntryToDelete {
+                        Task {
+                            await dataManager.removeSavedSharedNotebook(shareToken: entry.shareToken)
+                        }
+                    }
+                    sharedEntryToDelete = nil
+                }
+            } message: {
+                if let entry = sharedEntryToDelete {
+                    Text("Remove “\(entry.title)” from your notebooks? The shared notebook will still be available via its link.")
+                }
+            }
+            .fullScreenCover(isPresented: $isShowingLibraryShareSheet, onDismiss: {
+                libraryShareSheetURL = nil
+                libraryShareSheetTitle = ""
+            }) {
+                if let url = libraryShareSheetURL {
+                    ShareQRSheetView(
+                        title: libraryShareSheetTitle,
+                        inviteURL: url,
+                        isPresented: $isShowingLibraryShareSheet
+                    )
+                }
+            }
             .onAppear { presentTopicFromPendingQRIfNeeded() }
             .onChange(of: noteDisplayState.pendingNotebookTopicToPresent?.id) { _, _ in
                 presentTopicFromPendingQRIfNeeded()
@@ -1809,6 +1965,31 @@ struct NotebookView: View {
         guard let topic = noteDisplayState.pendingNotebookTopicToPresent else { return }
         topicPresentedFromQR = topic
         noteDisplayState.pendingNotebookTopicToPresent = nil
+    }
+
+    private func beginRenameOwnedTopic(_ topic: Topic) {
+        selectedTopic = topic
+        isShowingEditTopicSheet = true
+    }
+
+    private func presentShareSheetForOwnedTopic(_ topic: Topic) {
+        Task {
+            do {
+                let token = try await dataManager.ensureActiveTopicShareLink(forTopicId: topic.id)
+                let title = dataManager.topics.first(where: { $0.id == topic.id })?.title ?? topic.title
+                await MainActor.run {
+                    libraryShareSheetTitle = title
+                    libraryShareSheetURL = NoteShareInviteURL.httpsNotebookInviteURL(for: token)
+                    isShowingLibraryShareSheet = true
+                }
+            } catch { }
+        }
+    }
+
+    private func presentShareSheetForSharedNotebook(_ entry: SavedSharedNotebookEntry) {
+        libraryShareSheetTitle = entry.title
+        libraryShareSheetURL = NoteShareInviteURL.httpsNotebookInviteURL(for: entry.shareToken)
+        isShowingLibraryShareSheet = true
     }
 }
 

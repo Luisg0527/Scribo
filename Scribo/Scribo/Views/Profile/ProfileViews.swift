@@ -215,20 +215,7 @@ struct ProfileSheetView: View {
                     }
                 }
                 
-                Section {
-                    Button(role: .destructive) {
-                        Task {
-                            await authManager.signOut()
-                        }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
-                                .foregroundColor(.featureCalloutText.opacity(0.7))
-                            Spacer()
-                        }
-                    }
-                }
+               
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

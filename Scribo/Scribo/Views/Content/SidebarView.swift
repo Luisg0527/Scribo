@@ -38,7 +38,7 @@ struct SidebarView: View {
     @State private var isFeedbackPresented = false
     @AppStorage("offlineSyncEnabled") private var offlineSyncEnabled = false
     @AppStorage("spotlightSearchEnabled") private var spotlightSearchEnabled = false
-    @State private var showDeleteAccountAlert = false
+    @State private var showDeleteAccountOverlay = false
     @State private var scrollOffset: CGFloat = 0
     @State private var isQRScannerPresented = false
     @State private var showCameraDeniedAlert = false
@@ -211,13 +211,17 @@ struct SidebarView: View {
 
                             Button(action: {
                                 performHapticFeedback(style: .medium)
-                                showDeleteAccountAlert = true
+                                showDeleteAccountOverlay = true
                             }) {
-                                sidebarRow(title: "Delete my account", trailing: {
-                                    Image(systemName: "trash.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.white.opacity(0.6))
-                                })
+                                sidebarRow(
+                                    title: "Delete my account",
+                                    titleColor: sidebarRed,
+                                    trailing: {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(sidebarRed)
+                                    }
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -282,6 +286,14 @@ struct SidebarView: View {
                 )
             }
         }
+        .overlay {
+            if showDeleteAccountOverlay {
+                DeleteAccountIslandOverlay(isPresented: $showDeleteAccountOverlay) {
+                    // TODO: Implement delete account
+                }
+                .ignoresSafeArea()
+            }
+        }
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .onAppear {
             Task {
@@ -297,7 +309,7 @@ struct SidebarView: View {
         .sheet(isPresented: $isProfileSheetPresented) {
             ProfileSheetView(isPresented: $isProfileSheetPresented, authManager: authManager)
         }
-        .sheet(isPresented: $isSubscriptionPresented) {
+        .fullScreenCover(isPresented: $isSubscriptionPresented) {
             SubscriptionView()
         }
         .sheet(isPresented: $isFeedbackPresented) {
@@ -348,22 +360,18 @@ struct SidebarView: View {
                 }
             }
         }
-        .alert("Delete account", isPresented: $showDeleteAccountAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                // TODO: Implement delete account
-            }
-        } message: {
-            Text("This will permanently delete your account and data. This action cannot be undone.")
-        }
     }
 
     @ViewBuilder
-    private func sidebarRow<Trailing: View>(title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+    private func sidebarRow<Trailing: View>(
+        title: String,
+        titleColor: Color = .white,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
         HStack {
             Text(title)
                 .font(.system(size: 16))
-                .foregroundColor(.white)
+                .foregroundColor(titleColor)
             Spacer()
             trailing()
         }
@@ -481,5 +489,253 @@ struct SidebarView: View {
             let generator = UIImpactFeedbackGenerator(style: style)
             generator.impactOccurred()
         }
+    }
+}
+
+private let deleteAccountConfirmationPhrase = "DELETE"
+
+private struct DeleteAccountIslandOverlay: View {
+    @Binding var isPresented: Bool
+    let onDelete: () -> Void
+
+    @State private var step: Step = .warning
+    @State private var confirmationText = ""
+    @State private var cardAppeared = false
+
+    private enum Step {
+        case warning
+        case typeConfirm
+    }
+
+    private var canDelete: Bool {
+        confirmationText == deleteAccountConfirmationPhrase
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.58)
+                .ignoresSafeArea()
+                .onTapGesture { dismiss() }
+
+            islandCard
+                .padding(.horizontal, 32)
+                .scaleEffect(cardAppeared ? 1 : 0.94)
+                .opacity(cardAppeared ? 1 : 0)
+        }
+        .onAppear {
+            cardAppeared = false
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                cardAppeared = true
+            }
+        }
+        .onDisappear {
+            cardAppeared = false
+            step = .warning
+            confirmationText = ""
+        }
+    }
+
+    private var islandCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button(action: dismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.55))
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 16)
+            .padding(.horizontal, 16)
+
+            Group {
+                switch step {
+                case .warning:
+                    warningContent
+                case .typeConfirm:
+                    typeConfirmContent
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+            .animation(.spring(response: 0.32, dampingFraction: 0.88), value: step)
+        }
+        .background(islandBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .shadow(color: Color.black.opacity(0.45), radius: 28, x: 0, y: 14)
+    }
+
+    private var islandBackground: some View {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(hex: "35363D"),
+                        Color(hex: "2C2D33"),
+                        Color(hex: "232429")
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "FF9500").opacity(0.45),
+                                Color.white.opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    private var warningContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "FF9500"), sidebarRed],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .padding(.top, 4)
+
+            VStack(spacing: 10) {
+                Text("Are you sure?")
+                    .font(.system(size: 22, weight: .semibold, design: .serif))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Text("You’ll permanently lose your account, notebooks, and all synced data. This can’t be undone.")
+                    .font(.system(size: 15))
+                    .foregroundColor(sidebarLabelGray)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 12) {
+                islandPrimaryButton(title: "Yes, continue", isDestructive: true) {
+                    step = .typeConfirm
+                }
+
+                islandSecondaryButton(title: "No, keep my account") {
+                    dismiss()
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private var typeConfirmContent: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 10) {
+                Text("Type to confirm")
+                    .font(.system(size: 22, weight: .semibold, design: .serif))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Text("Type \(deleteAccountConfirmationPhrase) below to permanently delete your Scribo account.")
+                    .font(.system(size: 15))
+                    .foregroundColor(sidebarLabelGray)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Confirmation")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundColor(sidebarLabelGray)
+
+                TextField("", text: $confirmationText, prompt: Text(deleteAccountConfirmationPhrase).foregroundColor(.white.opacity(0.25)))
+                    .font(.system(size: 17, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.black.opacity(0.28))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(
+                                        canDelete ? sidebarRed.opacity(0.7) : Color.white.opacity(0.12),
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
+            }
+
+            VStack(spacing: 12) {
+                islandPrimaryButton(title: "Delete my account", isDestructive: true, isEnabled: canDelete) {
+                    onDelete()
+                    dismiss()
+                }
+
+                islandSecondaryButton(title: "Go back") {
+                    confirmationText = ""
+                    step = .warning
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func islandPrimaryButton(
+        title: String,
+        isDestructive: Bool = false,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    Capsule().fill(
+                        isDestructive
+                            ? (isEnabled ? sidebarRed : sidebarRed.opacity(0.35))
+                            : (isEnabled ? Color(hex: "FF9500") : Color(hex: "FF9500").opacity(0.35))
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
+
+    private func islandSecondaryButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    Capsule().fill(Color.white.opacity(0.1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dismiss() {
+        isPresented = false
+        step = .warning
+        confirmationText = ""
     }
 }

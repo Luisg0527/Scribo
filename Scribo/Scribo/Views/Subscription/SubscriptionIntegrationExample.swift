@@ -45,7 +45,7 @@ struct SubscriptionIntegrationExample: View {
             }
             .padding()
         }
-        .sheet(isPresented: $showingSubscriptionView) {
+        .fullScreenCover(isPresented: $showingSubscriptionView) {
             SubscriptionView()
         }
         .overlay(

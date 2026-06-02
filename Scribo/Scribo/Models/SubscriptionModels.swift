@@ -2,13 +2,18 @@ import Foundation
 
 enum SubscriptionTier: String, CaseIterable, Codable {
     case free = "free"
-    case pro = "pro"
     case premium = "premium"
+
+    /// Maps legacy stored values (e.g. `"pro"`) to the current tier set.
+    static func fromStoredValue(_ raw: String?) -> SubscriptionTier {
+        let value = raw?.lowercased() ?? "free"
+        if value == "pro" { return .premium }
+        return SubscriptionTier(rawValue: value) ?? .free
+    }
 
     var displayName: String {
         switch self {
         case .free: return "Free"
-        case .pro: return "Pro"
         case .premium: return "Premium"
         }
     }
@@ -16,7 +21,6 @@ enum SubscriptionTier: String, CaseIterable, Codable {
     var description: String {
         switch self {
         case .free: return "Basic note-taking features"
-        case .pro: return "Advanced features with AI assistance"
         case .premium: return "Unlimited access to all features"
         }
     }
@@ -24,7 +28,6 @@ enum SubscriptionTier: String, CaseIterable, Codable {
     var price: String {
         switch self {
         case .free: return "Free"
-        case .pro: return "$4.99/month"
         case .premium: return "$9.99/month"
         }
     }
@@ -40,26 +43,15 @@ enum SubscriptionTier: String, CaseIterable, Codable {
                 "Basic search",
                 "Dark/Light mode"
             ]
-        case .pro:
+        case .premium:
             return [
-                "Up to 500 notes",
+                "Unlimited notes",
                 "Advanced AI classification",
                 "Unlimited photo attachments",
                 "OCR text extraction",
                 "AI chat assistant",
                 "Advanced search & filters",
                 "Export notes",
-                "Priority support"
-            ]
-        case .premium:
-            return [
-                "Unlimited notes",
-                "All Pro features",
-                "Advanced AI features",
-                "Custom themes",
-                "Cloud backup",
-                "Collaborative notes",
-                "Advanced analytics",
                 "Priority support",
                 "Early access to new features"
             ]
@@ -76,15 +68,6 @@ enum SubscriptionTier: String, CaseIterable, Codable {
                 maxSubtopics: 20,
                 aiChatMessagesPerDay: 10,
                 ocrProcessingPerDay: 5
-            )
-        case .pro:
-            return SubscriptionLimits(
-                maxNotes: 500,
-                maxPhotosPerNote: -1, // Unlimited
-                maxTopics: 50,
-                maxSubtopics: 100,
-                aiChatMessagesPerDay: 100,
-                ocrProcessingPerDay: 50
             )
         case .premium:
             return SubscriptionLimits(

@@ -13,8 +13,6 @@ class SubscriptionManager: ObservableObject {
     @Published var errorMessage: String?
 
     private let productIdentifiers = [
-        "com.dauntless.scribos.pro.monthly",
-        "com.dauntless.scribos.pro.yearly",
         "com.dauntless.scribos.premium.monthly",
         "com.dauntless.scribos.premium.yearly"
     ]
@@ -159,13 +157,10 @@ class SubscriptionManager: ObservableObject {
     // MARK: - Helper Methods
 
     private func getSubscriptionTier(for productID: String) -> SubscriptionTier {
-        if productID.contains("premium") {
+        if productID.contains("premium") || productID.contains("pro") {
             return .premium
-        } else if productID.contains("pro") {
-            return .pro
-        } else {
-            return .free
         }
+        return .free
     }
 
     private func updateUserSubscriptionInDatabase(tier: SubscriptionTier) async {
@@ -193,13 +188,13 @@ class SubscriptionManager: ObservableObject {
 
     func canUseAIChat() -> Bool {
         // This would check against daily limits
-        // For now, return true for pro and premium
+        // For now, return true for premium
         return currentSubscriptionTier != .free
     }
 
     func canUseOCR() -> Bool {
         // This would check against daily limits
-        // For now, return true for pro and premium
+        // For now, return true for premium
         return currentSubscriptionTier != .free
     }
 

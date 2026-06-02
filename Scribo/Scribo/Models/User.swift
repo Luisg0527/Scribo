@@ -12,6 +12,6 @@ class User: Codable {
 
 extension User {
     var tierEnum: SubscriptionTier {
-        SubscriptionTier(rawValue: subscription_tier ?? "free") ?? .free
+        SubscriptionTier.fromStoredValue(subscription_tier)
     }
 }

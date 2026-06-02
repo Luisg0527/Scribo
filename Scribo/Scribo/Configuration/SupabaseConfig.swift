@@ -5,11 +5,15 @@ class SupabaseConfig {
     static let shared = SupabaseConfig()
     
     let client: SupabaseClient
+    let url: URL
+    var authCallbackURL: URL { url.appending(path: "auth/v1/callback") }
     
     private init() {
         // Get configuration from environment variables
         let supabaseURL = URL(string: ProcessInfo.processInfo.environment["SUPABASE_URL"] ?? "https://smyhydlufyrvnytwcwcy.supabase.co")!
         let supabaseKey = ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? "sb_publishable_SSzH-3IsV8niOjhBFE5zsg_wMVLIYp6"
+        
+        self.url = supabaseURL
         
         // Initialize with default options
         let options = SupabaseClientOptions()

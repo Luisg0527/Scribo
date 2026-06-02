@@ -13,6 +13,10 @@ private struct UserInsertData: Encodable {
     let subscription_expires_at: String?
 }
 
+private struct EmailExistsParams: Encodable {
+    let check_email: String
+}
+
 class AuthManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var currentUser: User?
@@ -116,6 +120,32 @@ class AuthManager: ObservableObject {
             isAuthenticated = false
             currentUser = nil
             self.error = handleAuthError(error)
+        }
+    }
+
+    @MainActor
+    func checkEmailExists(email: String) async throws -> Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        do {
+            let response = try await supabase
+                .rpc("email_exists", params: EmailExistsParams(check_email: trimmed))
+                .execute()
+
+            let raw = String(data: response.data, encoding: .utf8) ?? ""
+            print("📧 email_exists RPC raw response: \(raw)")
+
+            let string = raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            if string == "true" { return true }
+            if string == "false" { return false }
+
+            return try JSONDecoder().decode(Bool.self, from: response.data)
+        } catch {
+            print("❌ email_exists RPC failed: \(error)")
+            throw error
         }
     }
 
@@ -342,7 +372,7 @@ class AuthManager: ObservableObject {
             print("🔑 Starting Google Sign In process...")
 
             // Use the Supabase callback URL
-            let redirectURL = URL(string: "https://kyklpwptsuubycuaaeoq.supabase.co/auth/v1/callback")!
+            let redirectURL = SupabaseConfig.shared.authCallbackURL
 
             print("🔑 Attempting to sign in with Google...")
 
